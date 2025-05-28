@@ -112,3 +112,116 @@ export async function uploadVideo(formData: FormData): Promise<{ videoId: string
   }
 }
 
+// 프롬프트 상호작용 타입 정의
+export type PromptSession = {
+  session_id: number;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  main_event?: {
+    id: number;
+    timestamp: string;
+    action_detected: string | null;
+    location: string;
+  };
+}
+
+export type PromptInteraction = {
+  id: number;
+  input_prompt: string;
+  output_response: string;
+  timestamp: string;
+  event?: {
+    id: number;
+    timestamp: string;
+    action_detected: string | null;
+    location: string;
+  };
+}
+
+export type PromptResponse = {
+  session_id: number;
+  response: string;
+  timestamp: string;
+  event?: {
+    id: number;
+    timestamp: string;
+    action_detected: string | null;
+    location: string;
+  };
+}
+
+// 프롬프트 처리 함수
+export async function processPrompt(
+  prompt: string,
+  sessionId?: number
+): Promise<PromptResponse> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/prompt/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        session_id: sessionId
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Prompt processing error:", error);
+    // 오류 발생 시 기본 응답 반환
+    return {
+      session_id: sessionId || 0,
+      response: "죄송합니다. 처리 중 오류가 발생했습니다.",
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+// 프롬프트 히스토리 가져오기
+export async function getPromptHistory(): Promise<PromptSession[]> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/prompt/history/`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Prompt history fetch error:", error);
+    return [];
+  }
+}
+
+// 특정 세션의 상호작용 가져오기
+export async function getSessionInteractions(sessionId: number): Promise<PromptInteraction[]> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/prompt/history/${sessionId}/`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Session interactions fetch error:", error);
+    return [];
+  }
+}

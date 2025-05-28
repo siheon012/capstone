@@ -8,4 +8,3 @@ declare namespace NodeJS {
     STORAGE_API_KEY: string
   }
 }
-

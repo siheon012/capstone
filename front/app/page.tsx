@@ -1,8 +1,6 @@
 'use client';
 
-import type React from 'react';
-
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -11,14 +9,10 @@ import {
   Pause,
   SkipForward,
   SkipBack,
-  Github,
   Mail,
-  Store,
   Info,
-  History,
-  Menu,
-  X,
   MessageSquare,
+  X,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -28,9 +22,10 @@ import DraggableTooltip from '@/components/draggable-tooltip';
 import ToastNotification, { type Toast } from '@/components/toast-notification';
 import VideoMinimap from '@/components/video-minimap';
 import DragDropZone from '@/components/drag-drop-zone';
-import type { HistoryItem } from '@/app/types/history';
-import { saveHistory } from '@/app/actions/history-service';
+import SmartHeader from '@/components/smart-header';
+import { saveHistory, getHistoryList } from '@/app/actions/history-service';
 import JQueryCounterAnimation from '@/components/jquery-counter-animation';
+import { saveVideoFile } from '@/app/actions/video-service';
 
 export default function CCTVAnalysis() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
@@ -67,23 +62,102 @@ export default function CCTVAnalysis() {
   const [uploadHighlight, setUploadHighlight] = useState(false); // 업로드 영역 강조 상태 추가
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const videoSectionRef = useRef<HTMLDivElement>(null); // 새로 추가
+  const uploadAreaRef = useRef<HTMLDivElement>(null);
 
   // 모바일 감지 훅 추가
+  // 모바일 감지 훅 수정 - 초기값을 false로 설정하여 hydration 오류 방지
   const [isMobile, setIsMobile] = useState(false);
 
   // 분석 상태와 진행도를 관리하는 새로운 state 추가:
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
 
+  // 비디오 로딩 상태 추가
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+
+  // 히스토리 새로고침 트리거
+  const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
+
+  // 히스토리 새로고침 함수
+  const handleHistoryRefresh = async () => {
+    try {
+      // 중복 방지로 로딩 토스트 추가
+      addToastIfNotExists({
+        type: 'info',
+        title: '히스토리 새로고침',
+        message: '히스토리를 불러오는 중...',
+        duration: 1500,
+      });
+
+      // 트리거 값을 변경하여 DynamicHistorySidebar에서 새로고침 실행
+      setHistoryRefreshTrigger((prev) => prev + 1);
+
+      // 잠시 대기 후 성공 토스트 표시 (로딩 토스트와 겹치지 않도록)
+      setTimeout(() => {
+        addToastIfNotExists({
+          type: 'success',
+          title: '새로고침 완료',
+          message: '히스토리가 갱신되었습니다.',
+          duration: 1500,
+        });
+      }, 800);
+    } catch (error) {
+      console.error('History refresh error:', error);
+      addToastIfNotExists({
+        type: 'error',
+        title: '새로고침 실패',
+        message: '히스토리 새로고침 중 오류가 발생했습니다.',
+        duration: 3000,
+      });
+    }
+  };
+
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
+      const userAgent =
+        navigator.userAgent || navigator.vendor || (window as any).opera;
+      const isMobileDevice =
+        /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+          userAgent.toLowerCase()
+        );
+      const isSmallScreen = window.innerWidth <= 768;
+      setIsMobile(isMobileDevice || isSmallScreen);
     };
 
+    // 컴포넌트 마운트 후에만 실행
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // 모바일에서 히스토리 열릴 때 body 스크롤 방지
+  // 모바일에서 히스토리 열릴 때 body 스크롤 방지 - 클라이언트에서만 실행
+  useEffect(() => {
+    // 클라이언트에서만 실행
+    if (typeof window === 'undefined') return;
+
+    if (isMobile && historyOpen) {
+      // body 스크롤을 완전히 차단하는 대신 터치 이벤트만 제어
+      const preventScroll = (e: TouchEvent) => {
+        // 히스토리 사이드바 내부의 스크롤은 허용
+        const target = e.target as Element;
+        const historyElement = document.querySelector('[data-history-sidebar]');
+
+        if (historyElement && !historyElement.contains(target)) {
+          e.preventDefault();
+        }
+      };
+
+      // 터치 이벤트만 제어하여 브라우저의 스크롤 컨텍스트는 유지
+      document.addEventListener('touchmove', preventScroll, { passive: false });
+
+      return () => {
+        document.removeEventListener('touchmove', preventScroll);
+      };
+    }
+  }, [isMobile, historyOpen]);
 
   // 토스트 알림 함수
   const addToast = (toast: Omit<Toast, 'id'>) => {
@@ -108,76 +182,180 @@ export default function CCTVAnalysis() {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
 
-  const handleFileUpload = (file: File) => {
+  const handleFileUpload = async (file: File) => {
     try {
-      const url = URL.createObjectURL(file);
-      setVideoSrc(url);
-      setVideoFileName(file.name);
-      setCurrentHistoryId(undefined);
-      setTimeMarkers([]);
+      setVideoLoading(true);
+      setVideoError(null);
 
-      // 분석 시작
-      setIsAnalyzing(true);
-      setAnalysisProgress(0);
+      // Validate file type
+      const validVideoTypes = [
+        'video/mp4',
+        'video/webm',
+        'video/ogg',
+        'video/avi',
+        'video/mov',
+        'video/quicktime',
+      ];
+      if (!validVideoTypes.includes(file.type)) {
+        addToast({
+          type: 'error',
+          title: '지원하지 않는 파일 형식',
+          message: 'MP4, WebM, OGG 형식의 비디오 파일만 지원됩니다.',
+          duration: 3000,
+        });
+        setVideoLoading(false);
+        return;
+      }
 
-      // 분석 중 메시지 추가
-      setMessages([
-        {
-          role: 'assistant',
-          content: '영상 분석을 시작합니다. 잠시만 기다려주세요...',
-        },
-      ]);
+      // Validate file size (limit to 100MB)
+      const maxSize = 100 * 1024 * 1024; // 100MB
+      if (file.size > maxSize) {
+        addToast({
+          type: 'error',
+          title: '파일 크기 초과',
+          message: '100MB 이하의 파일만 업로드할 수 있습니다.',
+          duration: 3000,
+        });
+        setVideoLoading(false);
+        return;
+      }
 
-      // 성공 토스트
-      addToast({
-        type: 'success',
-        title: '업로드 완료',
-        message: `${file.name} 파일이 성공적으로 업로드되었습니다.`,
-        duration: 3000,
+      // 즉시 Object URL 생성하여 클라이언트에서 사용
+      const objectUrl = URL.createObjectURL(file);
+
+      // 모바일에서 비디오 검증을 더 관대하게 처리
+      const testVideo = document.createElement('video');
+      testVideo.muted = true; // 모바일에서 자동재생을 위해 음소거
+      testVideo.playsInline = true; // iOS에서 인라인 재생
+      testVideo.preload = 'metadata';
+
+      const loadPromise = new Promise((resolve, reject) => {
+        const timeout = setTimeout(
+          () => {
+            console.warn('Video loading timeout, but continuing...');
+            resolve(objectUrl); // 타임아웃이어도 계속 진행
+          },
+          isMobile ? 15000 : 10000
+        ); // 모바일에서는 더 긴 타임아웃
+
+        testVideo.onloadedmetadata = () => {
+          clearTimeout(timeout);
+          console.log('Video metadata loaded successfully');
+          resolve(objectUrl);
+        };
+
+        testVideo.oncanplay = () => {
+          clearTimeout(timeout);
+          console.log('Video can play');
+          resolve(objectUrl);
+        };
+
+        testVideo.onerror = (e) => {
+          clearTimeout(timeout);
+          console.warn('Video validation failed, but continuing:', e);
+          resolve(objectUrl); // 에러가 있어도 계속 진행 (모바일 호환성)
+        };
+
+        testVideo.src = objectUrl;
       });
 
-      // 분석 진행도 시뮬레이션 (실제로는 서버에서 진행도를 받아와야 함)
-      const progressInterval = setInterval(() => {
-        setAnalysisProgress((prev) => {
-          const newProgress = prev + Math.random() * 15 + 5; // 5-20% 씩 증가
+      try {
+        const validUrl = await loadPromise;
 
-          if (newProgress >= 100) {
-            clearInterval(progressInterval);
+        // 비디오 상태 즉시 업데이트
+        setVideoSrc(validUrl as string);
+        setVideoFileName(file.name);
+        setCurrentHistoryId(undefined);
+        setTimeMarkers([]);
+        setVideoLoading(false);
 
-            // 분석 완료
-            setTimeout(() => {
-              setIsAnalyzing(false);
-              setAnalysisProgress(100);
-              setMessages([
-                {
-                  role: 'assistant',
-                  content: `"${file.name}" 영상 분석이 완료되었습니다. 이제 영상을 재생하고 내용에 대해 질문할 수 있습니다.`,
-                },
-              ]);
+        // 분석 시작
+        setIsAnalyzing(true);
+        setAnalysisProgress(0);
 
-              // 분석 완료 토스트
-              addToast({
-                type: 'success',
-                title: '분석 완료',
-                message: '영상 분석이 완료되었습니다. 이제 질문할 수 있습니다.',
-                duration: 3000,
-              });
-            }, 500);
+        // 분석 중 메시지 추가
+        setMessages([
+          {
+            role: 'assistant',
+            content: '영상 분석을 시작합니다. 잠시만 기다려주세요...',
+          },
+        ]);
 
-            return 100;
-          }
-
-          return newProgress;
+        // 성공 토스트
+        addToast({
+          type: 'success',
+          title: '업로드 완료',
+          message: `${file.name} 파일이 성공적으로 업로드되었습니다.`,
+          duration: 3000,
         });
-      }, 800); // 0.8초마다 진행도 업데이트
+
+        // 백그라운드에서 서버 액션 실행 (실패해도 클라이언트 동작에 영향 없음)
+        try {
+          const formData = new FormData();
+          formData.append('video', file);
+          const saveResult = await saveVideoFile(formData);
+          console.log('Server save result:', saveResult);
+        } catch (serverError) {
+          console.warn(
+            'Server save failed, but client continues:',
+            serverError
+          );
+        }
+
+        // 분석 진행도 시뮬레이션
+        const progressInterval = setInterval(() => {
+          setAnalysisProgress((prev) => {
+            const newProgress = prev + Math.random() * 15 + 5;
+
+            if (newProgress >= 100) {
+              clearInterval(progressInterval);
+
+              setTimeout(() => {
+                setIsAnalyzing(false);
+                setAnalysisProgress(100);
+                setMessages([
+                  {
+                    role: 'assistant',
+                    content: `"${file.name}" 영상 분석이 완료되었습니다. 이제 영상을 재생하고 내용에 대해 질문할 수 있습니다.`,
+                  },
+                ]);
+
+                addToast({
+                  type: 'success',
+                  title: '분석 완료',
+                  message:
+                    '영상 분석이 완료되었습니다. 이제 질문할 수 있습니다.',
+                  duration: 3000,
+                });
+              }, 500);
+
+              return 100;
+            }
+
+            return newProgress;
+          });
+        }, 800);
+      } catch (validationError) {
+        URL.revokeObjectURL(objectUrl);
+        throw new Error('비디오 파일이 손상되었거나 지원되지 않는 형식입니다.');
+      }
     } catch (error) {
       console.error('File upload error:', error);
       setIsAnalyzing(false);
       setAnalysisProgress(0);
+      setVideoLoading(false);
+      setVideoError(
+        error instanceof Error
+          ? error.message
+          : '파일 업로드 중 오류가 발생했습니다.'
+      );
       addToast({
         type: 'error',
         title: '업로드 실패',
-        message: '파일 업로드 중 오류가 발생했습니다.',
+        message:
+          error instanceof Error
+            ? error.message
+            : '파일 업로드 중 오류가 발생했습니다.',
         duration: 3000,
       });
     }
@@ -194,23 +372,77 @@ export default function CCTVAnalysis() {
 
   const togglePlayPause = () => {
     try {
-      if (videoRef.current) {
-        if (isPlaying) {
-          videoRef.current.pause();
+      if (videoRef.current && videoSrc) {
+        // 모바일에서는 더 관대한 조건으로 재생 허용
+        if (videoRef.current.readyState >= 1 || isMobile) {
+          if (isPlaying) {
+            videoRef.current.pause();
+          } else {
+            // 모바일에서 재생 시 음소거 및 인라인 재생 설정
+            if (isMobile) {
+              videoRef.current.muted = true;
+              videoRef.current.playsInline = true;
+            }
+
+            const playPromise = videoRef.current.play();
+            if (playPromise !== undefined) {
+              playPromise
+                .then(() => {
+                  console.log('Video play started successfully');
+                  setIsPlaying(true);
+                })
+                .catch((error) => {
+                  console.warn('Video play failed:', error);
+                  setIsPlaying(false);
+
+                  // 모바일에서 재생 실패 시 사용자에게 안내
+                  if (isMobile) {
+                    addToast({
+                      type: 'info',
+                      title: '재생 안내',
+                      message:
+                        '모바일에서는 화면을 터치하여 비디오를 재생해주세요.',
+                      duration: 3000,
+                    });
+                  }
+                });
+            }
+          }
         } else {
-          videoRef.current.play();
+          console.warn(
+            'Video not ready to play, readyState:',
+            videoRef.current.readyState
+          );
+
+          // 모바일에서는 강제로 재생 시도
+          if (isMobile) {
+            const playPromise = videoRef.current.play();
+            if (playPromise !== undefined) {
+              playPromise.catch((error) => {
+                console.warn('Force play failed:', error);
+              });
+            }
+          }
         }
-        setIsPlaying(!isPlaying);
       }
     } catch (error) {
       console.error('Video control error:', error);
+      setIsPlaying(false);
     }
   };
 
   const skipForward = () => {
     try {
-      if (videoRef.current) {
-        videoRef.current.currentTime += 10;
+      if (
+        videoRef.current &&
+        videoSrc &&
+        (videoRef.current.readyState >= 1 || isMobile)
+      ) {
+        const newTime = Math.min(
+          videoRef.current.currentTime + 10,
+          duration || videoRef.current.duration || 0
+        );
+        videoRef.current.currentTime = newTime;
       }
     } catch (error) {
       console.error('Skip forward error:', error);
@@ -219,8 +451,13 @@ export default function CCTVAnalysis() {
 
   const skipBackward = () => {
     try {
-      if (videoRef.current) {
-        videoRef.current.currentTime -= 10;
+      if (
+        videoRef.current &&
+        videoSrc &&
+        (videoRef.current.readyState >= 1 || isMobile)
+      ) {
+        const newTime = Math.max(videoRef.current.currentTime - 10, 0);
+        videoRef.current.currentTime = newTime;
       }
     } catch (error) {
       console.error('Skip backward error:', error);
@@ -229,8 +466,37 @@ export default function CCTVAnalysis() {
 
   const seekToTime = (time: number) => {
     try {
-      if (videoRef.current) {
-        videoRef.current.currentTime = time;
+      if (
+        videoRef.current &&
+        videoSrc &&
+        (videoRef.current.readyState >= 1 || isMobile)
+      ) {
+        const targetTime = Math.min(
+          time,
+          duration || videoRef.current.duration || 0
+        );
+        videoRef.current.currentTime = targetTime;
+
+        // 모바일에서 타임스탬프 클릭 시 비디오 영역으로 스크롤
+        if (isMobile && videoSectionRef.current) {
+          videoSectionRef.current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+            inline: 'nearest',
+          });
+
+          // 스크롤 후 잠시 대기하고 비디오 재생 (선택사항)
+          setTimeout(() => {
+            if (videoRef.current && !isPlaying) {
+              const playPromise = videoRef.current.play();
+              if (playPromise !== undefined) {
+                playPromise.catch((error) => {
+                  console.warn('Auto play after seek failed:', error);
+                });
+              }
+            }
+          }, 500);
+        }
       }
     } catch (error) {
       console.error('Seek error:', error);
@@ -238,6 +504,7 @@ export default function CCTVAnalysis() {
   };
 
   const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return '00:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs
@@ -247,23 +514,104 @@ export default function CCTVAnalysis() {
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !videoSrc) return;
 
-    const updateTime = () => setCurrentTime(video.currentTime);
-    const updateDuration = () => setDuration(video.duration);
+    // 모바일 최적화 설정
+    if (isMobile) {
+      video.muted = true;
+      video.playsInline = true;
+      video.controls = false;
+    }
+
+    const updateTime = () => {
+      if (video.currentTime !== undefined && !isNaN(video.currentTime)) {
+        setCurrentTime(video.currentTime);
+      }
+    };
+
+    const updateDuration = () => {
+      if (video.duration && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+        console.log('Duration updated:', video.duration);
+      }
+    };
+
+    const handleError = (e: Event) => {
+      console.error('Video event error:', e);
+      const target = e.target as HTMLVideoElement;
+      const error = target.error;
+
+      if (error) {
+        console.error('Video error details:', {
+          code: error.code,
+          message: error.message,
+          networkState: target.networkState,
+          readyState: target.readyState,
+        });
+
+        setVideoError(`비디오 오류: ${error.message}`);
+        setIsPlaying(false);
+      }
+    };
+
+    const handleLoadedData = () => {
+      console.log('Video data loaded successfully');
+      setVideoError(null);
+    };
+
+    const handleLoadedMetadata = () => {
+      console.log('Video metadata loaded');
+      updateDuration();
+    };
+
+    const handleCanPlay = () => {
+      console.log('Video can play');
+      updateDuration();
+    };
+
+    const handleTimeUpdate = () => {
+      updateTime();
+    };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
 
     try {
-      video.addEventListener('timeupdate', updateTime);
-      video.addEventListener('loadedmetadata', updateDuration);
+      video.addEventListener('timeupdate', handleTimeUpdate);
+      video.addEventListener('loadedmetadata', handleLoadedMetadata);
+      video.addEventListener('loadeddata', handleLoadedData);
+      video.addEventListener('canplay', handleCanPlay);
+      video.addEventListener('play', handlePlay);
+      video.addEventListener('pause', handlePause);
+      video.addEventListener('error', handleError);
+      video.addEventListener('abort', handleError);
+      video.addEventListener('stalled', handleError);
+
+      // 초기 duration 설정 시도
+      if (video.duration && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+      }
 
       return () => {
-        video.removeEventListener('timeupdate', updateTime);
-        video.removeEventListener('loadedmetadata', updateDuration);
+        video.removeEventListener('timeupdate', handleTimeUpdate);
+        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        video.removeEventListener('loadeddata', handleLoadedData);
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('play', handlePlay);
+        video.removeEventListener('pause', handlePause);
+        video.removeEventListener('error', handleError);
+        video.removeEventListener('abort', handleError);
+        video.removeEventListener('stalled', handleError);
       };
     } catch (error) {
       console.error('Video event listener error:', error);
     }
-  }, [videoSrc]);
+  }, [videoSrc, isMobile]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,8 +633,9 @@ export default function CCTVAnalysis() {
       setTimeout(async () => {
         try {
           // 데모 목적으로 랜덤 타임스탬프 생성
+          const videoDuration = duration || videoRef.current?.duration || 60;
           const randomTimestamp = videoSrc
-            ? Math.random() * (duration || 60)
+            ? Math.random() * videoDuration
             : null;
 
           if (randomTimestamp) {
@@ -339,7 +688,7 @@ export default function CCTVAnalysis() {
               ],
               videoInfo: {
                 name: videoFileName,
-                duration: duration,
+                duration: videoDuration,
                 url: videoSrc,
               },
               eventType: null, // 초기에는 null, 나중에 AI 분석 결과에 따라 업데이트
@@ -373,6 +722,7 @@ export default function CCTVAnalysis() {
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
+      setVideoError(null);
 
       // 분석 상태 초기화
       setIsAnalyzing(false);
@@ -416,16 +766,24 @@ export default function CCTVAnalysis() {
   const handleInputClickWithoutVideo = (
     e: React.MouseEvent | React.FocusEvent | React.FormEvent
   ) => {
-    console.log('Input interaction detected, videoSrc:', videoSrc); // 디버깅용
+    console.log('Input interaction detected, videoSrc:', videoSrc);
     if (!videoSrc) {
-      console.log('No video, activating upload highlight'); // 디버깅용
+      console.log('No video, activating upload highlight');
+
+      // 모바일에서 업로드 영역으로 스크롤
+      if (isMobile && uploadAreaRef.current) {
+        uploadAreaRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      }
 
       // 업로드 영역 강조 애니메이션
       setUploadHighlight(true);
 
-      // 1초 후 애니메이션 종료 (3초에서 1초로 변경)
+      // 1초 후 애니메이션 종료
       setTimeout(() => {
-        console.log('Deactivating upload highlight'); // 디버깅용
+        console.log('Deactivating upload highlight');
         setUploadHighlight(false);
       }, 500);
 
@@ -454,7 +812,7 @@ export default function CCTVAnalysis() {
     }
   };
 
-  const handleSelectHistory = (historyItem: HistoryItem) => {
+  const handleSelectHistory = (historyItem: any) => {
     try {
       setMessages(historyItem.messages);
       setCurrentHistoryId(historyItem.id);
@@ -467,8 +825,8 @@ export default function CCTVAnalysis() {
 
       // 타임스탬프 마커 복원
       const timestamps = historyItem.messages
-        .filter((msg) => msg.timestamp)
-        .map((msg) => msg.timestamp!);
+        .filter((msg: any) => msg.timestamp)
+        .map((msg: any) => msg.timestamp!);
       setTimeMarkers(timestamps);
 
       // 히스토리 선택 후 사이드바 닫기
@@ -505,11 +863,7 @@ export default function CCTVAnalysis() {
       try {
         e.preventDefault();
         // 드래그 앤 드롭 존이 이미 열려있지 않을 때만 실행
-        if (
-          !dragDropVisible &&
-          e.dataTransfer?.files &&
-          e.dataTransfer.files.length > 0
-        ) {
+        if (!dragDropVisible && e.dataTransfer?.files.length > 0) {
           setDragDropVisible(true);
         }
       } catch (error) {
@@ -541,214 +895,47 @@ export default function CCTVAnalysis() {
 
   const statsData = [
     { label: '분석된 영상', value: 1247, suffix: '개', color: '#00e6b4' },
-    { label: '감지된 이벤트', value: 3891, suffix: '건', color: '#3694ff' },
+    { label: '감지된 이벤트', value: 3891, suffix: '건', color: '#6c5ce7' },
     { label: '처리 시간', value: 2.4, suffix: 's', color: '#ffd93d' },
     { label: '정확도', value: 99, suffix: '%', color: '#ff6b6b' },
   ];
 
+  // Add this useEffect after the existing useEffects
+  useEffect(() => {
+    // Cleanup object URLs when component unmounts or video changes
+    return () => {
+      if (videoSrc && videoSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(videoSrc);
+      }
+    };
+  }, [videoSrc]);
+
   return (
     <div className="min-h-screen bg-[#1a1f2c] text-gray-100 flex flex-col">
-      {/* Header - 모바일 최적화 */}
-      <header className="bg-[#242a38] border-b border-[#2a3142] shadow-lg">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo and Title */}
-            <div className="flex items-center gap-3 md:gap-6">
-              <div className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center">
-                <img
-                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Adobe%20Express%20-%20file-z6kXCSxAQt4ISVmQRZCDhYxUILirrx.png"
-                  alt="Deep Sentinel Logo"
-                  className="w-full h-full object-contain scale-[1.7]"
-                />
-              </div>
-              <div>
-                <h1 className="text-lg md:text-2xl font-bold text-white">
-                  Deep Sentinel
-                </h1>
-                <span className="text-xs md:text-sm text-gray-400 hidden sm:block">
-                  CCTV Analysis Platform
-                </span>
-              </div>
-            </div>
+      {/* Smart Header */}
+      <SmartHeader
+        currentPage="home"
+        historyOpen={historyOpen}
+        onHistoryToggle={() => {
+          setHistoryOpen(!historyOpen);
+          // 히스토리를 열 때는 모바일 메뉴 닫기
+          if (!historyOpen) {
+            setMobileMenuOpen(false);
+          }
+        }}
+        onHistoryRefresh={handleHistoryRefresh}
+        mobileMenuOpen={mobileMenuOpen}
+        onMobileMenuToggle={() => {
+          setMobileMenuOpen(!mobileMenuOpen);
+          // 모바일 메뉴를 열 때는 히스토리 닫기
+          if (!mobileMenuOpen && historyOpen) {
+            setHistoryOpen(false);
+          }
+        }}
+      />
 
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c] ${
-                  historyOpen ? 'text-[#00e6b4] bg-[#1a1f2c]' : ''
-                }`}
-                onClick={() => setHistoryOpen(!historyOpen)}
-              >
-                <History className="h-4 w-4 mr-2" />
-                History
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c]"
-                onClick={() => window.open('https://github.com', '_blank')}
-              >
-                <Github className="h-4 w-4 mr-2" />
-                GitHub
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c]"
-                onClick={() => window.open('https://google.com', '_blank')}
-              >
-                <svg
-                  className="h-4 w-4 mr-2"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                </svg>
-                Google
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c]"
-                onClick={() => window.open('#', '_blank')}
-              >
-                <Store className="h-4 w-4 mr-2" />
-                Store
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c]"
-                onClick={(e) => {
-                  try {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDragDropVisible(true);
-                  } catch (error) {
-                    console.error('Upload button error:', error);
-                  }
-                }}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                업로드
-              </Button>
-            </nav>
-
-            {/* Mobile Menu Button */}
-            <div className="flex md:hidden items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`text-gray-300 hover:text-[#00e6b4] transition-colors ${
-                  historyOpen ? 'text-[#00e6b4] bg-[#1a1f2c]' : ''
-                }`}
-                onClick={() => {
-                  setHistoryOpen(!historyOpen);
-                  setMobileMenuOpen(false); // 히스토리 열 때 모바일 메뉴 닫기
-                }}
-              >
-                <History className="h-5 w-5" />
-                History
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-300 hover:text-[#00e6b4]"
-                onClick={() => {
-                  setMobileMenuOpen(!mobileMenuOpen);
-                  setHistoryOpen(false); // 모바일 메뉴 열 때 히스토리 닫기
-                }}
-              >
-                {mobileMenuOpen ? (
-                  <X className="h-5 w-5" />
-                ) : (
-                  <Menu className="h-5 w-5" />
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {/* Mobile Menu Dropdown */}
-          {mobileMenuOpen && (
-            <div className="md:hidden mt-4 pb-4 border-t border-[#2a3142] pt-4">
-              <div className="flex flex-col gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c]"
-                  onClick={() => {
-                    window.open('https://github.com', '_blank');
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  <Github className="h-4 w-4 mr-2" />
-                  GitHub
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c]"
-                  onClick={() => {
-                    window.open('https://google.com', '_blank');
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  <svg
-                    className="h-4 w-4 mr-2"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                  Google
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c]"
-                  onClick={() => {
-                    window.open('#', '_blank');
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  <Store className="h-4 w-4 mr-2" />
-                  Store
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="justify-start text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c]"
-                  onClick={(e) => {
-                    try {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setDragDropVisible(true);
-                      setMobileMenuOpen(false);
-                    } catch (error) {
-                      console.error('Mobile upload button error:', error);
-                    }
-                  }}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  업로드
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* Main Layout */}
-      <div className="flex flex-1 overflow-hidden relative">
+      {/* Main Layout - 헤더 높이만큼 패딩 추가 */}
+      <div className="flex flex-1 overflow-hidden relative pt-20">
         {/* Main Content - 블러 효과와 함께 */}
         <main
           className={`flex-1 container mx-auto py-4 md:py-8 px-4 overflow-auto transition-all duration-300 ${
@@ -758,7 +945,7 @@ export default function CCTVAnalysis() {
           }`}
         >
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2" ref={videoSectionRef}>
               <Card className="mb-4 md:mb-6 bg-[#242a38] border-0 shadow-lg">
                 <CardContent className="p-4 md:p-6">
                   {videoSrc ? (
@@ -819,15 +1006,97 @@ export default function CCTVAnalysis() {
                         </div>
                       ) : null}
 
+                      {videoLoading && (
+                        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-md flex items-center justify-center z-5">
+                          <div className="text-white text-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00e6b4] mx-auto mb-2"></div>
+                            <p className="text-sm">비디오 로딩 중...</p>
+                          </div>
+                        </div>
+                      )}
+
                       <video
                         ref={videoRef}
                         className={`w-full h-auto rounded-md bg-black ${
-                          isAnalyzing ? 'opacity-50' : 'opacity-100'
+                          isAnalyzing || videoLoading
+                            ? 'opacity-50'
+                            : 'opacity-100'
                         } transition-opacity duration-300`}
                         src={videoSrc}
-                        onPlay={() => setIsPlaying(true)}
-                        onPause={() => setIsPlaying(false)}
+                        muted={isMobile} // 모바일에서 음소거
+                        playsInline={isMobile} // iOS에서 인라인 재생
+                        preload="metadata"
+                        controls={false}
+                        style={{
+                          minHeight: isMobile ? '200px' : '300px', // 최소 높이 보장
+                          maxHeight: isMobile ? '300px' : '500px', // 최대 높이 제한
+                        }}
+                        onError={(e) => {
+                          const target = e.target as HTMLVideoElement;
+                          const error = target.error;
+                          console.error('Video error details:', {
+                            code: error?.code,
+                            message: error?.message,
+                            networkState: target.networkState,
+                            readyState: target.readyState,
+                            src: target.src,
+                          });
+
+                          setVideoError(
+                            `비디오 오류: ${
+                              error?.message || '알 수 없는 오류'
+                            }`
+                          );
+                          setIsPlaying(false);
+                          setVideoLoading(false);
+                        }}
+                        onLoadStart={() => {
+                          console.log('Video loading started');
+                          setVideoLoading(true);
+                        }}
+                        onCanPlay={() => {
+                          console.log('Video can play');
+                          setVideoLoading(false);
+                          setVideoError(null);
+                        }}
+                        onLoadedData={() => {
+                          console.log('Video data loaded');
+                          setVideoLoading(false);
+                        }}
+                        onLoadedMetadata={() => {
+                          console.log('Video metadata loaded');
+                          setVideoLoading(false);
+                        }}
+                        onWaiting={() => {
+                          console.log('Video waiting for data');
+                        }}
+                        // 모바일에서 터치로 재생 가능하도록
+                        onClick={isMobile ? togglePlayPause : undefined}
                       />
+
+                      {/* 비디오 에러 표시 */}
+                      {videoError && (
+                        <div className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex items-center justify-center">
+                          <div className="text-center text-white p-4">
+                            <p className="text-sm mb-2">비디오 로드 오류</p>
+                            <p className="text-xs text-gray-300">
+                              {videoError}
+                            </p>
+                            <Button
+                              size="sm"
+                              className="mt-2 bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]"
+                              onClick={() => {
+                                setVideoError(null);
+                                if (videoRef.current) {
+                                  videoRef.current.load();
+                                }
+                              }}
+                            >
+                              다시 시도
+                            </Button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* 비디오 위 정보 버튼 */}
                       <Button
@@ -839,15 +1108,28 @@ export default function CCTVAnalysis() {
                             title: '비디오 정보',
                             content: `파일명: ${videoFileName}\n재생시간: ${formatTime(
                               duration
-                            )}\n현재 시간: ${formatTime(currentTime)}`,
+                            )}\n현재 시간: ${formatTime(
+                              currentTime
+                            )}\n모바일: ${isMobile ? '예' : '아니오'}`,
                           })
                         }
                       >
                         <Info className="h-3 w-3 md:h-4 md:w-4" />
                       </Button>
+
+                      {/* 모바일에서 재생 안내 */}
+                      {isMobile &&
+                        !isPlaying &&
+                        !isAnalyzing &&
+                        !videoLoading && (
+                          <div className="absolute bottom-2 left-2 right-2 bg-black bg-opacity-70 text-white text-xs p-2 rounded">
+                            화면을 터치하여 비디오를 재생하세요
+                          </div>
+                        )}
                     </div>
                   ) : (
                     <div
+                      ref={uploadAreaRef}
                       className={`flex flex-col items-center justify-center h-[250px] md:h-[400px] rounded-lg transition-all duration-500 ${
                         uploadHighlight
                           ? 'bg-[#2a3142] border-2 border-[#00e6b4] shadow-2xl shadow-[#00e6b4]/30'
@@ -904,6 +1186,7 @@ export default function CCTVAnalysis() {
                           size="icon"
                           className="border-[#2a3142] text-gray-300 hover:text-[#00e6b4] hover:border-[#00e6b4] h-8 w-8 md:h-10 md:w-10"
                           onClick={skipBackward}
+                          disabled={!videoSrc || isAnalyzing || videoLoading}
                         >
                           <SkipBack className="h-3 w-3 md:h-4 md:w-4" />
                         </Button>
@@ -912,6 +1195,7 @@ export default function CCTVAnalysis() {
                           size="icon"
                           className="border-[#2a3142] text-gray-300 hover:text-[#00e6b4] hover:border-[#00e6b4] h-8 w-8 md:h-10 md:w-10"
                           onClick={togglePlayPause}
+                          disabled={!videoSrc || isAnalyzing || videoLoading}
                         >
                           {isPlaying ? (
                             <Pause className="h-3 w-3 md:h-4 md:w-4" />
@@ -924,6 +1208,7 @@ export default function CCTVAnalysis() {
                           size="icon"
                           className="border-[#2a3142] text-gray-300 hover:text-[#00e6b4] hover:border-[#00e6b4] h-8 w-8 md:h-10 md:w-10"
                           onClick={skipForward}
+                          disabled={!videoSrc || isAnalyzing || videoLoading}
                         >
                           <SkipForward className="h-3 w-3 md:h-4 md:w-4" />
                         </Button>
@@ -938,7 +1223,9 @@ export default function CCTVAnalysis() {
                       <div
                         className="absolute top-0 left-0 h-full bg-[#00e6b4] opacity-30"
                         style={{
-                          width: `${(currentTime / (duration || 1)) * 100}%`,
+                          width: `${
+                            duration > 0 ? (currentTime / duration) * 100 : 0
+                          }%`,
                         }}
                       />
 
@@ -946,8 +1233,12 @@ export default function CCTVAnalysis() {
                       {timeMarkers.map((time, index) => (
                         <div
                           key={index}
-                          className="absolute top-0 h-full w-1 bg-[#3694ff] cursor-pointer"
-                          style={{ left: `${(time / (duration || 1)) * 100}%` }}
+                          className="absolute top-0 h-full w-1 bg-[#6c5ce7] cursor-pointer"
+                          style={{
+                            left: `${
+                              duration > 0 ? (time / duration) * 100 : 0
+                            }%`,
+                          }}
                           onClick={() => seekToTime(time)}
                           title={`${formatTime(time)}로 이동`}
                         />
@@ -958,12 +1249,12 @@ export default function CCTVAnalysis() {
                         className="absolute top-0 left-0 w-full h-full"
                         onClick={(e) => {
                           try {
-                            if (videoRef.current) {
+                            if (videoRef.current && videoSrc && duration > 0) {
                               const rect =
                                 e.currentTarget.getBoundingClientRect();
                               const pos = (e.clientX - rect.left) / rect.width;
-                              videoRef.current.currentTime =
-                                pos * (duration || 0);
+                              const newTime = pos * duration;
+                              videoRef.current.currentTime = newTime;
                             }
                           } catch (error) {
                             console.error('Timeline click error:', error);
@@ -986,7 +1277,7 @@ export default function CCTVAnalysis() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-[#3694ff] text-[#3694ff] hover:bg-[#3694ff] hover:text-white hover:border-[#3694ff] transition-all duration-200"
+                      className="border-[#6c5ce7] text-[#6c5ce7] hover:bg-[#6c5ce7] hover:text-white hover:border-[#6c5ce7] transition-all duration-200"
                       onClick={handleNewChat}
                     >
                       <MessageSquare className="h-4 w-4 mr-2" />새 채팅
@@ -995,7 +1286,7 @@ export default function CCTVAnalysis() {
 
                   <div className="flex-1 overflow-hidden mb-3 md:mb-4 border border-[#2a3142] rounded-md">
                     <ScrollArea className="h-[250px] md:h-[400px] pr-2">
-                      <div className="space-y-3 md:space-y-4 p-3 md:p-4">
+                      <div className="space-y-3 md:space-y-4 p-3 md:p-4 overflow-hidden">
                         {messages.map((message, index) => (
                           <div
                             key={index}
@@ -1003,22 +1294,45 @@ export default function CCTVAnalysis() {
                               message.role === 'user'
                                 ? 'justify-end'
                                 : 'justify-start'
-                            }`}
+                            } w-full`}
+                            style={{ minWidth: 0 }}
                           >
                             <div
-                              className={`max-w-[85%] md:max-w-[80%] rounded-lg p-2 md:p-3 text-sm md:text-base ${
+                              className={`max-w-[80%] sm:max-w-[85%] md:max-w-[80%] rounded-lg p-2 md:p-3 text-sm md:text-base break-words overflow-wrap-anywhere ${
                                 message.role === 'user'
-                                  ? 'bg-[#3694ff] text-white'
+                                  ? 'bg-[#6c5ce7] text-white'
                                   : 'bg-[#2a3142] text-gray-200'
                               }`}
+                              style={{
+                                wordBreak: 'break-word',
+                                overflowWrap: 'anywhere',
+                                hyphens: 'auto',
+                                maxWidth:
+                                  message.role === 'user' ? '85%' : '90%',
+                              }}
                             >
-                              {message.content}
+                              <div className="break-words whitespace-pre-wrap">
+                                {message.content}
+                              </div>
                               {message.timestamp && (
                                 <button
-                                  onClick={() =>
-                                    seekToTime(message.timestamp || 0)
-                                  }
-                                  className="mt-2 text-xs md:text-sm font-medium text-[#00e6b4] hover:underline block"
+                                  onClick={() => {
+                                    seekToTime(message.timestamp || 0);
+
+                                    // 모바일에서 타임스탬프 클릭 시 안내 토스트
+                                    if (isMobile) {
+                                      addToast({
+                                        type: 'info',
+                                        title: '비디오로 이동',
+                                        message: `${formatTime(
+                                          message.timestamp || 0
+                                        )} 시점으로 이동합니다.`,
+                                        duration: 2000,
+                                      });
+                                    }
+                                  }}
+                                  className="mt-2 text-xs md:text-sm font-medium text-[#00e6b4] hover:underline block break-words"
+                                  style={{ wordBreak: 'break-word' }}
                                 >
                                   {formatTime(message.timestamp)}로 이동
                                 </button>
@@ -1079,58 +1393,76 @@ export default function CCTVAnalysis() {
           </div>
         </main>
 
-        {/* History Sidebar - 모바일 완전 최적화 */}
+        {/* History Sidebar - 모바일에서는 전체 화면으로 */}
         {isMobile ? (
-          // 모바일 바텀 시트
+          // 모바일 전체 화면 히스토리
           <div
-            className={`fixed inset-x-0 bottom-0 z-50 transform transition-transform duration-300 ease-out ${
-              historyOpen ? 'translate-y-0' : 'translate-y-full'
+            className={`fixed inset-0 z-50 bg-[#1a1f2c] transform transition-transform duration-300 ease-out ${
+              historyOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
-            style={{
-              height: historyOpen ? '70vh' : '0',
-              borderTopLeftRadius: '1rem',
-              borderTopRightRadius: '1rem',
-            }}
           >
-            {/* 드래그 핸들 */}
-            <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-gray-400 rounded-full"></div>
+            {/* 모바일 전용 헤더 */}
+            <div className="bg-[#242a38] border-b border-[#2a3142] p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 flex items-center justify-center">
+                  <img
+                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Adobe%20Express%20-%20file-z6kXCSxAQt4ISVmQRZCDhYxUILirrx.png"
+                    alt="Deep Sentinel Logo"
+                    className="w-full h-full object-contain scale-[1.7]"
+                  />
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-white">
+                    Deep Sentinel
+                  </h1>
+                  <span className="text-xs text-gray-400">분석 히스토리</span>
+                </div>
+              </div>
+              {/* X 버튼 제거됨 */}
+            </div>
 
-            <DynamicHistorySidebar
-              onSelectHistory={handleSelectHistory}
-              currentHistoryId={currentHistoryId}
-              onClose={handleCloseHistory}
-            />
+            {/* 히스토리 콘텐츠 - 나머지 화면 전체 사용 */}
+            <div className="flex-1 h-[calc(100vh-80px)] overflow-hidden">
+              <DynamicHistorySidebar
+                onSelectHistory={handleSelectHistory}
+                currentHistoryId={currentHistoryId}
+                onClose={handleCloseHistory}
+                refreshTrigger={historyRefreshTrigger}
+                onHistoryRefresh={handleHistoryRefresh}
+              />
+            </div>
           </div>
         ) : (
-          // 데스크톱 사이드바 (기존)
+          // 데스크톱 사이드바 - 기존과 동일
           <div
             className={`fixed inset-y-0 right-0 z-50 transform transition-transform duration-300 ease-in-out ${
               historyOpen ? 'translate-x-0' : 'translate-x-full'
-            } w-80 max-w-sm`}
+            }`}
             style={{
               top: '73px',
               height: 'calc(100vh - 73px)',
+              width: '35vw',
+              maxWidth: '600px',
+              minWidth: '400px',
             }}
           >
             <DynamicHistorySidebar
               onSelectHistory={handleSelectHistory}
               currentHistoryId={currentHistoryId}
               onClose={handleCloseHistory}
+              refreshTrigger={historyRefreshTrigger}
+              onHistoryRefresh={handleHistoryRefresh}
             />
           </div>
         )}
 
-        {/* History Backdrop - 모바일/데스크톱 구분 */}
-        {historyOpen && (
+        {/* History Backdrop - 데스크톱에서만 표시 */}
+        {historyOpen && !isMobile && (
           <div
-            className={`fixed inset-0 z-40 ${
-              isMobile
-                ? 'bg-black/30'
-                : 'backdrop-blur-sm bg-gradient-to-r from-[#1a1f2c]/20 via-[#00e6b4]/5 to-[#3694ff]/10'
-            }`}
+            className="fixed inset-0 z-40 backdrop-blur-sm bg-gradient-to-r from-[#1a1f2c]/20 via-[#00e6b4]/5 to-[#6c5ce7]/10"
             style={{
-              top: isMobile ? '0' : '73px',
-              height: isMobile ? '100vh' : 'calc(100vh - 73px)',
+              top: '73px',
+              height: 'calc(100vh - 73px)',
             }}
             onClick={handleCloseHistory}
           />
@@ -1205,9 +1537,6 @@ export default function CCTVAnalysis() {
         isVisible={dragDropVisible}
         onClose={() => setDragDropVisible(false)}
       />
-
-      {/* jQuery 플로팅 요소들 - 파티클 배경 비활성화 */}
-      {/* <JQueryParticleBackground /> */}
 
       {/* Custom CSS for animations */}
       <style jsx>{`

@@ -1,4 +1,4 @@
-export type HistoryItem = {
+export type ChatSession = {
   id: string
   title: string
   createdAt: Date
@@ -12,11 +12,6 @@ export type HistoryItem = {
     duration: number
     url: string
   }
-  eventType?: "도난" | "쓰러짐" | "폭행" | null // 주요 사건 타입 추가
-}
-
-export type HistoryResponse = {
-  success: boolean
-  data: HistoryItem[]
-  error?: string
+  videoId: string
+  eventType?: "도난" | "쓰러짐" | "폭행" | null
 }

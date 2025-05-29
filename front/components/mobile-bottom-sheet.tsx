@@ -1,80 +1,72 @@
-'use client';
+"use client"
 
-import type React from 'react';
+import type React from "react"
 
-import { useEffect, useRef, useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { useEffect, useRef, useState } from "react"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { X } from "lucide-react"
 
 interface MobileBottomSheetProps {
-  isOpen: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-  title?: string;
+  isOpen: boolean
+  onClose: () => void
+  children: React.ReactNode
+  title?: string
 }
 
-export default function MobileBottomSheet({
-  isOpen,
-  onClose,
-  children,
-  title,
-}: MobileBottomSheetProps) {
-  const [dragY, setDragY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startY, setStartY] = useState(0);
-  const sheetRef = useRef<HTMLDivElement>(null);
+export default function MobileBottomSheet({ isOpen, onClose, children, title }: MobileBottomSheetProps) {
+  const [dragY, setDragY] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const [startY, setStartY] = useState(0)
+  const sheetRef = useRef<HTMLDivElement>(null)
 
   // 터치 이벤트 핸들러
   const handleTouchStart = (e: React.TouchEvent) => {
-    setIsDragging(true);
-    setStartY(e.touches[0].clientY);
-  };
+    setIsDragging(true)
+    setStartY(e.touches[0].clientY)
+  }
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
+    if (!isDragging) return
 
-    const currentY = e.touches[0].clientY;
-    const deltaY = currentY - startY;
+    const currentY = e.touches[0].clientY
+    const deltaY = currentY - startY
 
     // 아래로만 드래그 허용
     if (deltaY > 0) {
-      setDragY(deltaY);
+      setDragY(deltaY)
     }
-  };
+  }
 
   const handleTouchEnd = () => {
-    setIsDragging(false);
+    setIsDragging(false)
 
     // 드래그 거리가 100px 이상이면 닫기
     if (dragY > 100) {
-      onClose();
+      onClose()
     }
 
-    setDragY(0);
-  };
+    setDragY(0)
+  }
 
   // ESC 키로 닫기
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
+      if (e.key === "Escape" && isOpen) {
+        onClose()
       }
-    };
+    }
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [isOpen, onClose])
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
     <>
       {/* 백드롭 */}
-      <div
-        className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300" onClick={onClose} />
 
       {/* 바텀 시트 */}
       <div
@@ -82,9 +74,9 @@ export default function MobileBottomSheet({
         className="fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out"
         style={{
           transform: `translateY(${dragY}px)`,
-          height: '75vh',
-          borderTopLeftRadius: '1.5rem',
-          borderTopRightRadius: '1.5rem',
+          height: "75vh",
+          borderTopLeftRadius: "1.5rem",
+          borderTopRightRadius: "1.5rem",
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -97,15 +89,8 @@ export default function MobileBottomSheet({
 
             {/* 헤더 */}
             <div className="flex items-center justify-between w-full px-4">
-              <h2 className="text-lg font-semibold text-white">
-                {title || '히스토리'}
-              </h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-gray-400 hover:text-white"
-                onClick={onClose}
-              >
+              <h2 className="text-lg font-semibold text-white">{title || "히스토리"}</h2>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-white" onClick={onClose}>
                 <X className="h-5 w-5" />
               </Button>
             </div>
@@ -116,5 +101,5 @@ export default function MobileBottomSheet({
         </Card>
       </div>
     </>
-  );
+  )
 }

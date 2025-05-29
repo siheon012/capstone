@@ -57,7 +57,7 @@ export default function VanillaJSDOM() {
       toggleClass: () => {
         const toggleTarget = container.querySelector(".toggle-target")
         if (toggleTarget) {
-          toggleTarget.classList.toggle("bg-[#3694ff]")
+          toggleTarget.classList.toggle("bg-[#6c5ce7]")
           toggleTarget.classList.toggle("bg-[#ff6b6b]")
           toggleTarget.classList.toggle("scale-110")
         }
@@ -67,7 +67,7 @@ export default function VanillaJSDOM() {
       changeStyle: () => {
         const styleTarget = container.querySelector(".style-target") as HTMLElement
         if (styleTarget) {
-          const colors = ["#00e6b4", "#3694ff", "#ff6b6b", "#ffd93d", "#6c5ce7"]
+          const colors = ["#00e6b4", "#6c5ce7", "#ff6b6b", "#ffd93d", "#6c5ce7"]
           const randomColor = colors[Math.floor(Math.random() * colors.length)]
 
           styleTarget.style.backgroundColor = randomColor
@@ -212,7 +212,7 @@ export default function VanillaJSDOM() {
 
           {/* 테스트 요소들 */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="toggle-target bg-[#3694ff] h-16 rounded transition-all duration-300 flex items-center justify-center text-white text-sm">
+            <div className="toggle-target bg-[#6c5ce7] h-16 rounded transition-all duration-300 flex items-center justify-center text-white text-sm">
               토글 대상
             </div>
 
@@ -231,7 +231,7 @@ export default function VanillaJSDOM() {
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-[#1a1f2c] h-8 rounded"></div>
               <div className="bg-[#2a3142] h-8 rounded"></div>
-              <div className="bg-[#3694ff] h-8 rounded"></div>
+              <div className="bg-[#6c5ce7] h-8 rounded"></div>
               <div className="bg-[#00e6b4] h-8 rounded"></div>
             </div>
           </div>

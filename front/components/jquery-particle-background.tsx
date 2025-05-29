@@ -49,7 +49,7 @@ export default function JQueryParticleBackground() {
               vy: (Math.random() - 0.5) * 0.5,
               size: Math.random() * 2 + 1,
               opacity: Math.random() * 0.5 + 0.2,
-              color: Math.random() > 0.5 ? "#00e6b4" : "#3694ff",
+              color: Math.random() > 0.5 ? "#00e6b4" : "#6c5ce7",
             }
           }
 

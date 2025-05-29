@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, AlertCircle, XCircle, Info, X } from "lucide-react"
+import { CheckCircle, AlertCircle, XCircle, Info, X } from 'lucide-react'
 
 export type ToastType = "success" | "error" | "warning" | "info"
 
@@ -58,7 +58,7 @@ export default function ToastNotification({ toasts, onRemove }: ToastNotificatio
         const badge = document.createElement("div")
         badge.className =
           "dynamic-badge absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-        badge.style.backgroundColor = toastData.type === "success" ? "#10b981" : "#3b82f6"
+        badge.style.backgroundColor = toastData.type === "success" ? "#10b981" : "#6c5ce7"
         badge.style.color = "white"
         badge.textContent = "!"
 

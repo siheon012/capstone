@@ -1,14 +1,19 @@
 from rest_framework import serializers
-from .models import Event, PromptHistory, PromptInteraction, Timeline
+from .models import Video, Event, PromptSession, PromptInteraction, Timeline
+
+class VideoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Video
+        fields = '__all__'
 
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = '__all__'
 
-class PromptHistorySerializer(serializers.ModelSerializer):
+class PromptSessionSerializer(serializers.ModelSerializer):
     class Meta:
-        model = PromptHistory
+        model = PromptSession
         fields = '__all__'
 
 class PromptInteractionSerializer(serializers.ModelSerializer):

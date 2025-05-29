@@ -1,8 +1,8 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
-from apps.db.models import Event, PromptHistory, PromptInteraction
-from apps.db.serializers import EventSerializer, PromptHistorySerializer, PromptInteractionSerializer
+from apps.db.models import Video, Event, PromptSession, PromptInteraction
+from apps.db.serializers import VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer
 import json
 
 @api_view(['POST'])
@@ -18,14 +18,23 @@ def process_prompt(request):
         # 1. 세션 생성 또는 조회
         if session_id:
             try:
-                history = PromptHistory.objects.get(session_id=session_id)
-            except PromptHistory.DoesNotExist:
+                history = PromptSession.objects.get(session_id=session_id)
+            except PromptSession.DoesNotExist:
                 return Response({"error": "존재하지 않는 세션입니다."}, status=status.HTTP_404_NOT_FOUND)
         else:
-            # 새 세션 생성
+            # 새 세션 생성 - video와 main_event 필요
+            # 임시로 첫 번째 비디오와 이벤트 사용 (실제로는 요청에서 받아야 함)
+            video = Video.objects.first()
+            main_event = Event.objects.first()
+            
+            if not video or not main_event:
+                return Response({"error": "비디오나 이벤트가 없습니다."}, status=status.HTTP_400_BAD_REQUEST)
+            
             title = prompt_text[:50] + "..." if len(prompt_text) > 50 else prompt_text
-            history = PromptHistory.objects.create(
-                title=title
+            history = PromptSession.objects.create(
+                title=title,
+                video=video,
+                main_event=main_event
             )
         
         # 2. 프롬프트 처리 및 관련 이벤트 검색
@@ -39,9 +48,9 @@ def process_prompt(request):
         # 4. 상호작용 저장
         interaction = PromptInteraction.objects.create(
             session=history,
+            video=history.video,  # video 필드 추가
             input_prompt=prompt_text,
-            output_response=response_text,
-            event=relevant_event
+            output_response=response_text
         )
         
         # 5. 응답 반환
@@ -68,7 +77,7 @@ def process_prompt(request):
 def get_prompt_history(request):
     """모든 프롬프트 세션 목록을 반환하는 API 뷰"""
     try:
-        histories = PromptHistory.objects.all().order_by('-updated_at')
+        histories = PromptSession.objects.all().order_by('-updated_at')
         result = []
         
         for history in histories:
@@ -110,8 +119,8 @@ def get_session_detail(request, session_id):
     """특정 세션의 모든 상호작용을 반환하는 API 뷰"""
     try:
         try:
-            session = PromptHistory.objects.get(session_id=session_id)
-        except PromptHistory.DoesNotExist:
+            session = PromptSession.objects.get(session_id=session_id)
+        except PromptSession.DoesNotExist:
             return Response({"error": "존재하지 않는 세션입니다."}, status=status.HTTP_404_NOT_FOUND)
         
         interactions = session.interactions.all()

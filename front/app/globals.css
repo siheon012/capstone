@@ -16,7 +16,7 @@
     --primary: 164 100% 45%;
     --primary-foreground: 222 47% 11%;
 
-    --secondary: 217.2 91.2% 59.8%;
+    --secondary: 262 83% 58%;
     --secondary-foreground: 210 40% 98%;
 
     --muted: 217 33% 17%;
@@ -33,6 +33,15 @@
     --ring: 212.7 26.8% 83.9%;
 
     --radius: 0.5rem;
+
+    /* 안전 영역 변수 추가 */
+    --sat: env(safe-area-inset-top);
+    --sar: env(safe-area-inset-right);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
+    
+    /* 실제 뷰포트 높이 변수 (JavaScript에서 설정) */
+    --actual-vh: 100vh;
   }
 }
 
@@ -43,4 +52,109 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* 모바일 브라우저 하단 영역 고려한 클래스 추가 */
+.mobile-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+  margin-bottom: 50px; /* 모바일 브라우저 컨트롤 영역 */
+}
+
+/* 모바일 브라우저 뷰포트 높이 최적화 */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari 전용 */
+  .mobile-viewport-fix {
+    height: -webkit-fill-available;
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* 모바일 안전 영역을 고려한 유틸리티 클래스들 */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.safe-left {
+  padding-left: env(safe-area-inset-left, 0);
+}
+
+.safe-right {
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+/* 히스토리 사이드바 모바일 최적화 */
+.history-mobile-container {
+  height: var(--actual-vh, 100vh);
+  max-height: var(--actual-vh, 100vh);
+  /* iOS Safari에서 바운스 스크롤 방지 */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 모바일 브라우저에서 배경 스크롤 방지 시 적용할 클래스 */
+.scroll-locked {
+  position: fixed !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  height: var(--actual-vh, 100vh) !important;
+}
+
+.scroll-locked-ios {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+}
+
+/* 커스텀 스크롤바 스타일 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1f2c;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #00e6b4 0%, #00c49c 100%);
+  border-radius: 4px;
+  border: 1px solid #242a38;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #00c49c 0%, #00a085 100%);
+}
+
+::-webkit-scrollbar-corner {
+  background: #1a1f2c;
+}
+
+/* Firefox 스크롤바 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #00e6b4 #1a1f2c;
+}
+
+/* 히스토리 사이드바 전용 스크롤바 */
+.history-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.history-scrollbar::-webkit-scrollbar-track {
+  background: #242a38;
+  border-radius: 3px;
+}
+
+.history-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #00e6b4 0%, #6c5ce7 100%);
+  border-radius: 3px;
+  border: 1px solid #2a3142;
+}
+
+.history-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #6c5ce7 0%, #00e6b4 100%);
 }

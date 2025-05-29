@@ -1,7 +1,8 @@
 from django.contrib import admin
-from .models import Event, PromptHistory, PromptInteraction, Timeline
+from .models import Video, Event, PromptSession, PromptInteraction, Timeline
 
+admin.site.register(Video)
 admin.site.register(Event)
-admin.site.register(PromptHistory)
+admin.site.register(PromptSession)
 admin.site.register(PromptInteraction)
 admin.site.register(Timeline)

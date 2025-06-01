@@ -19,10 +19,6 @@ import {
 import type { HistoryItem } from '@/app/types/history';
 import { getHistoryList, deleteHistory } from '@/app/actions/history-service';
 import type { ChatSession } from '@/app/types/session';
-import {
-  useViewportHeight,
-  getMobileSafeStyles,
-} from '@/hooks/use-viewport-height';
 
 // HistoryItem과 ChatSession을 모두 처리할 수 있는 유니온 타입 정의
 type HistoryOrSession = HistoryItem | ChatSession;
@@ -53,8 +49,26 @@ export default function DynamicHistorySidebar({
   const footerRef = useRef<HTMLDivElement>(null);
 
   // 뷰포트 높이 및 모바일 감지 훅 사용
-  const { viewportHeight, isMobile, safeHeight } = useViewportHeight();
-  const mobileStyles = getMobileSafeStyles(isMobile, viewportHeight);
+  const [isMobile, setIsMobile] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(0);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent =
+        navigator.userAgent || navigator.vendor || (window as any).opera;
+      const isMobileDevice =
+        /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+          userAgent.toLowerCase()
+        );
+      const isSmallScreen = window.innerWidth <= 768;
+      setIsMobile(isMobileDevice || isSmallScreen);
+      setViewportHeight(window.innerHeight);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     loadHistoryData();
@@ -167,17 +181,12 @@ export default function DynamicHistorySidebar({
   }
 
   // 모바일에서 안전한 높이 계산
-  const safeViewportHeight = isMobile
-    ? Math.min(viewportHeight, window.screen.height)
+  const effectiveHeight = isMobile
+    ? Math.min(viewportHeight, window.screen?.height || viewportHeight)
     : viewportHeight;
-
-  // 모바일 브라우저의 안전 영역을 고려한 높이 계산
-  const mobileAdjustment = isMobile ? 60 : 0; // 모바일 브라우저 하단 바 여유 공간
-  const effectiveHeight = safeViewportHeight - mobileAdjustment;
-
   const contentHeight = isMobile
-    ? `${effectiveHeight - 160}px` // 헤더(80px) + 푸터(80px) 여유분
-    : 'calc(100vh - 200px)';
+    ? `${effectiveHeight - 160}px`
+    : 'calc(100vh - 280px)'; // 웹에서는 헤더 높이 고려
 
   return (
     <div
@@ -200,6 +209,48 @@ export default function DynamicHistorySidebar({
         e.stopPropagation();
       }}
     >
+      {/* Sticky Header - 웹에서만 표시 */}
+      {!isMobile && (
+        <div className="sticky top-0 z-10 bg-[#242a38] border-b border-[#2a3142] p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-[#00e6b4]" />
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  분석 히스토리
+                </h2>
+                <p className="text-sm text-gray-400">과거 CCTV 분석 기록</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* 새로고침 버튼 */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-gray-400 hover:text-[#00e6b4] hover:bg-[#1a1f2c] transition-colors"
+                onClick={onHistoryRefresh || loadHistoryData}
+                title="히스토리 새로고침"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+
+              {/* 웹 전용 닫기 버튼 */}
+              {onClose && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-gray-400 hover:text-white hover:bg-[#1a1f2c] flex-shrink-0"
+                  onClick={onClose}
+                  aria-label="히스토리 닫기"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* 콘텐츠 영역 - 고정 높이로 설정 */}
       <div
         className="flex-1 overflow-hidden"

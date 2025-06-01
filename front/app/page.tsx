@@ -27,6 +27,43 @@ import { saveHistory, getHistoryList } from '@/app/actions/history-service';
 import JQueryCounterAnimation from '@/components/jquery-counter-animation';
 import { saveVideoFile } from '@/app/actions/video-service';
 
+// HTML5 Video API를 사용하여 비디오 duration 추출 함수
+const getVideoDurationFromFile = (file: File): Promise<number> => {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true; // 모바일 호환성을 위해 음소거
+    video.playsInline = true; // iOS에서 인라인 재생
+
+    // 타임아웃 설정 (10초)
+    const timeout = setTimeout(() => {
+      URL.revokeObjectURL(video.src);
+      reject(new Error('Video duration extraction timeout'));
+    }, 10000);
+
+    video.onloadedmetadata = () => {
+      clearTimeout(timeout);
+      URL.revokeObjectURL(video.src);
+
+      // duration이 유효한지 확인
+      if (video.duration && !isNaN(video.duration) && video.duration > 0) {
+        resolve(video.duration);
+      } else {
+        reject(new Error('Invalid video duration'));
+      }
+    };
+
+    video.onerror = () => {
+      clearTimeout(timeout);
+      URL.revokeObjectURL(video.src);
+      reject(new Error('Failed to load video metadata'));
+    };
+
+    // 비디오 소스 설정
+    video.src = URL.createObjectURL(file);
+  });
+};
+
 export default function CCTVAnalysis() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [videoFileName, setVideoFileName] = useState<string>('');
@@ -76,6 +113,9 @@ export default function CCTVAnalysis() {
   // 비디오 로딩 상태 추가
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+
+  // 중복 비디오 여부 상태 추가
+  const [isDuplicateVideo, setIsDuplicateVideo] = useState(false);
 
   // 히스토리 새로고침 트리거
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
@@ -186,6 +226,8 @@ export default function CCTVAnalysis() {
     try {
       setVideoLoading(true);
       setVideoError(null);
+      // 중복 비디오 상태 초기화
+      setIsDuplicateVideo(false);
 
       // Validate file type
       const validVideoTypes = [
@@ -207,17 +249,65 @@ export default function CCTVAnalysis() {
         return;
       }
 
-      // Validate file size (limit to 100MB)
-      const maxSize = 100 * 1024 * 1024; // 100MB
+      // Validate file size
+      const maxSize = 2 * 1024 * 1024 * 1024;
       if (file.size > maxSize) {
         addToast({
           type: 'error',
           title: '파일 크기 초과',
-          message: '100MB 이하의 파일만 업로드할 수 있습니다.',
+          message: '2GB 이하의 파일만 업로드할 수 있습니다.',
           duration: 3000,
         });
         setVideoLoading(false);
         return;
+      }
+
+      // HTML5 Video API를 사용하여 비디오 duration 추출
+      let videoDuration: number | undefined = undefined;
+      try {
+        videoDuration = await getVideoDurationFromFile(file);
+        console.log('Extracted video duration:', videoDuration);
+      } catch (durationError) {
+        console.warn('Failed to extract video duration:', durationError);
+      }
+
+      // 서버에 파일 저장 및 중복 체크
+      let serverSaveResult = null;
+      try {
+        const formData = new FormData();
+        formData.append('video', file);
+        if (videoDuration !== undefined) {
+          formData.append('duration', videoDuration.toString());
+        }
+        serverSaveResult = await saveVideoFile(formData, videoDuration);
+        console.log('Server save result:', serverSaveResult);
+
+        // 중복 비디오 처리 - success가 false이고 isDuplicate가 true인 경우
+        if (serverSaveResult.isDuplicate && !serverSaveResult.success) {
+          setVideoLoading(false);
+          addToast({
+            type: 'warning',
+            title: '중복된 비디오',
+            message: '동일한 비디오가 이미 업로드되어 있습니다.',
+            duration: 4000,
+          });
+          return; // 중복 비디오인 경우 업로드 중단
+        }
+
+        // 서버 저장 실패 시 처리
+        if (!serverSaveResult.success && !serverSaveResult.isDuplicate) {
+          setVideoLoading(false);
+          addToast({
+            type: 'error',
+            title: '업로드 실패',
+            message:
+              serverSaveResult.error || '파일 저장 중 오류가 발생했습니다.',
+            duration: 4000,
+          });
+          return;
+        }
+      } catch (serverError) {
+        console.warn('Server save failed, but client continues:', serverError);
       }
 
       // 즉시 Object URL 생성하여 클라이언트에서 사용
@@ -277,30 +367,21 @@ export default function CCTVAnalysis() {
         setMessages([
           {
             role: 'assistant',
-            content: '영상 분석을 시작합니다. 잠시만 기다려주세요...',
+            content: isDuplicateVideo
+              ? '이미 업로드된 영상을 분석합니다. 이전 분석 결과를 활용할 수 있습니다.'
+              : '영상 분석을 시작합니다. 잠시만 기다려주세요...',
           },
         ]);
 
         // 성공 토스트
         addToast({
-          type: 'success',
-          title: '업로드 완료',
-          message: `${file.name} 파일이 성공적으로 업로드되었습니다.`,
+          type: isDuplicateVideo ? 'warning' : 'success',
+          title: isDuplicateVideo ? '중복 영상 감지' : '업로드 완료',
+          message: isDuplicateVideo
+            ? `${file.name} 파일이 이미 업로드된 영상입니다. 기존 파일을 사용합니다.`
+            : `${file.name} 파일이 성공적으로 업로드되었습니다.`,
           duration: 3000,
         });
-
-        // 백그라운드에서 서버 액션 실행 (실패해도 클라이언트 동작에 영향 없음)
-        try {
-          const formData = new FormData();
-          formData.append('video', file);
-          const saveResult = await saveVideoFile(formData);
-          console.log('Server save result:', saveResult);
-        } catch (serverError) {
-          console.warn(
-            'Server save failed, but client continues:',
-            serverError
-          );
-        }
 
         // 분석 진행도 시뮬레이션
         const progressInterval = setInterval(() => {
@@ -863,7 +944,11 @@ export default function CCTVAnalysis() {
       try {
         e.preventDefault();
         // 드래그 앤 드롭 존이 이미 열려있지 않을 때만 실행
-        if (!dragDropVisible && e.dataTransfer?.files.length > 0) {
+        if (
+          !dragDropVisible &&
+          e.dataTransfer?.files &&
+          e.dataTransfer.files.length > 0
+        ) {
           setDragDropVisible(true);
         }
       } catch (error) {
@@ -1063,9 +1148,18 @@ export default function CCTVAnalysis() {
                           console.log('Video data loaded');
                           setVideoLoading(false);
                         }}
-                        onLoadedMetadata={() => {
+                        onLoadedMetadata={(e) => {
                           console.log('Video metadata loaded');
                           setVideoLoading(false);
+                          const video = e.target as HTMLVideoElement;
+                          if (
+                            video.duration &&
+                            !isNaN(video.duration) &&
+                            video.duration > 0
+                          ) {
+                            setDuration(video.duration);
+                            console.log('Video duration set:', video.duration);
+                          }
                         }}
                         onWaiting={() => {
                           console.log('Video waiting for data');
@@ -1131,26 +1225,44 @@ export default function CCTVAnalysis() {
                     <div
                       ref={uploadAreaRef}
                       className={`flex flex-col items-center justify-center h-[250px] md:h-[400px] rounded-lg transition-all duration-500 ${
-                        uploadHighlight
+                        isDuplicateVideo
+                          ? 'bg-[#2a3142] border-2 border-[#FFB800] shadow-2xl shadow-[#FFB800]/30'
+                          : uploadHighlight
                           ? 'bg-[#2a3142] border-2 border-[#00e6b4] shadow-2xl shadow-[#00e6b4]/30'
                           : 'bg-[#2a3142] border-2 border-[#3a4553] hover:border-[#4a5563]'
                       }`}
                       style={{
-                        animation: uploadHighlight
+                        animation: isDuplicateVideo
+                          ? 'borderGlowYellow 0.5s ease-in-out'
+                          : uploadHighlight
                           ? 'borderGlow 0.5s ease-in-out'
                           : 'none',
                       }}
                     >
-                      {/* 업로드 아이콘 */}
+                      {/* 업로드 아이콘 - 중복 감지 시 노란색으로 변경 */}
                       <div className="mb-6">
-                        <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-[#00e6b4] bg-opacity-10 flex items-center justify-center border-2 border-[#00e6b4] border-opacity-30">
-                          <Upload className="h-8 w-8 md:h-10 md:w-10 text-[#00e6b4]" />
+                        <div
+                          className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center border-2 ${
+                            isDuplicateVideo
+                              ? 'bg-[#FFB800] bg-opacity-10 border-[#FFB800] border-opacity-30'
+                              : 'bg-[#00e6b4] bg-opacity-10 border-[#00e6b4] border-opacity-30'
+                          }`}
+                        >
+                          <Upload
+                            className={`h-8 w-8 md:h-10 md:w-10 ${
+                              isDuplicateVideo
+                                ? 'text-[#FFB800]'
+                                : 'text-[#00e6b4]'
+                            }`}
+                          />
                         </div>
                       </div>
 
-                      {/* 메인 텍스트 */}
+                      {/* 메인 텍스트 - 중복 감지 시 메시지 변경 */}
                       <p className="text-gray-300 mb-6 text-base md:text-lg text-center px-4 font-medium">
-                        분석을 시작하려면 CCTV 영상을 업로드하세요
+                        {isDuplicateVideo
+                          ? '이미 업로드된 동영상입니다. 분석을 시작하세요.'
+                          : '분석을 시작하려면 CCTV 영상을 업로드하세요'}
                       </p>
 
                       {/* 업로드 버튼 */}
@@ -1406,7 +1518,7 @@ export default function CCTVAnalysis() {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 flex items-center justify-center">
                   <img
-                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Adobe%20Express%20-%20file-z6kXCSxAQt4ISVmQRZCDhYxUILirrx.png"
+                    src="/images/ds_logo_transparent.png"
                     alt="Deep Sentinel Logo"
                     className="w-full h-full object-contain scale-[1.7]"
                   />
@@ -1586,6 +1698,21 @@ export default function CCTVAnalysis() {
           100% {
             border-color: rgba(0, 230, 180, 0.8);
             box-shadow: 0 0 0 2px rgba(0, 230, 180, 0.3);
+          }
+        }
+
+        @keyframes borderGlowYellow {
+          0% {
+            border-color: rgba(255, 184, 0, 0.8);
+            box-shadow: 0 0 0 2px rgba(255, 184, 0, 0.3);
+          }
+          50% {
+            border-color: rgba(255, 184, 0, 1);
+            box-shadow: 0 0 0 4px rgba(255, 184, 0, 0.6);
+          }
+          100% {
+            border-color: rgba(255, 184, 0, 0.8);
+            box-shadow: 0 0 0 2px rgba(255, 184, 0, 0.3);
           }
         }
       `}</style>

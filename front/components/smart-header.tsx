@@ -183,7 +183,7 @@ export default function SmartHeader({
           >
             <div className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center">
               <img
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Adobe%20Express%20-%20file-z6kXCSxAQt4ISVmQRZCDhYxUILirrx.png"
+                src="/images/ds_logo_transparent.png"
                 alt="Deep Sentinel Logo"
                 className="w-full h-full object-contain scale-[1.7]"
               />
@@ -219,7 +219,9 @@ export default function SmartHeader({
               variant="ghost"
               size="sm"
               className="text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c]"
-              onClick={() => window.open('https://github.com', '_blank')}
+              onClick={() =>
+                window.open('https://github.com/siheon012/capstone', '_blank')
+              }
             >
               <Github className="h-4 w-4 mr-2" />
               GitHub
@@ -313,7 +315,10 @@ export default function SmartHeader({
                 size="sm"
                 className="justify-start text-gray-300 hover:text-[#00e6b4] hover:bg-[#1a1f2c]"
                 onClick={() => {
-                  window.open('https://github.com', '_blank');
+                  window.open(
+                    'https://github.com/siheon012/capstone',
+                    '_blank'
+                  );
                   if (onMobileMenuToggle) {
                     onMobileMenuToggle();
                   }

@@ -11,7 +11,7 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: '2gb', // 또는 필요한 만큼 (예: '50mb', '100mb')
+      bodySizeLimit: '2gb',
     },
   },
 };

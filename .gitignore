@@ -59,3 +59,5 @@ back/**/__pycache__/
 .vscode/
 *.sublime-project
 *.sublime-workspace
+
+./front/public/uploads/

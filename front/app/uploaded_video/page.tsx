@@ -354,7 +354,7 @@ export default function UploadedVideoPage() {
       <div className="min-h-screen bg-[#1a1f2c] text-gray-100 flex items-center justify-center">
         <div className="animate-pulse text-center">
           <div className="w-16 h-16 bg-[#00e6b4] rounded-full mx-auto mb-4 animate-bounce"></div>
-          <p className="text-white text-lg">수정 중...</p>
+          <p className="text-white text-lg">삭제 중...</p>
         </div>
       </div>
     );

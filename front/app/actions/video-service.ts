@@ -27,11 +27,17 @@ async function ensureUploadDir() {
 // 메타데이터 저장 함수
 async function saveVideoMetadata(videoData: UploadedVideo): Promise<void> {
   try {
+    await ensureUploadDir(); // 디렉토리 확실히 생성
     const metadataPath = join(METADATA_DIR, `${videoData.id}.json`);
+    console.log(`💾 메타데이터 저장 중: ${metadataPath}`);
+    console.log(`📂 메타데이터 디렉토리: ${METADATA_DIR}`);
+    console.log(`🆔 비디오 ID: ${videoData.id}`);
+    
     await writeFile(metadataPath, JSON.stringify(videoData, null, 2));
-    console.log('Video metadata saved:', metadataPath);
+    console.log(`✅ 메타데이터 저장 완료: ${metadataPath}`);
+    console.log(`📊 저장된 데이터:`, videoData);
   } catch (error) {
-    console.error('Failed to save video metadata:', error);
+    console.error('❌ 메타데이터 저장 실패:', error);
   }
 }
 
@@ -304,8 +310,6 @@ export async function getUploadedVideos(): Promise<VideoListResponse> {
     // 디렉토리 존재 확인
     await ensureUploadDir();
 
-    // 이미 import된 readdir과 stat 함수를 사용하므로 별도의 설정 필요 없음
-
     // 비디오 디렉토리 읽기
     const files = await readdir(UPLOAD_DIR);
 
@@ -318,17 +322,48 @@ export async function getUploadedVideos(): Promise<VideoListResponse> {
         file.endsWith('.mov')
     );
 
+    // 메타데이터 파일들을 먼저 읽어서 파일명과 매핑
+    const metadataFiles = await readdir(METADATA_DIR);
+    const metadataMap = new Map<string, UploadedVideo>();
+    
+    console.log(`📂 메타데이터 파일 개수: ${metadataFiles.length}`);
+    
+    for (const metaFile of metadataFiles) {
+      if (metaFile.endsWith('.json')) {
+        try {
+          const metaPath = join(METADATA_DIR, metaFile);
+          const metaData = await readFile(metaPath, 'utf-8');
+          const videoData = JSON.parse(metaData) as UploadedVideo;
+          metadataMap.set(videoData.name, videoData);
+          console.log(`📄 메타데이터 로드: ${videoData.name} -> ID: ${videoData.id}`);
+        } catch (error) {
+          console.error(`❌ 메타데이터 파일 읽기 실패: ${metaFile}`, error);
+        }
+      }
+    }
+
     // 각 비디오에 대한 메타데이터 수집
     const videos: UploadedVideo[] = await Promise.all(
       videoFiles.map(async (fileName: string) => {
         const filePath = join(UPLOAD_DIR, fileName);
         const fileStats = await stat(filePath);
 
-        // 파일명에서 ID 추출 - timestamp 기반으로 생성
-        const nameParts = fileName.split('.');
-        const extension = nameParts.pop() || 'mp4';
+        // 메타데이터에서 실제 비디오 정보 찾기
+        const videoMetadata = metadataMap.get(fileName);
+        
+        if (videoMetadata) {
+          // 메타데이터가 있으면 그것을 사용하고 파일 정보만 업데이트
+          console.log(`✅ 메타데이터 발견: ${fileName} -> ID: ${videoMetadata.id}`);
+          return {
+            ...videoMetadata,
+            size: fileStats.size,
+            uploadDate: fileStats.birthtime,
+            filePath: `/uploads/videos/${fileName}`,
+          };
+        }
 
-        // ID는 파일 생성 시간 기반으로 생성
+        // 메타데이터가 없는 경우 (하위 호환성) - 파일 생성 시간을 ID로 사용
+        console.warn(`⚠️ 메타데이터 없음: ${fileName}, 파일 시간으로 ID 생성`);
         const id = fileStats.birthtime.getTime().toString();
 
         // 원본 파일명 추출 - (숫자) 패턴 제거하여 원본 이름 복원
@@ -352,20 +387,6 @@ export async function getUploadedVideos(): Promise<VideoListResponse> {
 
         // 언더스코어를 공백으로 복원하고 안전 문자 처리 복원
         originalName = originalName.replace(/_/g, ' ');
-
-        // 메타데이터 JSON 파일에서 실제 정보 로드 시도
-        const metadata = await loadVideoMetadata(id);
-
-        if (metadata) {
-          // 메타데이터가 있으면 그것을 사용
-          return {
-            ...metadata,
-            // 파일 시스템에서 가져온 정보로 일부 업데이트 (변경될 수 있는 정보들)
-            size: fileStats.size,
-            uploadDate: fileStats.birthtime,
-            filePath: `/uploads/videos/${fileName}`, // 웹에서 접근 가능한 경로
-          };
-        }
 
         // 메타데이터가 없으면 기본값으로 생성 (하위 호환성)
         const duration = 0;
@@ -402,11 +423,12 @@ export async function getUploadedVideos(): Promise<VideoListResponse> {
 
 // 비디오 삭제
 export async function deleteVideo(videoId: string): Promise<boolean> {
+  console.log(`🗑️ 비디오 삭제 시작: ${videoId}`);
   try {
     // 먼저 모든 비디오 목록을 가져와서 해당 ID의 비디오 찾기
     const videosResponse = await getUploadedVideos();
     if (!videosResponse.success) {
-      console.error('비디오 목록 조회 실패');
+      console.error('❌ 비디오 목록 조회 실패');
       return false;
     }
 
@@ -415,50 +437,123 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
       (video) => video.id === videoId
     );
     if (!targetVideo) {
-      console.error(`비디오를 찾을 수 없음: ${videoId}`);
+      console.error(`❌ 비디오를 찾을 수 없음: ${videoId}`);
       return false;
     }
 
-    // 파일 경로에서 실제 파일명 추출
-    // filePath 형태: "/uploads/videos/filename.mp4"
-    const fileName = targetVideo.name; // name 필드에 실제 파일명이 저장됨
+    console.log(`📹 삭제할 비디오:`, {
+      id: targetVideo.id,
+      name: targetVideo.name,
+      originalName: targetVideo.originalName,
+      filePath: targetVideo.filePath
+    });
+
+    // 1. 비디오 파일 삭제
+    const fileName = targetVideo.name;
     const filePath = join(UPLOAD_DIR, fileName);
+    
+    console.log(`📁 비디오 파일 삭제: ${filePath}`);
 
-    // 파일 존재 확인
-    if (!existsSync(filePath)) {
-      console.error(`파일이 존재하지 않음: ${filePath}`);
-      return false;
+    if (existsSync(filePath)) {
+      await unlink(filePath);
+      console.log(`✅ 비디오 파일 삭제 완료`);
+    } else {
+      console.warn(`⚠️ 비디오 파일이 존재하지 않음: ${filePath}`);
     }
 
-    // 파일 삭제
-    await unlink(filePath);
-
-    // 메타데이터 JSON 파일 삭제
+    // 2. 메타데이터 파일 삭제 - 모든 메타데이터 파일을 검사해서 매칭되는 것 삭제
+    let metadataDeleted = false;
+    let matchedFiles: string[] = [];
+    
     try {
-      const metadataPath = join(METADATA_DIR, `${videoId}.json`);
-      if (existsSync(metadataPath)) {
-        await unlink(metadataPath);
-        console.log(`메타데이터 삭제 완료: ${metadataPath}`);
+      const metadataFiles = await readdir(METADATA_DIR);
+      console.log(`🔍 메타데이터 파일 ${metadataFiles.length}개 검사 시작`);
+      console.log(`🎯 찾는 조건: ID='${videoId}' 또는 파일명='${fileName}'`);
+
+      for (const metaFile of metadataFiles) {
+        if (metaFile.endsWith('.json')) {
+          try {
+            const metaPath = join(METADATA_DIR, metaFile);
+            console.log(`📄 검사 중: ${metaFile}`);
+            
+            const metaData = await readFile(metaPath, 'utf-8');
+            const videoData = JSON.parse(metaData) as UploadedVideo;
+            
+            console.log(`   - 메타데이터 ID: '${videoData.id}'`);
+            console.log(`   - 메타데이터 파일명: '${videoData.name}'`);
+            
+            // ID 또는 파일명이 일치하는 메타데이터 찾기
+            const idMatch = videoData.id === videoId;
+            const nameMatch = videoData.name === fileName;
+            
+            if (idMatch || nameMatch) {
+              console.log(`🎯 매칭된 메타데이터 발견!`);
+              console.log(`   - 파일: ${metaFile}`);
+              console.log(`   - ID 매칭: ${idMatch} (${videoData.id} === ${videoId})`);
+              console.log(`   - 파일명 매칭: ${nameMatch} (${videoData.name} === ${fileName})`);
+              
+              await unlink(metaPath);
+              console.log(`✅ 메타데이터 삭제 완료: ${metaFile}`);
+              matchedFiles.push(metaFile);
+              metadataDeleted = true;
+            } else {
+              console.log(`   - 매칭 안됨`);
+            }
+          } catch (error) {
+            console.error(`❌ 메타데이터 파일 읽기 실패: ${metaFile}`, error);
+          }
+        }
+      }
+
+      if (!metadataDeleted) {
+        console.warn(`⚠️ 삭제할 메타데이터를 찾을 수 없음`);
+        console.warn(`   조건: ID='${videoId}' 또는 파일명='${fileName}'`);
+        
+        // 백업 방법: ID를 파일명으로 한 메타데이터 파일 직접 삭제 시도
+        const directMetaPath = join(METADATA_DIR, `${videoId}.json`);
+        console.log(`🔄 백업 삭제 시도: ${directMetaPath}`);
+        
+        if (existsSync(directMetaPath)) {
+          try {
+            await unlink(directMetaPath);
+            console.log(`✅ 백업 방법으로 메타데이터 삭제 성공: ${videoId}.json`);
+            metadataDeleted = true;
+          } catch (error) {
+            console.error(`❌ 백업 삭제 실패:`, error);
+          }
+        } else {
+          console.log(`❌ 백업 파일도 존재하지 않음: ${videoId}.json`);
+        }
+      } else {
+        console.log(`🎉 메타데이터 삭제 성공: ${matchedFiles.join(', ')}`);
       }
     } catch (metadataError) {
-      console.error('메타데이터 삭제 중 오류 발생:', metadataError);
-      // 메타데이터 삭제 실패해도 비디오 파일은 삭제되었으므로 계속 진행
+      console.error('❌ 메타데이터 디렉토리 읽기 실패:', metadataError);
     }
 
-    console.log(`비디오 삭제 완료: ${videoId}, 파일: ${filePath}`);
-
-    // 관련 세션들도 함께 삭제
+    // 3. 관련 세션 삭제
     try {
       await deleteSessionsByVideoId(videoId);
-      console.log(`비디오 ${videoId}의 관련 세션들 삭제 완료`);
+      console.log(`✅ 관련 세션 삭제 완료`);
     } catch (sessionError) {
-      console.error('세션 삭제 중 오류 발생:', sessionError);
-      // 파일은 이미 삭제되었으므로 세션 삭제 실패해도 전체 작업은 성공으로 처리
+      console.error('❌ 세션 삭제 실패:', sessionError);
     }
 
-    return true;
+    // 4. 최종 결과 확인
+    const wasVideoDeleted = !existsSync(filePath);
+    console.log(`📊 삭제 결과 요약:`);
+    console.log(`   - 비디오 파일 삭제: ${wasVideoDeleted ? '✅ 성공' : '❌ 실패'}`);
+    console.log(`   - 메타데이터 삭제: ${metadataDeleted ? '✅ 성공' : '❌ 실패'}`);
+
+    if (wasVideoDeleted && metadataDeleted) {
+      console.log(`🎉 비디오 삭제 작업 완료: ${videoId}`);
+      return true;
+    } else {
+      console.error(`⚠️ 일부 삭제 실패 - 비디오: ${wasVideoDeleted}, 메타데이터: ${metadataDeleted}`);
+      return false;
+    }
   } catch (error) {
-    console.error('비디오 삭제 오류:', error);
+    console.error('❌ 비디오 삭제 오류:', error);
     return false;
   }
 }
@@ -475,5 +570,66 @@ export async function updateVideoMetadata(
   } catch (error) {
     console.error('Video metadata update error:', error);
     return false;
+  }
+}
+
+// 고아 메타데이터 파일 정리 함수
+async function cleanupOrphanedMetadata(): Promise<void> {
+  try {
+    const metadataFiles = await readdir(METADATA_DIR);
+    const videoFiles = await readdir(UPLOAD_DIR);
+    
+    // 비디오 파일만 필터링
+    const existingVideoFiles = new Set(videoFiles.filter(
+      (file: string) =>
+        file.endsWith('.mp4') ||
+        file.endsWith('.webm') ||
+        file.endsWith('.ogg') ||
+        file.endsWith('.mov')
+    ));
+    
+    console.log(`🧹 고아 메타데이터 정리 시작`);
+    console.log(`📹 존재하는 비디오 파일: ${Array.from(existingVideoFiles).join(', ')}`);
+    
+    for (const metaFile of metadataFiles) {
+      if (metaFile.endsWith('.json')) {
+        try {
+          const metaPath = join(METADATA_DIR, metaFile);
+          const metaData = await readFile(metaPath, 'utf-8');
+          const videoData = JSON.parse(metaData) as UploadedVideo;
+          
+          // 해당하는 비디오 파일이 존재하지 않으면 메타데이터 삭제
+          if (!existingVideoFiles.has(videoData.name)) {
+            console.log(`🗑️ 고아 메타데이터 발견: ${metaFile} (비디오 파일: ${videoData.name})`);
+            await unlink(metaPath);
+            console.log(`✅ 고아 메타데이터 삭제 완료: ${metaFile}`);
+          }
+        } catch (error) {
+          console.error(`❌ 메타데이터 파일 처리 실패: ${metaFile}`, error);
+        }
+      }
+    }
+    
+    console.log(`🎉 고아 메타데이터 정리 완료`);
+  } catch (error) {
+    console.error('❌ 고아 메타데이터 정리 실패:', error);
+  }
+}
+
+// 비디오 목록을 가져올 때 고아 메타데이터 정리도 함께 실행
+export async function getAllVideos(): Promise<VideoListResponse> {
+  try {
+    // 고아 메타데이터 정리 실행
+    await cleanupOrphanedMetadata();
+    
+    // 일반적인 비디오 목록 반환
+    return await getUploadedVideos();
+  } catch (error) {
+    console.error('Failed to get all videos:', error);
+    return {
+      success: false,
+      data: [],
+      error: '비디오 목록을 불러오는 중 오류가 발생했습니다.',
+    };
   }
 }

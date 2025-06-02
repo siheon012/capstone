@@ -285,6 +285,23 @@ export default function CCTVAnalysis() {
         // 중복 비디오 처리 - success가 false이고 isDuplicate가 true인 경우
         if (serverSaveResult.isDuplicate && !serverSaveResult.success) {
           setVideoLoading(false);
+
+          // 중복 비디오 애니메이션 활성화
+          setIsDuplicateVideo(true);
+
+          // 모바일에서 업로드 영역으로 스크롤
+          if (isMobile && uploadAreaRef.current) {
+            uploadAreaRef.current.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+            });
+          }
+
+          // 1초 후 애니메이션 종료
+          setTimeout(() => {
+            setIsDuplicateVideo(false);
+          }, 1000);
+
           addToast({
             type: 'warning',
             title: '중복된 비디오',
@@ -1233,7 +1250,7 @@ export default function CCTVAnalysis() {
                       }`}
                       style={{
                         animation: isDuplicateVideo
-                          ? 'borderGlowYellow 0.5s ease-in-out'
+                          ? 'borderGlowYellow 1s ease-in-out 3'
                           : uploadHighlight
                           ? 'borderGlow 0.5s ease-in-out'
                           : 'none',

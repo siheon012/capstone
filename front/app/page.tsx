@@ -271,6 +271,24 @@ export default function CCTVAnalysis() {
         console.warn('Failed to extract video duration:', durationError);
       }
 
+      // 썸네일 생성 및 업로드
+      let thumbnailPath: string | null = null;
+      try {
+        const { createAndUploadThumbnail } = await import(
+          '@/utils/thumbnail-utils'
+        );
+        thumbnailPath = await createAndUploadThumbnail(file, file.name);
+        if (thumbnailPath) {
+          console.log('Thumbnail generated and uploaded:', thumbnailPath);
+        } else {
+          console.warn(
+            'Thumbnail generation failed, continuing without thumbnail'
+          );
+        }
+      } catch (thumbnailError) {
+        console.warn('Thumbnail generation error:', thumbnailError);
+      }
+
       // 서버에 파일 저장 및 중복 체크
       let serverSaveResult = null;
       try {
@@ -279,7 +297,11 @@ export default function CCTVAnalysis() {
         if (videoDuration !== undefined) {
           formData.append('duration', videoDuration.toString());
         }
-        serverSaveResult = await saveVideoFile(formData, videoDuration);
+        serverSaveResult = await saveVideoFile(
+          formData,
+          videoDuration,
+          thumbnailPath || undefined
+        );
         console.log('Server save result:', serverSaveResult);
 
         // 중복 비디오 처리 - success가 false이고 isDuplicate가 true인 경우

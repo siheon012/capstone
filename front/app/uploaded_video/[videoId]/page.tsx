@@ -159,7 +159,7 @@ export default function CCTVAnalysis() {
             }
           }
 
-          setVideoFileName(foundVideo.originalName);
+          setVideoFileName(foundVideo.name);
 
           // 진행도 애니메이션 시뮬레이션 (메인 페이지와 동일한 로직)
           const progressInterval = setInterval(() => {
@@ -175,7 +175,7 @@ export default function CCTVAnalysis() {
                   setMessages([
                     {
                       role: 'assistant',
-                      content: `"${foundVideo.originalName}" 영상이 로드되었습니다. 영상 내용에 대해 질문할 수 있습니다.`,
+                      content: `"${foundVideo.name}" 영상이 로드되었습니다. 영상 내용에 대해 질문할 수 있습니다.`,
                     },
                   ]);
                 }, 500);
@@ -852,8 +852,7 @@ export default function CCTVAnalysis() {
                           새 분석 세션
                         </h2>
                         <p className="text-xs md:text-sm text-gray-400 break-words">
-                          {video?.originalName} 영상에 대한 새로운 분석을
-                          시작합니다
+                          {video?.name} 영상에 대한 새로운 분석을 시작합니다
                         </p>
                       </div>
                       <Link href="/">

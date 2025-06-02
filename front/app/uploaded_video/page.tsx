@@ -270,7 +270,7 @@ export default function UploadedVideoPage() {
   const allFilteredAndSortedVideos = videos
     .filter((video) => {
       const matchesSearch =
-        video.originalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        video.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         video.description?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesFilter =
         filterEvent === 'all' ||
@@ -285,7 +285,7 @@ export default function UploadedVideoPage() {
             new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
           );
         case 'name':
-          return a.originalName.localeCompare(b.originalName);
+          return a.name.localeCompare(b.name);
         case 'size':
           return b.size - a.size;
         case 'duration':
@@ -474,7 +474,25 @@ export default function UploadedVideoPage() {
                     <div className="w-full sm:w-48 flex-shrink-0">
                       <Link href={`/uploaded_video/${video.id}/sessions`}>
                         <div className="w-full h-32 sm:w-48 sm:h-28 bg-[#1a1f2c] rounded-lg overflow-hidden border border-[#2a3142] hover:border-[#00e6b4] transition-colors cursor-pointer">
-                          <div className="w-full h-full flex items-center justify-center">
+                          {video.thumbnail ? (
+                            <img
+                              src={video.thumbnail}
+                              alt={`${video.name} 썸네일`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                // 썸네일 로드 실패 시 기본 아이콘 표시
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.nextElementSibling?.classList.remove(
+                                  'hidden'
+                                );
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className={`w-full h-full flex items-center justify-center ${
+                              video.thumbnail ? 'hidden' : ''
+                            }`}
+                          >
                             <Video className="h-8 w-8 text-gray-500" />
                           </div>
                         </div>
@@ -487,7 +505,7 @@ export default function UploadedVideoPage() {
                         <div className="min-w-0 flex-1">
                           <Link href={`/uploaded_video/${video.id}/sessions`}>
                             <h3 className="text-base sm:text-lg font-semibold text-white mb-1 truncate hover:text-[#00e6b4] transition-colors cursor-pointer">
-                              {video.originalName}
+                              {video.name}
                             </h3>
                           </Link>
                           {video.description && (

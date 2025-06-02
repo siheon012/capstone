@@ -197,7 +197,7 @@ export default function VideoSessionsPage() {
         );
 
         const success = await deleteVideo(videoId);
-        
+
         if (success) {
           // 성공 토스트
           addToast(
@@ -212,11 +212,7 @@ export default function VideoSessionsPage() {
           }, 1000);
         } else {
           // 실패 토스트
-          addToast(
-            '삭제 실패',
-            '비디오 삭제 중 오류가 발생했습니다.',
-            'error'
-          );
+          addToast('삭제 실패', '비디오 삭제 중 오류가 발생했습니다.', 'error');
         }
       } catch (error) {
         console.error('Delete video error:', error);
@@ -370,7 +366,24 @@ export default function VideoSessionsPage() {
               {/* 썸네일 - 모바일에서는 전체 너비로 */}
               <div className="w-full sm:w-64 sm:flex-shrink-0 order-1">
                 <div className="w-full h-48 sm:w-64 sm:h-36 bg-[#1a1f2c] rounded-lg overflow-hidden border border-[#2a3142] mx-auto">
-                  <div className="w-full h-full flex items-center justify-center">
+                  {video.thumbnail ? (
+                    <img
+                      src={video.thumbnail}
+                      alt={`${video.name} 썸네일`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove(
+                          'hidden'
+                        );
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className={`w-full h-full flex items-center justify-center ${
+                      video.thumbnail ? 'hidden' : ''
+                    }`}
+                  >
                     <Video className="h-12 w-12 text-gray-500" />
                   </div>
                 </div>
@@ -381,7 +394,7 @@ export default function VideoSessionsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4">
                   <div>
                     <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">
-                      {video.originalName}
+                      {video.name}
                     </h1>
                     {video.description && (
                       <p className="text-sm sm:text-base text-gray-400 mb-3">

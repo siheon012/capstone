@@ -12,7 +12,7 @@ class Video(models.Model):
     thumbnail_path = models.CharField(max_length=500, null= False, blank=False)
     chat_count = models.IntegerField(default=0)
     major_event = models.CharField(max_length=100, null=True, blank=True)
-    video_file = models.FileField(upload_to='videos/%Y/%m/%d/')
+    video_file = models.FileField(upload_to='videos/%Y/%m/%d/', blank=True, null=True)  # 임시로 nullable로 설정
     
     @property
     def file_path(self):
@@ -45,25 +45,23 @@ class Video(models.Model):
 class Event(models.Model):
     """비디오 내에서 발생한 이벤트"""
     video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='events', db_column='video_id')
-    timestamp = models.FloatField() # 상대시간 초 단위
+    timestamp = models.DateTimeField()  # FloatField → DateTimeField로 변경
     obj_id = models.IntegerField()
-    age = models.FloatField(null=True, blank=True)
-    gender = models.CharField(max_length=10, null=True, blank=True)
-    gender_score = models.FloatField(null=True, blank=True)
+    age = models.FloatField()  # null=True, blank=True 제거 (DB에서 not null)
+    gender = models.CharField(max_length=10)  # null=True, blank=True 제거
+    gender_score = models.FloatField()  # null=True, blank=True 제거
     location = models.CharField(max_length=255)
     area_of_interest = models.IntegerField()
     action_detected = models.CharField(max_length=255)
     event_type = models.CharField(max_length=255)
+    scene_analysis = models.CharField(max_length=255, null=True, blank=True)  # 분석 결과 (예: VLM 요약)
+    orientataion= models.CharField(max_length=50, null=True, blank=True)  # 객체 방향 (예: left, right)
 
-    # 메타데이터
-    created_at = models.DateTimeField(auto_now_add=True)  # DB 저장 시간
     
     @property
     def timestamp_display(self):
         """사용자 친화적 시간 표시"""
-        minutes = int(self.timestamp // 60)
-        seconds = int(self.timestamp % 60)
-        return f"{minutes:02d}:{seconds:02d}"
+        return self.timestamp.strftime("%H:%M:%S")
     
     class Meta:
         ordering = ['video', 'timestamp']
@@ -150,7 +148,7 @@ class PromptSession(models.Model):
 class PromptInteraction(models.Model):
     """각 프롬프트 세션 내의 상호작용"""
     session = models.ForeignKey(PromptSession, on_delete=models.CASCADE, related_name='interactions')
-    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='prompt_interactions', db_column='video_id')  # 성능 최적화를 위한 직접 참조
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='prompt_interactions', db_column='video_id', null=True, blank=True)  # 임시로 nullable로 설정
     
     # 프롬프트 내용
     input_prompt = models.TextField()  # 사용자 입력 프롬프트
@@ -158,17 +156,17 @@ class PromptInteraction(models.Model):
     
     # AI 처리 과정
     generated_sql = models.TextField(null=True, blank=True)  # Text2SQL로 생성된 SQL
-    thumbnail_path = models.CharField(max_length=500, blank=True)  # 추출된 썸네일
-    
+    highlight_thumbnail_path = models.CharField(max_length=500, blank=True)  # 타임라인 하이라이트 썸네일
+    thumbnail_extracted_at = models.DateTimeField(null=True, blank=True)     # 썸네일 추출 시간    
+
     # 처리 상태
     PROCESSING_STATUS = [
         ('pending', '대기중'),
         ('processing', '처리중'),
-        ('extracting_thumbnail', '썸네일 추출중'),
-        ('analyzing_vlm', 'VLM 분석중'),
         ('completed', '완료'),
         ('failed', '실패'),
     ]
+
     processing_status = models.CharField(max_length=20, choices=PROCESSING_STATUS, default='pending')
     error_message = models.TextField(blank=True)  # 오류 발생 시 메시지
 
@@ -190,6 +188,11 @@ class PromptInteraction(models.Model):
     
     def __str__(self):
         return f"Interaction #{self.interaction_number} in Session #{self.session.session_id} at {self.timestamp}"
+        
+    def save(self, *args, **kwargs):
+        # 데이터 일관성 보장: video 자동 설정
+        if self.session and not self.video_id:
+            self.video = self.session.video
     
     @property
     def interaction_number(self):
@@ -266,12 +269,12 @@ class PromptInteraction(models.Model):
     
     def mark_completed(self, thumbnail_path="", vlm_summary=""):
         """처리 완료 표시"""
-        self.thumbnail_path = thumbnail_path
+        self.highlight_thumbnail_path = thumbnail_path
         if vlm_summary:
             self.output_response = vlm_summary
         self.processing_status = 'completed'
         self.processed_at = timezone.now()
-        self.save(update_fields=['thumbnail_path', 'output_response', 'processing_status', 'processed_at'])
+        self.save(update_fields=['highlight_thumbnail_path', 'output_response', 'processing_status', 'processed_at'])
     
     def mark_failed(self, error_message):
         """처리 실패 표시"""

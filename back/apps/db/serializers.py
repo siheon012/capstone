@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Video, Event, PromptSession, PromptInteraction, Timeline
+from .models import Video, Event, PromptSession, PromptInteraction
 
 class VideoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -21,7 +21,8 @@ class PromptInteractionSerializer(serializers.ModelSerializer):
         model = PromptInteraction
         fields = '__all__'
 
-class TimelineSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Timeline
-        fields = '__all__'
+# Timeline 모델이 주석처리되어 있어 serializer 제외
+# class TimelineSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Timeline
+#         fields = '__all__'

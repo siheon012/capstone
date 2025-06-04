@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from apps.db.models import Video, Event, PromptSession, PromptInteraction
 from apps.db.serializers import VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer
 import json
+import requests
+from django.db import connection
 
 @api_view(['POST'])
 def process_prompt(request):
@@ -152,40 +154,76 @@ def get_session_detail(request, session_id):
 
 def process_prompt_logic(prompt_text):
     """
-    프롬프트 처리 로직
+    프롬프트 처리 로직 - FastAPI text2sql 호출
     
-    이 함수는 프롬프트를 분석하고 관련 이벤트를 찾아 응답을 생성합니다.
-    실제 구현에서는 더 복잡한 로직이 필요할 수 있습니다.
+    1. FastAPI에 프롬프트 전송하여 SQL 생성
+    2. 생성된 SQL로 타임스탬프 추출
+    3. DB 쿼리 실행
+    4. 타임라인 추출 → 영상 캡쳐
+    5. VLM에 캡쳐 이미지 + 프롬프트 전송
+    6. 응답 생성
     """
-    # 예시: 키워드 기반으로 간단한 이벤트 검색
-    keywords = {
-        "도난": "theft",
-        "폭행": "assault",
-        "침입": "invasion",
-        "배회": "loitering",
-        "싸움": "fight",
-        "넘어짐": "fall"
-    }
-    
-    # 이벤트 검색
-    relevant_event = None
-    event_type = None
-    
-    for keyword, event_type_eng in keywords.items():
-        if keyword in prompt_text:
-            event_type = event_type_eng
-            break
-    
-    if event_type:
-        # 관련 이벤트를 데이터베이스에서 검색
-        events = Event.objects.filter(action_detected__icontains=event_type).order_by('-timestamp')
-        if events.exists():
-            relevant_event = events.first()
-    
-    # 응답 생성
-    if relevant_event:
-        response = f"관련 이벤트를 찾았습니다. {relevant_event.timestamp.strftime('%H:%M')}에 {relevant_event.location}에서 {relevant_event.action_detected} 행동이 감지되었습니다."
-    else:
-        response = "관련 이벤트를 찾을 수 없습니다."
-    
-    return response, relevant_event
+    try:
+        # 1. FastAPI text2sql 호출
+        fastapi_url = "http://localhost:8087/api/process"
+        fastapi_payload = {"prompt": prompt_text}
+        
+        print(f"FastAPI 호출: {fastapi_url}")
+        print(f"Payload: {fastapi_payload}")
+        
+        response = requests.post(
+            fastapi_url,
+            json=fastapi_payload,
+            headers={"Content-Type": "application/json"},
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            return f"FastAPI 호출 실패: {response.status_code}", None
+            
+        text2sql_result = response.json()
+        print(f"FastAPI 응답: {text2sql_result}")
+        
+        # 2. SQL 쿼리 추출 및 실행
+        if 'sql' not in text2sql_result:
+            return "SQL 쿼리가 생성되지 않았습니다.", None
+            
+        sql_query = text2sql_result['sql']
+        print(f"생성된 SQL: {sql_query}")
+        
+        # 3. DB에서 쿼리 실행
+        with connection.cursor() as cursor:
+            cursor.execute(sql_query)
+            query_results = cursor.fetchall()
+            
+        if not query_results:
+            return "쿼리 결과가 없습니다.", None
+            
+        print(f"쿼리 결과: {query_results}")
+        
+        # 4. 타임라인 추출 (첫 번째 결과 사용)
+        # TODO: 영상 캡쳐 로직 구현
+        # TODO: VLM 호출 로직 구현
+        
+        # 임시 응답 생성
+        response_text = f"FastAPI text2sql 처리 완료. {len(query_results)}개의 결과를 찾았습니다."
+        
+        # 관련 이벤트 반환 (첫 번째 결과)
+        relevant_event = None
+        if query_results:
+            # Event 모델의 필드 순서에 맞춰 결과 매핑
+            # 실제 구현에서는 쿼리 결과의 구조에 따라 조정 필요
+            try:
+                first_result = query_results[0]
+                events = Event.objects.filter(id=first_result[0])
+                if events.exists():
+                    relevant_event = events.first()
+            except Exception as e:
+                print(f"이벤트 매핑 오류: {e}")
+        
+        return response_text, relevant_event
+        
+    except requests.exceptions.RequestException as e:
+        return f"FastAPI 연결 오류: {str(e)}", None
+    except Exception as e:
+        return f"처리 중 오류 발생: {str(e)}", None

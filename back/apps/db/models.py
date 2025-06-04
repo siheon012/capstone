@@ -288,36 +288,138 @@ class PromptInteraction(models.Model):
         self.processing_status = status
         self.save(update_fields=['processing_status'])
 
-'''
-class Timeline(models.Model):
-    """사용자가 저장한 특정 이벤트 타임라인"""
-    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='timelines', db_column='video_id')
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='timelines')  # Event 참조로 event_type 접근
-    start_time = models.DateTimeField()  # 이벤트 시작 시간
-    end_time = models.DateTimeField()    # 이벤트 종료 시간
+class DepthData(models.Model):
+    """동영상의 공간 구조 정보를 저장하는 모델"""
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='spatial_data')
     
-    # 어떤 프롬프트로 찾았는지 - 이것만 있으면 input_prompt도 접근 가능
-    source_interaction = models.ForeignKey(PromptInteraction, on_delete=models.CASCADE, related_name='saved_timelines')
+    # 프레임 정보
+    frame_name = models.CharField(max_length=255)  # 예: "20250526_182739_3fps_frame78.jpg"
+    frame_width = models.IntegerField()  # 프레임 너비
+    frame_height = models.IntegerField()  # 프레임 높이
     
-    # 사용자 저장 정보
-    user_note = models.TextField(blank=True)  # 사용자 메모
-    priority = models.CharField(
-        max_length=10,
-        choices=[
-            ('low', '낮음'),
-            ('medium', '보통'), 
-            ('high', '높음')
-        ],
-        default='medium'
-    )
-    saved_at = models.DateTimeField(auto_now_add=True)  # 저장한 시점
+    # 마스크 정보
+    mask_id = models.IntegerField()  # 해당 프레임 내에서의 마스크 ID
+    bbox_x1 = models.IntegerField()  # 바운딩 박스 좌상단 x
+    bbox_y1 = models.IntegerField()  # 바운딩 박스 좌상단 y
+    bbox_x2 = models.IntegerField()  # 바운딩 박스 우하단 x
+    bbox_y2 = models.IntegerField()  # 바운딩 박스 우하단 y
+    area = models.IntegerField()     # 픽셀 면적
     
-    # 추가 메타데이터
-    confidence_score = models.FloatField(null=True, blank=True)  # AI 신뢰도 점수
-    action_sequence = models.TextField(blank=True)  # 상세 행동 시퀀스
-
+    # 깊이 정보
+    avg_depth = models.FloatField()  # 평균 깊이
+    min_depth = models.FloatField()  # 최소 깊이
+    max_depth = models.FloatField()  # 최대 깊이
+    
+    # 메타데이터
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['video', 'frame_name', 'mask_id']
+        indexes = [
+            models.Index(fields=['video', 'frame_name']),  # 비디오별 프레임 조회
+            models.Index(fields=['frame_name']),           # 프레임명으로 조회
+            models.Index(fields=['video', 'mask_id']),     # 비디오별 마스크 조회
+        ]
+        # 같은 프레임에서 같은 mask_id 중복 방지
+        unique_together = ['frame_name', 'mask_id']
+    
+    @property
+    def bbox_array(self):
+        """바운딩 박스를 [x1, y1, x2, y2] 배열로 반환"""
+        return [self.bbox_x1, self.bbox_y1, self.bbox_x2, self.bbox_y2]
+    
+    @property
+    def bbox_width(self):
+        """바운딩 박스 너비"""
+        return self.bbox_x2 - self.bbox_x1
+    
+    @property
+    def bbox_height(self):
+        """바운딩 박스 높이"""
+        return self.bbox_y2 - self.bbox_y1
+    
+    @property
+    def depth_range(self):
+        """깊이 범위"""
+        return self.max_depth - self.min_depth
+    
+    @property
+    def frame_timestamp(self):
+        """프레임명에서 타임스탬프 추출 (frame78 -> 78)"""
+        try:
+            # "20250526_182739_3fps_frame78.jpg" -> 78
+            import re
+            match = re.search(r'frame(\d+)', self.frame_name)
+            return int(match.group(1)) if match else None
+        except:
+            return None
+    
     def __str__(self):
-        return f"Timeline: {self.event.event_type} in {self.video.name} ({self.start_time} - {self.end_time})"
+        return f"SpatialData: {self.frame_name} mask#{self.mask_id} in {self.video.name}"
 
-
-'''
+class DisplayData(models.Model):
+    """진열대 마스크 정보를 저장하는 모델"""
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='display_data')
+    
+    # 이미지 메타 정보
+    image_index = models.IntegerField()  # 이미지 인덱스
+    image_name = models.CharField(max_length=255)  # 예: "test1.png"
+    timestamp = models.DateTimeField()  # 2025-06-05 01:00:55.590351
+    
+    # 좌표 변환 정보
+    original_width = models.IntegerField()  # 원본 이미지 너비
+    original_height = models.IntegerField()  # 원본 이미지 높이
+    new_width = models.IntegerField()  # 변환된 이미지 너비
+    new_height = models.IntegerField()  # 변환된 이미지 높이
+    width_ratio = models.FloatField()  # 너비 변환 비율
+    height_ratio = models.FloatField()  # 높이 변환 비율
+    
+    # 마스크 정보
+    mask_key = models.IntegerField()  # 마스크 키
+    avg_depth = models.FloatField()  # 평균 깊이
+    description = models.CharField(max_length=255)  # 예: "Farthest display", "Left side display"
+    
+    # 바운딩 박스 정보 (변환된 좌표)
+    min_x = models.IntegerField()
+    max_x = models.IntegerField()
+    min_y = models.IntegerField()
+    max_y = models.IntegerField()
+    width = models.IntegerField()   # 너비
+    height = models.IntegerField()  # 높이
+    
+    # 메타데이터
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['video', 'timestamp', 'image_index', 'mask_key']
+        indexes = [
+            models.Index(fields=['video', 'timestamp']),    # 비디오별 시간순 조회
+            models.Index(fields=['image_index']),           # 이미지 인덱스로 조회
+            models.Index(fields=['avg_depth']),             # 깊이별 조회
+            models.Index(fields=['description']),           # 설명별 조회
+        ]
+        # 같은 이미지에서 같은 mask_key 중복 방지
+        unique_together = ['video', 'image_index', 'mask_key']
+    
+    @property
+    def bbox_array(self):
+        """바운딩 박스를 [min_x, min_y, max_x, max_y] 배열로 반환"""
+        return [self.min_x, self.min_y, self.max_x, self.max_y]
+    
+    @property
+    def center_x(self):
+        """마스크 중심점 X 좌표"""
+        return (self.min_x + self.max_x) // 2
+    
+    @property
+    def center_y(self):
+        """마스크 중심점 Y 좌표"""
+        return (self.min_y + self.max_y) // 2
+    
+    @property
+    def area(self):
+        """마스크 면적"""
+        return self.width * self.height
+    
+    def __str__(self):
+        return f"Display Mask {self.mask_key}: {self.description} in {self.video.name} (depth:{self.avg_depth})"

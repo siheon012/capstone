@@ -1,12 +1,18 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.db import transaction
 import os
-from .models import Video, Event, PromptSession, PromptInteraction
-from .serializers import VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer
+import json
+from datetime import datetime
+from .models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData
+from .serializers import (
+    VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer,
+    DepthDataSerializer, DisplayDataSerializer, DepthDataBulkCreateSerializer, DisplayDataBulkCreateSerializer
+)
 
 class VideoViewSet(viewsets.ModelViewSet):
     queryset = Video.objects.all()
@@ -75,7 +81,103 @@ class PromptInteractionViewSet(viewsets.ModelViewSet):
     queryset = PromptInteraction.objects.all()
     serializer_class = PromptInteractionSerializer
 
-# Timeline 모델이 주석처리되어 있어 ViewSet 제외
-# class TimelineViewSet(viewsets.ModelViewSet):
-#     queryset = Timeline.objects.all()
-#     serializer_class = TimelineSerializer
+class DepthDataViewSet(viewsets.ModelViewSet):
+    queryset = DepthData.objects.all()
+    serializer_class = DepthDataSerializer
+    
+    def get_queryset(self):
+        queryset = DepthData.objects.all()
+        video_id = self.request.query_params.get('video_id', None)
+        frame_name = self.request.query_params.get('frame_name', None)
+        
+        if video_id is not None:
+            queryset = queryset.filter(video_id=video_id)
+        if frame_name is not None:
+            queryset = queryset.filter(frame_name__icontains=frame_name)
+            
+        return queryset.order_by('frame_name', 'mask_id')
+    
+    @action(detail=False, methods=['post'], url_path='bulk-create')
+    def bulk_create(self, request):
+        """공간 정보 데이터 일괄 생성"""
+        try:
+            serializer = DepthDataBulkCreateSerializer(data=request.data)
+            if serializer.is_valid():
+                with transaction.atomic():
+                    depth_data_objects = serializer.save()
+                    return Response({
+                        'success': True,
+                        'message': f'{len(depth_data_objects)}개의 공간 정보가 저장되었습니다.',
+                        'count': len(depth_data_objects)
+                    }, status=status.HTTP_201_CREATED)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {'error': f'공간 정보 저장 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class DisplayDataViewSet(viewsets.ModelViewSet):
+    queryset = DisplayData.objects.all()
+    serializer_class = DisplayDataSerializer
+    
+    def get_queryset(self):
+        queryset = DisplayData.objects.all()
+        video_id = self.request.query_params.get('video_id', None)
+        description = self.request.query_params.get('description', None)
+        
+        if video_id is not None:
+            queryset = queryset.filter(video_id=video_id)
+        if description is not None:
+            queryset = queryset.filter(description__icontains=description)
+            
+        return queryset.order_by('timestamp', 'image_index', 'mask_key')
+    
+    @action(detail=False, methods=['post'], url_path='bulk-create')
+    def bulk_create(self, request):
+        """진열대 정보 데이터 일괄 생성"""
+        try:
+            serializer = DisplayDataBulkCreateSerializer(data=request.data)
+            if serializer.is_valid():
+                with transaction.atomic():
+                    display_data_objects = serializer.save()
+                    return Response({
+                        'success': True,
+                        'message': f'{len(display_data_objects)}개의 진열대 정보가 저장되었습니다.',
+                        'count': len(display_data_objects)
+                    }, status=status.HTTP_201_CREATED)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {'error': f'진열대 정보 저장 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'], url_path='by-depth')
+    def by_depth(self, request):
+        """깊이별 진열대 정보 조회"""
+        video_id = request.query_params.get('video_id')
+        if not video_id:
+            return Response(
+                {'error': 'video_id 파라미터가 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        displays = DisplayData.objects.filter(video_id=video_id).order_by('avg_depth')
+        serializer = self.get_serializer(displays, many=True)
+        
+        # 깊이별로 그룹화
+        depth_groups = {}
+        for display in serializer.data:
+            depth = display['description']
+            if depth not in depth_groups:
+                depth_groups[depth] = []
+            depth_groups[depth].append(display)
+        
+        return Response({
+            'video_id': video_id,
+            'depth_groups': depth_groups,
+            'total_count': len(serializer.data)
+        })

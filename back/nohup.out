@@ -1,0 +1,339 @@
+Watching for file changes with StatReloader
+Performing system checks...
+
+System check identified no issues (0 silenced).
+June 04, 2025 - 23:13:29
+Django version 5.2, using settings 'core.settings'
+Starting development server at http://0.0.0.0:8088/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+[04/Jun/2025 23:14:59] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:15:01] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:15:02] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:15:02] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:15:06] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:15:06] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:15:07] "GET /admin/ HTTP/1.1" 200 10136
+Watching for file changes with StatReloader
+Error: That port is already in use.
+Watching for file changes with StatReloader
+[04/Jun/2025 23:23:19] "GET /admin HTTP/1.1" 301 0
+[04/Jun/2025 23:23:20] "GET /admin/ HTTP/1.1" 302 0
+[04/Jun/2025 23:23:20] "GET /admin/login/?next=/admin/ HTTP/1.1" 200 4184
+[04/Jun/2025 23:23:20] "GET /static/admin/css/base.css HTTP/1.1" 200 22154
+[04/Jun/2025 23:23:20] "GET /static/admin/css/dark_mode.css HTTP/1.1" 200 2808
+[04/Jun/2025 23:23:20] "GET /static/admin/css/nav_sidebar.css HTTP/1.1" 200 2810
+[04/Jun/2025 23:23:20] "GET /static/admin/css/responsive.css HTTP/1.1" 200 16632
+[04/Jun/2025 23:23:20] "GET /static/admin/css/login.css HTTP/1.1" 200 951
+[04/Jun/2025 23:23:20] "GET /static/admin/js/theme.js HTTP/1.1" 200 1653
+[04/Jun/2025 23:23:20] "GET /static/admin/js/nav_sidebar.js HTTP/1.1" 200 3063
+Not Found: /favicon.ico
+[04/Jun/2025 23:23:20] "GET /favicon.ico HTTP/1.1" 404 2503
+[04/Jun/2025 23:23:26] "POST /admin/login/?next=/admin/ HTTP/1.1" 302 0
+[04/Jun/2025 23:23:27] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:23:27] "GET /static/admin/css/dashboard.css HTTP/1.1" 200 441
+[04/Jun/2025 23:23:27] "GET /static/admin/img/icon-addlink.svg HTTP/1.1" 200 331
+[04/Jun/2025 23:23:27] "GET /static/admin/img/icon-changelink.svg HTTP/1.1" 200 380
+[04/Jun/2025 23:23:49] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:23:49] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:23:50] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:23:50] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:23:50] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:25:46] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:25:48] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:25:49] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:25:49] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:25:49] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:25:49] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:25:49] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:25:50] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:25:50] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:25:50] "GET /admin/ HTTP/1.1" 200 10136
+[04/Jun/2025 23:26:07,802] - Broken pipe from ('125.178.110.242', 51409)
+[04/Jun/2025 23:26:07,807] - Broken pipe from ('125.178.110.242', 51413)
+[04/Jun/2025 23:26:07,807] - Broken pipe from ('125.178.110.242', 51411)
+[04/Jun/2025 23:26:07,807] - Broken pipe from ('125.178.110.242', 51416)
+[04/Jun/2025 23:26:07,807] - Broken pipe from ('125.178.110.242', 51415)
+[04/Jun/2025 23:26:07,808] - Broken pipe from ('125.178.110.242', 7632)
+Not Found: /ws/v1/cluster/apps/new-application
+[04/Jun/2025 23:28:55] "POST /ws/v1/cluster/apps/new-application HTTP/1.1" 404 2573
+Not Found: /
+[05/Jun/2025 00:19:00] "GET / HTTP/1.1" 404 2452
+Not Found: /favicon.ico
+[05/Jun/2025 00:19:01] "GET /favicon.ico HTTP/1.1" 404 2503
+[05/Jun/2025 00:55:58] "GET /admin HTTP/1.1" 301 0
+[05/Jun/2025 00:55:58] "GET /admin/ HTTP/1.1" 302 0
+[05/Jun/2025 00:55:58] "GET /admin/login/?next=/admin/ HTTP/1.1" 200 4184
+[05/Jun/2025 00:56:07] "GET /admin HTTP/1.1" 301 0
+[05/Jun/2025 00:56:07] "GET /admin/ HTTP/1.1" 302 0
+[05/Jun/2025 00:56:07] "GET /admin/login/?next=/admin/ HTTP/1.1" 200 4184
+[05/Jun/2025 00:56:07] "GET /static/admin/css/base.css HTTP/1.1" 200 22154
+[05/Jun/2025 00:56:07] "GET /static/admin/css/dark_mode.css HTTP/1.1" 200 2808
+[05/Jun/2025 00:56:07] "GET /static/admin/css/responsive.css HTTP/1.1" 200 16632
+[05/Jun/2025 00:56:07] "GET /static/admin/css/login.css HTTP/1.1" 200 951
+[05/Jun/2025 00:56:07] "GET /static/admin/css/nav_sidebar.css HTTP/1.1" 200 2810
+[05/Jun/2025 00:56:07] "GET /static/admin/js/theme.js HTTP/1.1" 200 1653
+[05/Jun/2025 00:56:08] "GET /static/admin/js/nav_sidebar.js HTTP/1.1" 200 3063
+Not Found: /favicon.ico
+[05/Jun/2025 00:56:08] "GET /favicon.ico HTTP/1.1" 404 2503
+Not Found: /
+[05/Jun/2025 00:56:18] "GET / HTTP/1.1" 404 2447
+[05/Jun/2025 00:56:34] "POST /admin/login/?next=/admin/ HTTP/1.1" 302 0
+[05/Jun/2025 00:56:35] "GET /admin/ HTTP/1.1" 200 10136
+[05/Jun/2025 00:56:35] "GET /static/admin/css/dashboard.css HTTP/1.1" 200 441
+[05/Jun/2025 00:56:35] "GET /static/admin/img/icon-addlink.svg HTTP/1.1" 200 331
+[05/Jun/2025 00:56:35] "GET /static/admin/img/icon-changelink.svg HTTP/1.1" 200 380
+[05/Jun/2025 00:56:40] "GET /admin HTTP/1.1" 301 0
+[05/Jun/2025 00:56:40] "GET /admin/ HTTP/1.1" 302 0
+[05/Jun/2025 00:56:40] "GET /admin/login/?next=/admin/ HTTP/1.1" 200 4184
+[05/Jun/2025 00:56:40] "GET /static/admin/css/base.css HTTP/1.1" 200 22154
+[05/Jun/2025 00:56:40] "GET /static/admin/js/theme.js HTTP/1.1" 200 1653
+[05/Jun/2025 00:56:40] "GET /static/admin/css/login.css HTTP/1.1" 200 951
+[05/Jun/2025 00:56:40] "GET /static/admin/css/dark_mode.css HTTP/1.1" 200 2808
+[05/Jun/2025 00:56:40] "GET /static/admin/js/nav_sidebar.js HTTP/1.1" 200 3063
+[05/Jun/2025 00:56:40] "GET /static/admin/css/nav_sidebar.css HTTP/1.1" 200 2810
+[05/Jun/2025 00:56:40] "GET /static/admin/css/responsive.css HTTP/1.1" 200 16632
+[05/Jun/2025 00:56:59] "GET /admin/db/depthdata/add/ HTTP/1.1" 200 19944
+[05/Jun/2025 00:56:59] "GET /static/admin/css/forms.css HTTP/1.1" 200 8525
+[05/Jun/2025 00:56:59] "GET /static/admin/js/jquery.init.js HTTP/1.1" 200 347
+[05/Jun/2025 00:56:59] "GET /static/admin/js/core.js HTTP/1.1" 200 6208
+[05/Jun/2025 00:56:59] "GET /static/admin/js/admin/RelatedObjectLookups.js HTTP/1.1" 200 9777
+[05/Jun/2025 00:56:59] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 00:56:59] "GET /static/admin/js/actions.js HTTP/1.1" 200 8076
+[05/Jun/2025 00:56:59] "GET /static/admin/js/urlify.js HTTP/1.1" 200 7887
+[05/Jun/2025 00:56:59] "GET /static/admin/css/widgets.css HTTP/1.1" 200 11991
+[05/Jun/2025 00:56:59] "GET /static/admin/js/prepopulate.js HTTP/1.1" 200 1531
+[05/Jun/2025 00:56:59] "GET /static/admin/js/vendor/jquery/jquery.js HTTP/1.1" 200 285314
+[05/Jun/2025 00:56:59] "GET /static/admin/js/prepopulate_init.js HTTP/1.1" 200 586
+[05/Jun/2025 00:56:59] "GET /static/admin/js/vendor/xregexp/xregexp.js HTTP/1.1" 200 325171
+[05/Jun/2025 00:56:59] "GET /static/admin/js/change_form.js HTTP/1.1" 200 606
+[05/Jun/2025 00:56:59] "GET /static/admin/img/search.svg HTTP/1.1" 200 458
+[05/Jun/2025 00:57:00] "GET /admin/ HTTP/1.1" 200 10136
+[05/Jun/2025 00:57:01] "GET /admin/db/depthdata/ HTTP/1.1" 200 11860
+[05/Jun/2025 00:57:01] "GET /static/admin/css/changelists.css HTTP/1.1" 200 6878
+[05/Jun/2025 00:57:01] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 00:57:01] "GET /static/admin/js/filters.js HTTP/1.1" 200 978
+[05/Jun/2025 00:57:01] "GET /static/admin/img/icon-viewlink.svg HTTP/1.1" 200 581
+[05/Jun/2025 00:57:01] "GET /static/admin/img/tooltag-add.svg HTTP/1.1" 200 331
+[05/Jun/2025 00:57:04] "GET /admin/db/depthdata/ HTTP/1.1" 200 11860
+[05/Jun/2025 00:57:04] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 00:57:11] "GET /admin/ HTTP/1.1" 200 10136
+[05/Jun/2025 00:57:13] "GET /admin/db/depthdata/ HTTP/1.1" 200 11860
+[05/Jun/2025 00:57:14] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 00:57:17] "GET /admin/ HTTP/1.1" 200 10136
+[05/Jun/2025 00:57:18] "POST /admin/login/?next=/admin/ HTTP/1.1" 302 0
+[05/Jun/2025 00:57:18] "GET /admin/ HTTP/1.1" 200 10136
+[05/Jun/2025 00:57:18] "GET /static/admin/css/dashboard.css HTTP/1.1" 200 441
+[05/Jun/2025 00:57:18] "GET /static/admin/img/icon-changelink.svg HTTP/1.1" 200 380
+[05/Jun/2025 00:57:18] "GET /static/admin/img/icon-addlink.svg HTTP/1.1" 200 331
+[05/Jun/2025 00:57:21] "GET /admin/db/depthdata/add/ HTTP/1.1" 200 19944
+[05/Jun/2025 00:57:21] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 00:57:28] "GET /admin/db/event/ HTTP/1.1" 200 11398
+[05/Jun/2025 00:57:28] "GET /static/admin/css/changelists.css HTTP/1.1" 200 6878
+[05/Jun/2025 00:57:28] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 00:57:28] "GET /static/admin/js/admin/RelatedObjectLookups.js HTTP/1.1" 200 9777
+[05/Jun/2025 00:57:28] "GET /static/admin/js/core.js HTTP/1.1" 200 6208
+[05/Jun/2025 00:57:28] "GET /static/admin/js/jquery.init.js HTTP/1.1" 200 347
+[05/Jun/2025 00:57:28] "GET /static/admin/js/urlify.js HTTP/1.1" 200 7887
+[05/Jun/2025 00:57:28] "GET /static/admin/js/actions.js HTTP/1.1" 200 8076
+[05/Jun/2025 00:57:28] "GET /static/admin/js/prepopulate.js HTTP/1.1" 200 1531
+[05/Jun/2025 00:57:28] "GET /static/admin/js/filters.js HTTP/1.1" 200 978
+[05/Jun/2025 00:57:28] "GET /static/admin/js/vendor/jquery/jquery.js HTTP/1.1" 200 285314
+[05/Jun/2025 00:57:28] "GET /static/admin/js/vendor/xregexp/xregexp.js HTTP/1.1" 200 325171
+[05/Jun/2025 00:57:28] "GET /static/admin/img/search.svg HTTP/1.1" 200 458
+[05/Jun/2025 00:57:28] "GET /static/admin/img/icon-viewlink.svg HTTP/1.1" 200 581
+[05/Jun/2025 00:57:28] "GET /static/admin/img/tooltag-add.svg HTTP/1.1" 200 331
+[05/Jun/2025 01:05:07] "GET /admin/db/depthdata/add/ HTTP/1.1" 200 19944
+[05/Jun/2025 01:05:07] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 01:05:12] "GET /admin/ HTTP/1.1" 200 10136
+[05/Jun/2025 01:05:23] "GET /admin/db/depthdata/add/ HTTP/1.1" 200 19944
+[05/Jun/2025 01:05:23] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 01:05:33] "GET /admin/db/displaydata/add/ HTTP/1.1" 200 24273
+[05/Jun/2025 01:05:33] "GET /static/admin/js/calendar.js HTTP/1.1" 200 9141
+[05/Jun/2025 01:05:33] "GET /static/admin/js/admin/DateTimeShortcuts.js HTTP/1.1" 200 19319
+[05/Jun/2025 01:05:33] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 01:05:33] "GET /static/admin/img/icon-clock.svg HTTP/1.1" 200 677
+[05/Jun/2025 01:05:33] "GET /static/admin/img/icon-calendar.svg HTTP/1.1" 200 1086
+[05/Jun/2025 01:05:44] "GET /admin/db/event/add/ HTTP/1.1" 200 18533
+[05/Jun/2025 01:05:45] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 01:21:36] "GET /admin/db/depthdata/ HTTP/1.1" 200 11860
+[05/Jun/2025 01:21:36] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 01:21:41] "GET /admin/db/event/ HTTP/1.1" 200 11398
+[05/Jun/2025 01:21:41] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 01:21:43] "GET /admin/db/promptinteraction/ HTTP/1.1" 200 12413
+[05/Jun/2025 01:21:43] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 01:21:45] "GET /admin/db/promptinteraction/add/ HTTP/1.1" 200 19628
+[05/Jun/2025 01:21:45] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 01:21:48] "GET /admin/db/video/add/ HTTP/1.1" 200 15539
+[05/Jun/2025 01:21:48] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 01:21:51] "GET /admin/db/event/add/ HTTP/1.1" 200 18533
+[05/Jun/2025 01:21:52] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 01:22:05,313] - Broken pipe from ('162.142.125.203', 55606)
+Not Found: /
+[05/Jun/2025 01:22:11] "GET / HTTP/1.1" 404 2452
+[05/Jun/2025 01:22:12,066] - Broken pipe from ('162.142.125.203', 55624)
+Not Found: /
+[05/Jun/2025 01:22:15] "GET / HTTP/1.1" 404 2452
+[05/Jun/2025 01:22:16] code 505, message Invalid HTTP version (2.0)
+[05/Jun/2025 01:22:16] "PRI * HTTP/2.0" 505 -
+Not Found: /favicon.ico
+[05/Jun/2025 01:22:21] "GET /favicon.ico HTTP/1.1" 404 2503
+[05/Jun/2025 01:22:22] code 400, message Bad request version ('À\x14À')
+[05/Jun/2025 01:22:22] You're accessing the development server over HTTPS, but it only supports HTTP.
+[05/Jun/2025 01:22:27] code 400, message Bad HTTP/0.9 request type ('\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03Ù$H\x08')
+[05/Jun/2025 01:22:27] You're accessing the development server over HTTPS, but it only supports HTTP.
+Not Found: /login
+[05/Jun/2025 01:22:30] "GET /login HTTP/1.1" 404 2485
+Not Found: /favicon.ico
+[05/Jun/2025 01:22:31] "GET /favicon.ico HTTP/1.1" 404 2503
+[05/Jun/2025 01:22:32] code 400, message Bad request version ('À\x14À')
+[05/Jun/2025 01:22:32] You're accessing the development server over HTTPS, but it only supports HTTP.
+Not Found: /
+[05/Jun/2025 01:49:05] "GET / HTTP/1.1" 404 2452
+[05/Jun/2025 04:04:37,724] - Broken pipe from ('199.45.154.119', 54840)
+Not Found: /
+[05/Jun/2025 04:04:41] "GET / HTTP/1.1" 404 2452
+[05/Jun/2025 04:04:41,186] - Broken pipe from ('199.45.154.119', 33142)
+Not Found: /
+[05/Jun/2025 04:04:45] "GET / HTTP/1.1" 404 2452
+[05/Jun/2025 04:04:45] code 505, message Invalid HTTP version (2.0)
+[05/Jun/2025 04:04:45] "PRI * HTTP/2.0" 505 -
+Not Found: /favicon.ico
+[05/Jun/2025 04:04:49] "GET /favicon.ico HTTP/1.1" 404 2503
+[05/Jun/2025 04:04:49] code 400, message Bad request version ('À\x14À')
+[05/Jun/2025 04:04:49] You're accessing the development server over HTTPS, but it only supports HTTP.
+[05/Jun/2025 04:04:54] code 400, message Bad request syntax ('\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03!ÌMr&\x02íY\x8fÑ\x84_6\x8cÆþ\x92IT\x86Ì²E')
+[05/Jun/2025 04:04:54] You're accessing the development server over HTTPS, but it only supports HTTP.
+Not Found: /security.txt
+[05/Jun/2025 04:04:54] "GET /security.txt HTTP/1.1" 404 2506
+Not Found: /favicon.ico
+[05/Jun/2025 04:04:54] "GET /favicon.ico HTTP/1.1" 404 2503
+[05/Jun/2025 04:04:54] code 400, message Bad request version ('À\x14À')
+[05/Jun/2025 04:04:54] You're accessing the development server over HTTPS, but it only supports HTTP.
+Not Found: /stacks
+[05/Jun/2025 04:10:04] "GET /stacks HTTP/1.1" 404 2488
+Not Found: /ws/v1/cluster/apps/new-application
+[05/Jun/2025 04:45:51] "POST /ws/v1/cluster/apps/new-application HTTP/1.1" 404 2573
+Not Found: /ws/v1/cluster/apps/new-application
+[05/Jun/2025 05:13:56] "POST /ws/v1/cluster/apps/new-application HTTP/1.1" 404 2573
+Invalid HTTP_HOST header: 'uns:8088'. You may need to add 'uns' to ALLOWED_HOSTS.
+Traceback (most recent call last):
+  File "/home/uns/code/project/back/env/lib/python3.10/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/home/uns/code/project/back/env/lib/python3.10/site-packages/django/utils/deprecation.py", line 119, in __call__
+    response = self.process_request(request)
+  File "/home/uns/code/project/back/env/lib/python3.10/site-packages/django/middleware/common.py", line 48, in process_request
+    host = request.get_host()
+  File "/home/uns/code/project/back/env/lib/python3.10/site-packages/django/http/request.py", line 186, in get_host
+    raise DisallowedHost(msg)
+django.core.exceptions.DisallowedHost: Invalid HTTP_HOST header: 'uns:8088'. You may need to add 'uns' to ALLOWED_HOSTS.
+Bad Request: /
+[05/Jun/2025 05:35:34] "GET / HTTP/1.0" 400 65756
+Not Found: /ws/v1/cluster/apps/new-application
+[05/Jun/2025 05:44:20] "POST /ws/v1/cluster/apps/new-application HTTP/1.1" 404 2573
+[05/Jun/2025 05:46:15] code 400, message Bad HTTP/0.9 request type ('\x03\x00\x00/*à\x00\x00\x00\x00\x00Cookie:')
+[05/Jun/2025 05:46:15] "  /*à     Cookie: mstshash=Administr" 400 -
+[05/Jun/2025 06:39:24,504] - Broken pipe from ('167.94.145.108', 54494)
+Not Found: /
+[05/Jun/2025 06:39:27] "GET / HTTP/1.1" 404 2452
+[05/Jun/2025 06:39:28,163] - Broken pipe from ('167.94.145.108', 48432)
+Not Found: /
+[05/Jun/2025 06:39:31] "GET / HTTP/1.1" 404 2452
+[05/Jun/2025 06:39:32] code 505, message Invalid HTTP version (2.0)
+[05/Jun/2025 06:39:32] "PRI * HTTP/2.0" 505 -
+Not Found: /favicon.ico
+[05/Jun/2025 06:39:36] "GET /favicon.ico HTTP/1.1" 404 2503
+[05/Jun/2025 06:39:37] code 400, message Bad request version ('®]')
+[05/Jun/2025 06:39:37] You're accessing the development server over HTTPS, but it only supports HTTP.
+[05/Jun/2025 06:39:43] code 400, message Bad request version ('À\x14À')
+[05/Jun/2025 06:39:43] You're accessing the development server over HTTPS, but it only supports HTTP.
+Not Found: /security.txt
+[05/Jun/2025 06:39:44] "GET /security.txt HTTP/1.1" 404 2506
+Not Found: /favicon.ico
+[05/Jun/2025 06:39:45] "GET /favicon.ico HTTP/1.1" 404 2503
+[05/Jun/2025 06:39:46] code 400, message Bad request version ('À\x14À')
+[05/Jun/2025 06:39:46] You're accessing the development server over HTTPS, but it only supports HTTP.
+Not Found: /ws/v1/cluster/apps/new-application
+[05/Jun/2025 08:04:46] "POST /ws/v1/cluster/apps/new-application HTTP/1.1" 404 2573
+Not Found: /
+[05/Jun/2025 08:39:03] "GET / HTTP/1.1" 404 2447
+[05/Jun/2025 08:39:03] "GET /admin HTTP/1.1" 301 0
+[05/Jun/2025 08:39:03] "GET /admin/ HTTP/1.1" 302 0
+[05/Jun/2025 08:39:03] "GET /admin/login/?next=/admin/ HTTP/1.1" 200 4184
+[05/Jun/2025 09:39:21] "GET /admin/ HTTP/1.1" 302 0
+[05/Jun/2025 09:39:21] "GET /admin/login/?next=/admin/ HTTP/1.1" 200 4184
+[05/Jun/2025 09:39:21] "GET /static/admin/css/base.css HTTP/1.1" 304 0
+[05/Jun/2025 09:39:21] "GET /static/admin/js/theme.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:21] "GET /static/admin/css/nav_sidebar.css HTTP/1.1" 304 0
+[05/Jun/2025 09:39:21] "GET /static/admin/css/dark_mode.css HTTP/1.1" 304 0
+[05/Jun/2025 09:39:21] "GET /static/admin/css/login.css HTTP/1.1" 304 0
+[05/Jun/2025 09:39:21] "GET /static/admin/css/responsive.css HTTP/1.1" 304 0
+[05/Jun/2025 09:39:21] "GET /static/admin/js/nav_sidebar.js HTTP/1.1" 304 0
+Not Found: /favicon.ico
+[05/Jun/2025 09:39:21] "GET /favicon.ico HTTP/1.1" 404 2503
+[05/Jun/2025 09:39:25] "POST /admin/login/?next=/admin/ HTTP/1.1" 302 0
+[05/Jun/2025 09:39:25] "GET /admin/ HTTP/1.1" 200 10136
+[05/Jun/2025 09:39:25] "GET /static/admin/css/dashboard.css HTTP/1.1" 304 0
+[05/Jun/2025 09:39:25] "GET /static/admin/img/icon-addlink.svg HTTP/1.1" 304 0
+[05/Jun/2025 09:39:25] "GET /static/admin/img/icon-changelink.svg HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /admin/db/depthdata/ HTTP/1.1" 200 11860
+[05/Jun/2025 09:39:26] "GET /static/admin/css/changelists.css HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /static/admin/js/jquery.init.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /static/admin/js/vendor/jquery/jquery.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /static/admin/js/prepopulate.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /static/admin/js/core.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /static/admin/js/urlify.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /static/admin/js/admin/RelatedObjectLookups.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /static/admin/js/actions.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /static/admin/js/vendor/xregexp/xregexp.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 09:39:26] "GET /static/admin/img/search.svg HTTP/1.1" 200 458
+[05/Jun/2025 09:39:26] "GET /static/admin/js/filters.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /static/admin/img/tooltag-add.svg HTTP/1.1" 304 0
+[05/Jun/2025 09:39:26] "GET /static/admin/img/icon-viewlink.svg HTTP/1.1" 200 581
+[05/Jun/2025 09:39:28] "GET /admin/db/depthdata/add/ HTTP/1.1" 200 19944
+[05/Jun/2025 09:39:28] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 09:39:28] "GET /static/admin/js/prepopulate_init.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:28] "GET /static/admin/css/forms.css HTTP/1.1" 304 0
+[05/Jun/2025 09:39:28] "GET /static/admin/css/widgets.css HTTP/1.1" 304 0
+[05/Jun/2025 09:39:28] "GET /static/admin/js/change_form.js HTTP/1.1" 304 0
+[05/Jun/2025 09:39:30] "GET /admin/db/displaydata/add/ HTTP/1.1" 200 24273
+[05/Jun/2025 09:39:30] "GET /static/admin/js/calendar.js HTTP/1.1" 200 9141
+[05/Jun/2025 09:39:30] "GET /static/admin/js/admin/DateTimeShortcuts.js HTTP/1.1" 200 19319
+[05/Jun/2025 09:39:30] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 09:39:30] "GET /static/admin/img/icon-calendar.svg HTTP/1.1" 200 1086
+[05/Jun/2025 09:39:30] "GET /static/admin/img/icon-clock.svg HTTP/1.1" 200 677
+[05/Jun/2025 10:35:12] code 400, message Bad request version ('\x9e2bõå')
+[05/Jun/2025 10:35:12] You're accessing the development server over HTTPS, but it only supports HTTP.
+[05/Jun/2025 10:35:12] code 400, message Bad request version ('À(À$À\x14À')
+[05/Jun/2025 10:35:12] You're accessing the development server over HTTPS, but it only supports HTTP.
+[05/Jun/2025 11:39:50] "GET /admin/ HTTP/1.1" 200 10136
+Not Found: /favicon.ico
+[05/Jun/2025 11:39:51] "GET /favicon.ico HTTP/1.1" 404 2503
+[05/Jun/2025 11:39:58] "GET /admin/ HTTP/1.1" 200 10136
+[05/Jun/2025 11:39:59] "GET /admin/ HTTP/1.1" 200 10136
+Not Found: /ws/v1/cluster/apps/new-application
+[05/Jun/2025 11:39:59] "POST /ws/v1/cluster/apps/new-application HTTP/1.1" 404 2573
+[05/Jun/2025 11:40:07] "GET /admin/db/depthdata/ HTTP/1.1" 200 11860
+[05/Jun/2025 11:40:07] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 11:40:10] "GET /admin/db/depthdata/ HTTP/1.1" 200 11860
+[05/Jun/2025 11:40:10] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 11:40:14] "GET /admin/db/displaydata/ HTTP/1.1" 200 12045
+[05/Jun/2025 11:40:15] "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+[05/Jun/2025 11:40:24] "GET /admin/login/?next=/admin/ HTTP/1.1" 302 0
+[05/Jun/2025 11:40:24] "GET /admin/ HTTP/1.1" 200 10136
+Not Found: /
+[05/Jun/2025 12:32:40] "GET / HTTP/1.1" 404 2447
+Not Found: /favicon.ico
+[05/Jun/2025 12:32:41] "GET /favicon.ico HTTP/1.1" 404 2498
+Not Found: /ws/v1/cluster/apps/new-application
+[05/Jun/2025 12:50:17] "POST /ws/v1/cluster/apps/new-application HTTP/1.1" 404 2573
+Not Found: /ws/v1/cluster/apps/new-application
+[05/Jun/2025 13:21:19] "POST /ws/v1/cluster/apps/new-application HTTP/1.1" 404 2573
+[05/Jun/2025 14:16:24] code 400, message Bad request version ('À#À¬À®À+À')
+[05/Jun/2025 14:16:24] You're accessing the development server over HTTPS, but it only supports HTTP.
+Not Found: /
+[05/Jun/2025 14:16:35] "GET / HTTP/1.1" 404 2452

@@ -117,8 +117,136 @@ export default function CCTVAnalysis() {
   // 중복 비디오 여부 상태 추가
   const [isDuplicateVideo, setIsDuplicateVideo] = useState(false);
 
+  // 업로드 진행률 추적을 위한 새로운 상태들
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStartTime, setUploadStartTime] = useState<number | null>(null);
+
   // 히스토리 새로고침 트리거
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
+
+  // 업로드 및 분석 취소 함수
+  const handleCancelProcess = () => {
+    console.log('🚫 업로드/분석 프로세스 취소됨');
+    
+    // 업로드 관련 상태 초기화
+    setIsUploading(false);
+    setUploadProgress(0);
+    setUploadStage('');
+    setUploadStartTime(null);
+    
+    // 분석 관련 상태 초기화
+    setIsAnalyzing(false);
+    setAnalysisProgress(0);
+    
+    // 비디오 관련 상태 초기화
+    setVideoLoading(false);
+    setVideoError(null);
+    setVideoSrc(null);
+    setVideoFileName('');
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setTimeMarkers([]);
+    
+    // UI 상태 초기화
+    setDragDropVisible(false);
+    setIsDuplicateVideo(false);
+    setUploadHighlight(false);
+    
+    // 메시지 초기화
+    setMessages([
+      {
+        role: 'assistant',
+        content:
+          '안녕하세요! CCTV 영상 분석을 도와드리겠습니다. 먼저 분석할 영상을 업로드해주세요.',
+      },
+    ]);
+    setCurrentHistoryId(undefined);
+    
+    // 비디오 엘리먼트 정리
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+      videoRef.current.src = '';
+    }
+    
+    // Object URL 정리 (메모리 누수 방지)
+    if (videoSrc && videoSrc.startsWith('blob:')) {
+      URL.revokeObjectURL(videoSrc);
+    }
+    
+    // 취소 토스트 표시
+    addToast({
+      type: 'info',
+      title: '취소됨',
+      message: '업로드/분석이 취소되었습니다.',
+      duration: 2000,
+    });
+  };
+
+  // 테스트용 애니메이션 시뮬레이션 함수
+  const handleTestAnimation = () => {
+    console.log('🎭 테스트 애니메이션 시작');
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadStage('테스트: 파일 형식을 확인하는 중...');
+    setUploadStartTime(Date.now());
+
+    // 단계별 진행률 시뮬레이션
+    const simulateProgress = () => {
+      let progress = 0;
+      const stages = [
+        { progress: 10, stage: '테스트: 파일 형식을 확인하는 중...' },
+        { progress: 25, stage: '테스트: 비디오 메타데이터를 추출하는 중...' },
+        { progress: 45, stage: '테스트: 썸네일을 생성하는 중...' },
+        { progress: 65, stage: '테스트: 중복 파일을 확인하는 중...' },
+        { progress: 80, stage: '테스트: 파일을 저장하는 중...' },
+        { progress: 90, stage: '테스트: 비디오를 준비하는 중...' },
+        { progress: 100, stage: '테스트: 업로드 완료!' },
+      ];
+
+      let currentStage = 0;
+      const progressInterval = setInterval(() => {
+        if (currentStage < stages.length) {
+          const stage = stages[currentStage];
+          setUploadProgress(stage.progress);
+          setUploadStage(stage.stage);
+          console.log(`🎭 진행률: ${stage.progress}% - ${stage.stage}`);
+          currentStage++;
+        } else {
+          clearInterval(progressInterval);
+
+          // 3초 후 애니메이션 종료
+          setTimeout(() => {
+            setIsUploading(false);
+            setUploadProgress(0);
+            setUploadStage('');
+
+            const endTime = Date.now();
+            const duration = endTime - (uploadStartTime || endTime);
+            console.log(
+              `🎭 테스트 애니메이션 완료 - 소요 시간: ${Math.round(
+                duration / 1000
+              )}초`
+            );
+
+            addToast({
+              type: 'success',
+              title: '테스트 완료',
+              message: `애니메이션 테스트가 완료되었습니다. (소요 시간: ${Math.round(
+                duration / 1000
+              )}초)`,
+              duration: 3000,
+            });
+          }, 2000);
+        }
+      }, 800); // 각 단계마다 800ms
+    };
+
+    simulateProgress();
+  };
 
   // 히스토리 새로고침 함수
   const handleHistoryRefresh = async () => {
@@ -228,8 +356,16 @@ export default function CCTVAnalysis() {
       setVideoError(null);
       // 중복 비디오 상태 초기화
       setIsDuplicateVideo(false);
+      
+      // 업로드 진행률 추적 시작
+      setIsUploading(true);
+      setUploadProgress(0);
+      setUploadStartTime(Date.now());
 
-      // Validate file type
+      // Validate file type (0-10%)
+      setUploadStage('파일 형식을 확인하는 중...');
+      setUploadProgress(5);
+      
       const validVideoTypes = [
         'video/mp4',
         'video/webm',
@@ -239,39 +375,54 @@ export default function CCTVAnalysis() {
         'video/quicktime',
       ];
       if (!validVideoTypes.includes(file.type)) {
+        setIsUploading(false);
+        setVideoLoading(false);
+        setDragDropVisible(false);
         addToast({
           type: 'error',
           title: '지원하지 않는 파일 형식',
           message: 'MP4, WebM, OGG 형식의 비디오 파일만 지원됩니다.',
           duration: 3000,
         });
-        setVideoLoading(false);
         return;
       }
 
-      // Validate file size
+      // Validate file size (10-20%)
+      setUploadStage('파일 크기를 확인하는 중...');
+      setUploadProgress(15);
+      
       const maxSize = 2 * 1024 * 1024 * 1024;
       if (file.size > maxSize) {
+        setIsUploading(false);
+        setVideoLoading(false);
+        setDragDropVisible(false);
         addToast({
           type: 'error',
           title: '파일 크기 초과',
           message: '2GB 이하의 파일만 업로드할 수 있습니다.',
           duration: 3000,
         });
-        setVideoLoading(false);
         return;
       }
 
-      // HTML5 Video API를 사용하여 비디오 duration 추출
+      // HTML5 Video API를 사용하여 비디오 duration 추출 (20-40%)
+      setUploadStage('비디오 메타데이터를 추출하는 중...');
+      setUploadProgress(25);
+      
       let videoDuration: number | undefined = undefined;
       try {
         videoDuration = await getVideoDurationFromFile(file);
         console.log('Extracted video duration:', videoDuration);
+        setUploadProgress(40);
       } catch (durationError) {
         console.warn('Failed to extract video duration:', durationError);
+        setUploadProgress(40);
       }
 
-      // 썸네일 생성 및 업로드
+      // 썸네일 생성 및 업로드 (40-60%)
+      setUploadStage('썸네일을 생성하는 중...');
+      setUploadProgress(45);
+      
       let thumbnailPath: string | null = null;
       try {
         const { createAndUploadThumbnail } = await import(
@@ -285,11 +436,16 @@ export default function CCTVAnalysis() {
             'Thumbnail generation failed, continuing without thumbnail'
           );
         }
+        setUploadProgress(60);
       } catch (thumbnailError) {
         console.warn('Thumbnail generation error:', thumbnailError);
+        setUploadProgress(60);
       }
 
-      // 서버에 파일 저장 및 중복 체크
+      // 서버에 파일 저장 및 중복 체크 (60-80%)
+      setUploadStage('중복 파일을 확인하는 중...');
+      setUploadProgress(65);
+      
       let serverSaveResult = null;
       try {
         const formData = new FormData();
@@ -297,16 +453,23 @@ export default function CCTVAnalysis() {
         if (videoDuration !== undefined) {
           formData.append('duration', videoDuration.toString());
         }
+        
+        setUploadStage('파일을 저장하는 중...');
+        setUploadProgress(70);
+        
         serverSaveResult = await saveVideoFile(
           formData,
           videoDuration,
           thumbnailPath || undefined
         );
         console.log('Server save result:', serverSaveResult);
+        setUploadProgress(80);
 
         // 중복 비디오 처리 - success가 false이고 isDuplicate가 true인 경우
         if (serverSaveResult.isDuplicate && !serverSaveResult.success) {
+          setIsUploading(false);
           setVideoLoading(false);
+          setDragDropVisible(false);
 
           // 중복 비디오 애니메이션 활성화
           setIsDuplicateVideo(true);
@@ -335,7 +498,9 @@ export default function CCTVAnalysis() {
 
         // 서버 저장 실패 시 처리
         if (!serverSaveResult.success && !serverSaveResult.isDuplicate) {
+          setIsUploading(false);
           setVideoLoading(false);
+          setDragDropVisible(false);
           addToast({
             type: 'error',
             title: '업로드 실패',
@@ -347,9 +512,13 @@ export default function CCTVAnalysis() {
         }
       } catch (serverError) {
         console.warn('Server save failed, but client continues:', serverError);
+        setUploadProgress(80);
       }
 
-      // 즉시 Object URL 생성하여 클라이언트에서 사용
+      // 즉시 Object URL 생성하여 클라이언트에서 사용 (80-90%)
+      setUploadStage('비디오를 준비하는 중...');
+      setUploadProgress(85);
+      
       const objectUrl = URL.createObjectURL(file);
 
       // 모바일에서 비디오 검증을 더 관대하게 처리
@@ -390,17 +559,38 @@ export default function CCTVAnalysis() {
 
       try {
         const validUrl = await loadPromise;
+        
+        // 업로드 완료 (90-100%)
+        setUploadStage('업로드를 완료하는 중...');
+        setUploadProgress(95);
 
         // 비디오 상태 즉시 업데이트
         setVideoSrc(validUrl as string);
         setVideoFileName(file.name);
         setCurrentHistoryId(undefined);
         setTimeMarkers([]);
-        setVideoLoading(false);
+        
+        // 업로드 진행률 완료
+        setUploadProgress(100);
+        
+        // 업로드 완료 후 상태 정리
+        setTimeout(() => {
+          setIsUploading(false);
+          setUploadProgress(0);
+          setUploadStage('');
+          setVideoLoading(false);
+          // 업로드 완료 후 DragDrop 모달 닫기
+          setDragDropVisible(false);
+        }, 500);
 
         // 분석 시작
         setIsAnalyzing(true);
         setAnalysisProgress(0);
+
+        // 업로드 시간 계산
+        const uploadEndTime = Date.now();
+        const uploadDuration = uploadStartTime ? (uploadEndTime - uploadStartTime) / 1000 : 0;
+        console.log(`Upload completed in ${uploadDuration.toFixed(1)} seconds`);
 
         // 분석 중 메시지 추가
         setMessages([
@@ -464,6 +654,11 @@ export default function CCTVAnalysis() {
       setIsAnalyzing(false);
       setAnalysisProgress(0);
       setVideoLoading(false);
+      setIsUploading(false);
+      setUploadProgress(0);
+      setUploadStage('');
+      // 에러 발생 시에도 DragDrop 모달 닫기
+      setDragDropVisible(false);
       setVideoError(
         error instanceof Error
           ? error.message
@@ -1074,7 +1269,69 @@ export default function CCTVAnalysis() {
                 <CardContent className="p-4 md:p-6">
                   {videoSrc ? (
                     <div className="relative">
-                      {isAnalyzing ? (
+                      {isUploading ? (
+                        // 업로드 중일 때 보라색 프로그레스 오버레이
+                        <div className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10"
+                             style={{ animation: 'borderGlowPurple 2s ease-in-out infinite' }}>
+                          <div className="relative w-24 h-24 md:w-32 md:h-32 mb-4">
+                            {/* 배경 원 */}
+                            <svg
+                              className="w-full h-full transform -rotate-90"
+                              viewBox="0 0 100 100"
+                            >
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="45"
+                                stroke="#2a3142"
+                                strokeWidth="8"
+                                fill="none"
+                              />
+                              {/* 보라색 진행도 원 */}
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="45"
+                                stroke="#6c5ce7"
+                                strokeWidth="8"
+                                fill="none"
+                                strokeLinecap="round"
+                                strokeDasharray={`${2 * Math.PI * 45}`}
+                                strokeDashoffset={`${
+                                  2 *
+                                  Math.PI *
+                                  45 *
+                                  (1 - uploadProgress / 100)
+                                }`}
+                                className="transition-all duration-300 ease-out"
+                                style={{
+                                  filter:
+                                    'drop-shadow(0 0 8px rgba(108, 92, 231, 0.6))',
+                                }}
+                              />
+                            </svg>
+                            {/* 진행도 텍스트 */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-[#6c5ce7] font-bold text-lg md:text-xl">
+                                {Math.round(uploadProgress)}%
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-white text-sm md:text-base font-medium mb-2">
+                            동영상 업로드 중입니다.
+                          </p>
+                          <p className="text-gray-300 text-xs md:text-sm text-center px-4 mb-4">
+                            {uploadStage || '파일을 처리하고 있습니다...'}
+                          </p>
+                          {/* 취소 버튼 */}
+                          <button
+                            onClick={handleCancelProcess}
+                            className="bg-[#6c5ce7] hover:bg-[#5a4fcf] text-white px-4 py-2 rounded-md transition-colors duration-200 text-sm font-medium border border-[#6c5ce7] hover:border-[#5a4fcf]"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      ) : isAnalyzing ? (
                         // 분석 중일 때 프로그레스 오버레이
                         <div className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10">
                           <div className="relative w-24 h-24 md:w-32 md:h-32 mb-4">
@@ -1124,9 +1381,16 @@ export default function CCTVAnalysis() {
                           <p className="text-white text-sm md:text-base font-medium mb-2">
                             영상 분석 중...
                           </p>
-                          <p className="text-gray-300 text-xs md:text-sm text-center px-4">
+                          <p className="text-gray-300 text-xs md:text-sm text-center px-4 mb-4">
                             AI가 영상을 분석하고 있습니다. 잠시만 기다려주세요.
                           </p>
+                          {/* 취소 버튼 */}
+                          <button
+                            onClick={handleCancelProcess}
+                            className="bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c] px-4 py-2 rounded-md transition-colors duration-200 text-sm font-medium border border-[#00e6b4] hover:border-[#00c49c]"
+                          >
+                            취소
+                          </button>
                         </div>
                       ) : null}
 
@@ -1139,73 +1403,76 @@ export default function CCTVAnalysis() {
                         </div>
                       )}
 
-                      <video
-                        ref={videoRef}
-                        className={`w-full h-auto rounded-md bg-black ${
-                          isAnalyzing || videoLoading
-                            ? 'opacity-50'
-                            : 'opacity-100'
-                        } transition-opacity duration-300`}
-                        src={videoSrc}
-                        muted={isMobile} // 모바일에서 음소거
-                        playsInline={isMobile} // iOS에서 인라인 재생
-                        preload="metadata"
-                        controls={false}
-                        style={{
-                          minHeight: isMobile ? '200px' : '300px', // 최소 높이 보장
-                          maxHeight: isMobile ? '300px' : '500px', // 최대 높이 제한
-                        }}
-                        onError={(e) => {
-                          const target = e.target as HTMLVideoElement;
-                          const error = target.error;
-                          console.error('Video error details:', {
-                            code: error?.code,
-                            message: error?.message,
-                            networkState: target.networkState,
-                            readyState: target.readyState,
-                            src: target.src,
-                          });
+                      {/* 비디오 요소 - 업로드 중일 때 숨김 */}
+                      {!isUploading && (
+                        <video
+                          ref={videoRef}
+                          className={`w-full h-auto rounded-md bg-black ${
+                            isAnalyzing || videoLoading
+                              ? 'opacity-50'
+                              : 'opacity-100'
+                          } transition-opacity duration-300`}
+                          src={videoSrc}
+                          muted={isMobile} // 모바일에서 음소거
+                          playsInline={isMobile} // iOS에서 인라인 재생
+                          preload="metadata"
+                          controls={false}
+                          style={{
+                            minHeight: isMobile ? '200px' : '300px', // 최소 높이 보장
+                            maxHeight: isMobile ? '300px' : '500px', // 최대 높이 제한
+                          }}
+                          onError={(e) => {
+                            const target = e.target as HTMLVideoElement;
+                            const error = target.error;
+                            console.error('Video error details:', {
+                              code: error?.code,
+                              message: error?.message,
+                              networkState: target.networkState,
+                              readyState: target.readyState,
+                              src: target.src,
+                            });
 
-                          setVideoError(
-                            `비디오 오류: ${
-                              error?.message || '알 수 없는 오류'
-                            }`
-                          );
-                          setIsPlaying(false);
-                          setVideoLoading(false);
-                        }}
-                        onLoadStart={() => {
-                          console.log('Video loading started');
-                          setVideoLoading(true);
-                        }}
-                        onCanPlay={() => {
-                          console.log('Video can play');
-                          setVideoLoading(false);
-                          setVideoError(null);
-                        }}
-                        onLoadedData={() => {
-                          console.log('Video data loaded');
-                          setVideoLoading(false);
-                        }}
-                        onLoadedMetadata={(e) => {
-                          console.log('Video metadata loaded');
-                          setVideoLoading(false);
-                          const video = e.target as HTMLVideoElement;
-                          if (
-                            video.duration &&
-                            !isNaN(video.duration) &&
-                            video.duration > 0
-                          ) {
-                            setDuration(video.duration);
-                            console.log('Video duration set:', video.duration);
-                          }
-                        }}
-                        onWaiting={() => {
-                          console.log('Video waiting for data');
-                        }}
-                        // 모바일에서 터치로 재생 가능하도록
-                        onClick={isMobile ? togglePlayPause : undefined}
-                      />
+                            setVideoError(
+                              `비디오 오류: ${
+                                error?.message || '알 수 없는 오류'
+                              }`
+                            );
+                            setIsPlaying(false);
+                            setVideoLoading(false);
+                          }}
+                          onLoadStart={() => {
+                            console.log('Video loading started');
+                            setVideoLoading(true);
+                          }}
+                          onCanPlay={() => {
+                            console.log('Video can play');
+                            setVideoLoading(false);
+                            setVideoError(null);
+                          }}
+                          onLoadedData={() => {
+                            console.log('Video data loaded');
+                            setVideoLoading(false);
+                          }}
+                          onLoadedMetadata={(e) => {
+                            console.log('Video metadata loaded');
+                            setVideoLoading(false);
+                            const video = e.target as HTMLVideoElement;
+                            if (
+                              video.duration &&
+                              !isNaN(video.duration) &&
+                              video.duration > 0
+                            ) {
+                              setDuration(video.duration);
+                              console.log('Video duration set:', video.duration);
+                            }
+                          }}
+                          onWaiting={() => {
+                            console.log('Video waiting for data');
+                          }}
+                          // 모바일에서 터치로 재생 가능하도록
+                          onClick={isMobile ? togglePlayPause : undefined}
+                        />
+                      )}
 
                       {/* 비디오 에러 표시 */}
                       {videoError && (
@@ -1263,62 +1530,141 @@ export default function CCTVAnalysis() {
                   ) : (
                     <div
                       ref={uploadAreaRef}
-                      className={`flex flex-col items-center justify-center h-[250px] md:h-[400px] rounded-lg transition-all duration-500 ${
-                        isDuplicateVideo
+                      className={`flex flex-col items-center justify-center h-[250px] md:h-[400px] rounded-lg transition-all duration-500 relative ${
+                        isUploading
+                          ? 'bg-[#2a3142] border-2 border-[#6c5ce7] shadow-2xl shadow-[#6c5ce7]/30'
+                          : isDuplicateVideo
                           ? 'bg-[#2a3142] border-2 border-[#FFB800] shadow-2xl shadow-[#FFB800]/30'
                           : uploadHighlight
                           ? 'bg-[#2a3142] border-2 border-[#00e6b4] shadow-2xl shadow-[#00e6b4]/30'
                           : 'bg-[#2a3142] border-2 border-[#3a4553] hover:border-[#4a5563]'
                       }`}
                       style={{
-                        animation: isDuplicateVideo
+                        animation: isUploading
+                          ? 'borderGlowPurple 2s ease-in-out infinite'
+                          : isDuplicateVideo
                           ? 'borderGlowYellow 1s ease-in-out 3'
                           : uploadHighlight
                           ? 'borderGlow 0.5s ease-in-out'
                           : 'none',
                       }}
                     >
-                      {/* 업로드 아이콘 - 중복 감지 시 노란색으로 변경 */}
-                      <div className="mb-6">
-                        <div
-                          className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center border-2 ${
-                            isDuplicateVideo
-                              ? 'bg-[#FFB800] bg-opacity-10 border-[#FFB800] border-opacity-30'
-                              : 'bg-[#00e6b4] bg-opacity-10 border-[#00e6b4] border-opacity-30'
-                          }`}
-                        >
-                          <Upload
-                            className={`h-8 w-8 md:h-10 md:w-10 ${
-                              isDuplicateVideo
-                                ? 'text-[#FFB800]'
-                                : 'text-[#00e6b4]'
-                            }`}
-                          />
+                      {/* 업로드 진행 중일 때 보라색 오버레이 */}
+                      {isUploading && (
+                        <div className="absolute inset-0 bg-black bg-opacity-60 rounded-lg flex flex-col items-center justify-center z-10">
+                          <div className="relative w-20 h-20 md:w-24 md:h-24 mb-4">
+                            {/* 배경 원 */}
+                            <svg
+                              className="w-full h-full transform -rotate-90"
+                              viewBox="0 0 100 100"
+                            >
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="45"
+                                stroke="#2a3142"
+                                strokeWidth="8"
+                                fill="none"
+                              />
+                              {/* 보라색 진행도 원 */}
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="45"
+                                stroke="#6c5ce7"
+                                strokeWidth="8"
+                                fill="none"
+                                strokeLinecap="round"
+                                strokeDasharray={`${2 * Math.PI * 45}`}
+                                strokeDashoffset={`${
+                                  2 *
+                                  Math.PI *
+                                  45 *
+                                  (1 - uploadProgress / 100)
+                                }`}
+                                className="transition-all duration-300 ease-out"
+                                style={{
+                                  filter:
+                                    'drop-shadow(0 0 8px rgba(108, 92, 231, 0.6))',
+                                }}
+                              />
+                            </svg>
+                            {/* 진행도 텍스트 */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-[#6c5ce7] font-bold text-lg md:text-xl">
+                                {Math.round(uploadProgress)}%
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-white text-sm md:text-base font-medium mb-2">
+                            동영상 업로드 중입니다.
+                          </p>
+                          <p className="text-gray-300 text-xs md:text-sm text-center px-4 mb-4">
+                            {uploadStage || '파일을 처리하고 있습니다...'}
+                          </p>
+                          {/* 취소 버튼 */}
+                          <button
+                            onClick={handleCancelProcess}
+                            className="bg-[#6c5ce7] hover:bg-[#5a4fcf] text-white px-4 py-2 rounded-md transition-colors duration-200 text-sm font-medium border border-[#6c5ce7] hover:border-[#5a4fcf]"
+                          >
+                            취소
+                          </button>
                         </div>
-                      </div>
+                      )}
+                      {/* 업로드 아이콘 - 업로드 중일 때 숨김, 중복 감지 시 노란색으로 변경 */}
+                      {!isUploading && (
+                        <div className="mb-6">
+                          <div
+                            className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center border-2 ${
+                              isDuplicateVideo
+                                ? 'bg-[#FFB800] bg-opacity-10 border-[#FFB800] border-opacity-30'
+                                : 'bg-[#00e6b4] bg-opacity-10 border-[#00e6b4] border-opacity-30'
+                            }`}
+                          >
+                            <Upload
+                              className={`h-8 w-8 md:h-10 md:w-10 ${
+                                isDuplicateVideo
+                                  ? 'text-[#FFB800]'
+                                  : 'text-[#00e6b4]'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      )}
 
-                      {/* 메인 텍스트 - 중복 감지 시 메시지 변경 */}
-                      <p className="text-gray-300 mb-6 text-base md:text-lg text-center px-4 font-medium">
-                        {isDuplicateVideo
-                          ? '이미 업로드된 동영상입니다. 분석을 시작하세요.'
-                          : '분석을 시작하려면 CCTV 영상을 업로드하세요'}
-                      </p>
+                      {/* 메인 텍스트 - 업로드 중일 때 숨김, 중복 감지 시 메시지 변경 */}
+                      {!isUploading && (
+                        <p className="text-gray-300 mb-6 text-base md:text-lg text-center px-4 font-medium">
+                          {isDuplicateVideo
+                            ? '이미 업로드된 동영상입니다. 분석을 시작하세요.'
+                            : '분석을 시작하려면 CCTV 영상을 업로드하세요'}
+                        </p>
+                      )}
 
-                      {/* 업로드 버튼 */}
-                      <Button
-                        className="bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c] px-8 py-3 text-base font-semibold rounded-lg transition-all duration-200 hover:scale-105"
-                        onClick={(e) => {
-                          try {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDragDropVisible(true);
-                          } catch (error) {
-                            console.error('Main upload button error:', error);
-                          }
-                        }}
-                      >
-                        영상 업로드
-                      </Button>
+                      {/* 업로드 버튼 - 업로드 중일 때 숨김 */}
+                      {!isUploading && (
+                        <Button
+                          disabled={isUploading}
+                          className={`px-8 py-3 text-base font-semibold rounded-lg transition-all duration-200 ${
+                            isUploading
+                              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                              : 'bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c] hover:scale-105'
+                          }`}
+                          onClick={(e) => {
+                            try {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (!isUploading) {
+                                setDragDropVisible(true);
+                              }
+                            } catch (error) {
+                              console.error('Main upload button error:', error);
+                            }
+                          }}
+                        >
+                          {isUploading ? '업로드 중...' : '영상 업로드'}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </CardContent>

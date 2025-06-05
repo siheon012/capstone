@@ -176,6 +176,21 @@
   }
 }
 
+@keyframes borderGlowPurple {
+  0% {
+    border-color: #6c5ce7;
+    box-shadow: 0 0 20px rgba(108, 92, 231, 0.3);
+  }
+  50% {
+    border-color: #a29bfe;
+    box-shadow: 0 0 40px rgba(108, 92, 231, 0.6);
+  }
+  100% {
+    border-color: #6c5ce7;
+    box-shadow: 0 0 20px rgba(108, 92, 231, 0.3);
+  }
+}
+
 /* Firefox 스크롤바 */
 * {
   scrollbar-width: thin;

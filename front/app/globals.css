@@ -145,37 +145,6 @@
   }
 }
 
-/* 업로드 영역 애니메이션 */
-@keyframes borderGlow {
-  0% {
-    border-color: #00e6b4;
-    box-shadow: 0 0 20px rgba(0, 230, 180, 0.3);
-  }
-  50% {
-    border-color: #00c49c;
-    box-shadow: 0 0 40px rgba(0, 230, 180, 0.6);
-  }
-  100% {
-    border-color: #00e6b4;
-    box-shadow: 0 0 20px rgba(0, 230, 180, 0.3);
-  }
-}
-
-@keyframes borderGlowYellow {
-  0% {
-    border-color: #ffb800;
-    box-shadow: 0 0 20px rgba(255, 184, 0, 0.3);
-  }
-  50% {
-    border-color: #ffa500;
-    box-shadow: 0 0 40px rgba(255, 184, 0, 0.6);
-  }
-  100% {
-    border-color: #ffb800;
-    box-shadow: 0 0 20px rgba(255, 184, 0, 0.3);
-  }
-}
-
 @keyframes borderGlowPurple {
   0% {
     border-color: #6c5ce7;
@@ -215,4 +184,27 @@
 
 .history-scrollbar::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #6c5ce7 0%, #00e6b4 100%);
+}
+
+/* Custom animations for professional UI */
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 30px rgba(108, 92, 231, 0.5), 0 10px 25px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 40px rgba(108, 92, 231, 0.7), 0 15px 35px rgba(0, 0, 0, 0.4);
+  }
+}
+
+@keyframes gentleGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 30px rgba(108, 92, 231, 0.5), 0 10px 25px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 50px rgba(108, 92, 231, 0.8), 0 20px 40px rgba(0, 0, 0, 0.5);
+  }
 }

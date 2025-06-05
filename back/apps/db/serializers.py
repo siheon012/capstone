@@ -11,6 +11,8 @@ class VideoSerializer(serializers.ModelSerializer):
 
 class EventSerializer(serializers.ModelSerializer):
     timestamp_display = serializers.ReadOnlyField()
+    absolute_time = serializers.ReadOnlyField()
+    absolute_time_display = serializers.ReadOnlyField()
     
     class Meta:
         model = Event

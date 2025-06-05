@@ -350,7 +350,7 @@ export default function CCTVAnalysis() {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
 
-  const handleFileUpload = async (file: File) => {
+  const handleFileUpload = async (file: File, videoDateTime?: string) => {
     try {
       setVideoLoading(true);
       setVideoError(null);
@@ -460,7 +460,8 @@ export default function CCTVAnalysis() {
         serverSaveResult = await saveVideoFile(
           formData,
           videoDuration,
-          thumbnailPath || undefined
+          thumbnailPath || undefined,
+          videoDateTime
         );
         console.log('Server save result:', serverSaveResult);
         setUploadProgress(80);

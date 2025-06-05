@@ -4,11 +4,11 @@ import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload, FileVideo, X, MessageSquare, CirclePlay, CalendarDays, Check } from "lucide-react"
+import { Upload, FileVideo, X, MessageSquare, CirclePlay, CalendarDays, Check, Play, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface DragDropZoneProps {
-  onFileUpload: (file: File) => void
+  onFileUpload: (file: File, videoDateTime?: string) => void
   isVisible: boolean
   onClose: () => void
   isUploading?: boolean
@@ -52,13 +52,13 @@ export default function DragDropZone({ onFileUpload, isVisible, onClose }: DragD
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // 모달이 열릴 때 배경 스크롤 방지
+  // 모달이 열릴 때 메인 창 스크롤 방지
   useEffect(() => {
     if (isVisible) {
       // 현재 스크롤 위치 저장
       const scrollY = window.scrollY;
       
-      // body에 스크롤 방지 스타일 추가
+      // body에 스크롤 방지 스타일 추가 (메인 창 스크롤 방지)
       document.body.style.position = 'fixed';
       document.body.style.top = `-${scrollY}px`;
       document.body.style.width = '100%';
@@ -126,7 +126,7 @@ export default function DragDropZone({ onFileUpload, isVisible, onClose }: DragD
   // 플레이 버튼 클릭 시 업로드 시작
   const handleStartUpload = () => {
     if (selectedFile) {
-      onFileUpload(selectedFile)
+      onFileUpload(selectedFile, selectedDateTime)
       onClose()
     }
   }
@@ -157,26 +157,17 @@ export default function DragDropZone({ onFileUpload, isVisible, onClose }: DragD
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-0 md:p-4 overflow-hidden"
       onWheel={(e) => {
-        // 모달 배경에서 스크롤 이벤트 전파 방지
-        e.stopPropagation();
-      }}
-      onTouchMove={(e) => {
-        // 모바일 터치 스크롤 이벤트 전파 방지
-        e.stopPropagation();
+        // 모달 배경 클릭 시에만 스크롤 방지 (내부 컨텐츠는 스크롤 허용)
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
       }}
     >
       <div
         className={`relative w-full h-full md:h-auto md:max-w-4xl transition-all duration-300 ${
           isDragOver ? "md:scale-105" : "md:scale-100"
         } ${isMobile ? 'overflow-y-auto max-h-full' : 'overflow-y-auto md:overflow-visible max-h-screen md:max-h-none'}`}
-        onWheel={(e) => {
-          // 모달 내부에서 스크롤 이벤트가 배경으로 전파되지 않도록 방지
-          e.stopPropagation();
-        }}
-        onTouchMove={(e) => {
-          // 모바일에서 터치 스크롤 이벤트 전파 방지
-          e.stopPropagation();
-        }}
       >
         {/* Sticky Header - 모바일에서만 표시 */}
         {isMobile && (
@@ -247,20 +238,20 @@ export default function DragDropZone({ onFileUpload, isVisible, onClose }: DragD
               <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
                 <Button
                   onClick={handleStartUpload}
-                  className="w-20 h-20 rounded-full bg-[#6c5ce7] hover:bg-[#a29bfe] text-white flex items-center justify-center shadow-2xl transition-all duration-300 hover:scale-110 animate-pulse hover:animate-none"
+                  className="w-24 h-24 rounded-full bg-[#6c5ce7] hover:bg-[#a29bfe] text-white flex items-center justify-center shadow-2xl transition-all duration-300 hover:scale-110 animate-[gentleGlow_4s_ease-in-out_infinite] hover:animate-none"
                   style={{
                     background: 'linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)',
                     boxShadow: '0 0 30px rgba(108, 92, 231, 0.5), 0 10px 25px rgba(0, 0, 0, 0.3)'
                   }}
                 >
-                  <CirclePlay className="h-10 w-10" />
+                  <CirclePlay className="h-20 w-20" style={{ width: '80px', height: '80px' }} />
                 </Button>
               </div>
             )}
 
-            <div className="flex flex-col md:flex-row flex-1 md:flex-none">
+            <div className="flex flex-col md:flex-row flex-1 md:flex-none gap-8">
               {/* 왼쪽 영역 (모바일에서는 상단) */}
-              <div className="w-full md:w-1/2 pr-0 md:pr-8 flex flex-col items-center justify-center mb-8 md:mb-0 flex-1 md:flex-none py-8 md:py-0">
+              <div className="w-full md:w-1/2 pr-0 md:pr-8 flex flex-col items-center justify-start flex-1 md:flex-none py-8 md:py-16">
                 {/* 아이콘 */}
                 <div className={`mb-6 transition-all duration-300 ${isDragOver ? "scale-110" : "scale-100"}`}>
                   {selectedFile ? (
@@ -340,8 +331,13 @@ export default function DragDropZone({ onFileUpload, isVisible, onClose }: DragD
                 </div>
               </div>
 
+              {/* 모바일 전용 구분선 */}
+              {isMobile && (
+                <div className="w-full h-px bg-gradient-to-r from-transparent via-[#2a3142] to-transparent my-4"></div>
+              )}
+
               {/* 오른쪽 영역 (모바일에서는 하단) */}
-              <div className="w-full md:w-1/2 pl-0 md:pl-8 flex flex-col items-center justify-center flex-1 md:flex-none py-8 md:py-0">
+              <div className="w-full md:w-1/2 pl-0 md:pl-8 flex flex-col items-center justify-start flex-1 md:flex-none py-8 md:py-16">
                 {/* 아이콘 */}
                 <div className={`mb-6 transition-all duration-300 ${isDragOver ? "scale-110" : "scale-100"}`}>
                   {selectedDateTime ? (

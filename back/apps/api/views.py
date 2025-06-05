@@ -152,6 +152,62 @@ def get_session_detail(request, session_id):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# Video API Views
+@api_view(['GET', 'POST'])
+def video_list_create(request):
+    """비디오 목록 조회 및 생성"""
+    if request.method == 'GET':
+        videos = Video.objects.all().order_by('-upload_date')
+        serializer = VideoSerializer(videos, many=True)
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        serializer = VideoSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+def video_detail(request, video_id):
+    """비디오 상세 조회, 수정, 삭제"""
+    try:
+        video = Video.objects.get(video_id=video_id)
+    except Video.DoesNotExist:
+        return Response({"error": "비디오를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == 'GET':
+        serializer = VideoSerializer(video)
+        return Response(serializer.data)
+    
+    elif request.method in ['PUT', 'PATCH']:
+        partial = request.method == 'PATCH'
+        serializer = VideoSerializer(video, data=request.data, partial=partial)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    elif request.method == 'DELETE':
+        video.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['GET'])
+def check_duplicate_video(request):
+    """비디오 중복 체크"""
+    name = request.GET.get('name')
+    size = request.GET.get('size')
+    
+    if not name or not size:
+        return Response({"error": "name과 size 파라미터가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        size = int(size)
+        exists = Video.objects.filter(name=name, size=size).exists()
+        return Response({"exists": exists})
+    except ValueError:
+        return Response({"error": "size는 숫자여야 합니다."}, status=status.HTTP_400_BAD_REQUEST)
+
 def process_prompt_logic(prompt_text):
     """
     프롬프트 처리 로직 - FastAPI text2sql 호출

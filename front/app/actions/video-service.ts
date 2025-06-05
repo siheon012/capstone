@@ -6,6 +6,95 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { deleteSessionsByVideoId } from './session-service';
 
+// Django API URL 설정
+const DJANGO_API_BASE = process.env.DJANGO_API_URL || 'http://localhost:8088/api';
+
+// Django Video API 통신 함수들
+async function createVideoInDjango(videoData: {
+  name: string;
+  duration: number;
+  size: number;
+  thumbnail_path: string;
+  video_file_path: string;
+  time_in_video?: string;
+}): Promise<{ success: boolean; video?: any; error?: string }> {
+  try {
+    const response = await fetch(`${DJANGO_API_BASE}/videos/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: videoData.name,
+        duration: videoData.duration,
+        size: videoData.size,
+        thumbnail_path: videoData.thumbnail_path,
+        video_file: videoData.video_file_path, // Django의 video_file 필드에 경로 저장
+        chat_count: 0,
+        major_event: null,
+        ...(videoData.time_in_video && { time_in_video: videoData.time_in_video }),
+      }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      return { success: true, video: result };
+    } else {
+      const error = await response.text();
+      console.error('Django API error:', error);
+      return { success: false, error: `Django API 오류: ${response.status}` };
+    }
+  } catch (error) {
+    console.error('Django API 통신 실패:', error);
+    return { success: false, error: 'Django API 통신에 실패했습니다.' };
+  }
+}
+
+async function getVideosFromDjango(): Promise<{ success: boolean; videos?: any[]; error?: string }> {
+  try {
+    const response = await fetch(`${DJANGO_API_BASE}/videos/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const videos = await response.json();
+      return { success: true, videos };
+    } else {
+      const error = await response.text();
+      console.error('Django API error:', error);
+      return { success: false, error: `Django API 오류: ${response.status}` };
+    }
+  } catch (error) {
+    console.error('Django API 통신 실패:', error);
+    return { success: false, error: 'Django API 통신에 실패했습니다.' };
+  }
+}
+
+async function deleteVideoFromDjango(videoId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(`${DJANGO_API_BASE}/videos/${videoId}/`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      return { success: true };
+    } else {
+      const error = await response.text();
+      console.error('Django API error:', error);
+      return { success: false, error: `Django API 오류: ${response.status}` };
+    }
+  } catch (error) {
+    console.error('Django API 통신 실패:', error);
+    return { success: false, error: 'Django API 통신에 실패했습니다.' };
+  }
+}
+
 // 썸네일 생성을 위한 추가 함수
 async function createVideoThumbnail(
   videoBuffer: Buffer,
@@ -44,40 +133,6 @@ async function ensureUploadDir() {
   }
 }
 
-// 메타데이터 저장 함수
-async function saveVideoMetadata(videoData: UploadedVideo): Promise<void> {
-  try {
-    await ensureUploadDir(); // 디렉토리 확실히 생성
-    const metadataPath = join(METADATA_DIR, `${videoData.id}.json`);
-    console.log(`💾 메타데이터 저장 중: ${metadataPath}`);
-    console.log(`📂 메타데이터 디렉토리: ${METADATA_DIR}`);
-    console.log(`🆔 비디오 ID: ${videoData.id}`);
-
-    await writeFile(metadataPath, JSON.stringify(videoData, null, 2));
-    console.log(`✅ 메타데이터 저장 완료: ${metadataPath}`);
-    console.log(`📊 저장된 데이터:`, videoData);
-  } catch (error) {
-    console.error('❌ 메타데이터 저장 실패:', error);
-  }
-}
-
-// 메타데이터 로드 함수
-async function loadVideoMetadata(
-  videoId: string
-): Promise<UploadedVideo | null> {
-  try {
-    const metadataPath = join(METADATA_DIR, `${videoId}.json`);
-    if (!existsSync(metadataPath)) {
-      return null;
-    }
-    const data = await readFile(metadataPath, 'utf-8');
-    return JSON.parse(data) as UploadedVideo;
-  } catch (error) {
-    console.error('Failed to load video metadata:', error);
-    return null;
-  }
-}
-
 // 중복 비디오 체크 함수
 export async function checkDuplicateVideo(
   file: File,
@@ -94,16 +149,13 @@ export async function checkDuplicateVideo(
       videoDuration,
     });
 
-    // 디렉토리 존재 확인
-    await ensureUploadDir();
-
-    // 먼저 기존 비디오들을 가져와서 비교
-    const videosResponse = await getUploadedVideos();
+    // Django API에서 기존 비디오들을 가져와서 비교
+    const videosResponse = await getVideosFromDjango();
     if (!videosResponse.success) {
       return { isDuplicate: false, error: videosResponse.error };
     }
 
-    console.log('기존 비디오 개수:', videosResponse.data.length);
+    console.log('기존 비디오 개수:', videosResponse.videos?.length || 0);
 
     // 업로드할 파일명을 정규화 (saveVideoFile과 동일한 로직)
     const fileNameWithoutExt = file.name.substring(
@@ -123,8 +175,8 @@ export async function checkDuplicateVideo(
     });
 
     // 각 비디오에 대해 중복 검사 실행
-    for (const video of videosResponse.data) {
-      // 기존 비디오의 name도 정규화해서 비교
+    for (const video of videosResponse.videos || []) {
+      // Django에서 가져온 비디오의 name도 정규화해서 비교
       const videoFileNameWithoutExt = video.name.substring(
         0,
         video.name.lastIndexOf('.')
@@ -166,9 +218,20 @@ export async function checkDuplicateVideo(
 
           if (durationDiff <= 0.5) {
             console.log('중복 비디오 발견!');
+            // Django 모델을 UploadedVideo 형태로 변환
             return {
               isDuplicate: true,
-              duplicateVideo: video,
+              duplicateVideo: {
+                id: video.video_id.toString(),
+                name: video.name,
+                filePath: video.file_path || `/uploads/videos/${video.name}`,
+                duration: video.duration,
+                size: video.size,
+                uploadDate: new Date(video.upload_date),
+                thumbnail: video.computed_thumbnail_path || video.thumbnail_path,
+                chatCount: video.chat_count,
+                majorEvent: video.major_event,
+              },
             };
           }
         } else {
@@ -176,7 +239,17 @@ export async function checkDuplicateVideo(
           console.log('Duration 정보 없음, 파일명과 크기로만 중복 판단');
           return {
             isDuplicate: true,
-            duplicateVideo: video,
+            duplicateVideo: {
+              id: video.video_id.toString(),
+              name: video.name,
+              filePath: video.file_path || `/uploads/videos/${video.name}`,
+              duration: video.duration,
+              size: video.size,
+              uploadDate: new Date(video.upload_date),
+              thumbnail: video.computed_thumbnail_path || video.thumbnail_path,
+              chatCount: video.chat_count,
+              majorEvent: video.major_event,
+            },
           };
         }
       }
@@ -191,11 +264,12 @@ export async function checkDuplicateVideo(
 }
 
 // 비디오 파일 저장
-// 로컬 시스템에 직접 저장하는 구현
+// 로컬 시스템에 직접 저장하고 메타데이터는 Django에 저장하는 구현
 export async function saveVideoFile(
   formData: FormData,
   videoDuration?: number,
-  thumbnailPath?: string
+  thumbnailPath?: string,
+  videoDateTime?: string
 ): Promise<{
   success: boolean;
   videoId?: string;
@@ -207,6 +281,7 @@ export async function saveVideoFile(
   console.log('saveVideoFile 함수 시작');
   console.log('videoDuration:', videoDuration);
   console.log('thumbnailPath:', thumbnailPath);
+  console.log('videoDateTime:', videoDateTime);
 
   try {
     const file = formData.get('video') as File;
@@ -264,8 +339,8 @@ export async function saveVideoFile(
       .substring(0, 50); // 이름 길이 제한
 
     // 파일명 충돌 확인 및 처리 - (1), (2) 형태로 번호 추가
+    await ensureUploadDir();
     const files = await readdir(UPLOAD_DIR);
-    const videoId = timestamp.toString();
     let fileName = '';
     let counter = 0;
 
@@ -279,9 +354,6 @@ export async function saveVideoFile(
       }
       counter++;
     } while (files.includes(fileName) && counter < 100); // 100번 시도 제한
-
-    // 업로드 디렉토리 준비
-    await ensureUploadDir();
 
     // 파일 저장 경로
     const filePath = join(UPLOAD_DIR, fileName);
@@ -303,26 +375,36 @@ export async function saveVideoFile(
       thumbnailPath ||
       `/uploads/thumbnails/${fileName.replace(/\.[^/.]+$/, '')}.png`;
 
-    // 비디오 메타데이터 (데이터베이스 대신 JSON 파일로 저장)
-    const videoData: UploadedVideo = {
-      id: videoId,
+    // Django API에 비디오 메타데이터 저장
+    const djangoResult = await createVideoInDjango({
       name: fileName, // 실제 저장된 파일명을 name으로 사용
-      filePath: `/uploads/videos/${fileName}`, // 웹 경로
       duration: duration,
       size: file.size,
-      uploadDate: new Date(),
-      thumbnail: finalThumbnailPath, // 썸네일 경로 추가
-      chatCount: 0,
-      majorEvent: null,
-    };
+      thumbnail_path: finalThumbnailPath,
+      video_file_path: `/uploads/videos/${fileName}`, // 웹 경로
+      time_in_video: videoDateTime, // 비디오 촬영 시간
+    });
 
-    // 메타데이터를 JSON 파일로 저장
-    await saveVideoMetadata(videoData);
-    console.log('비디오 메타데이터가 저장되었습니다:', videoData);
+    if (!djangoResult.success) {
+      // Django 저장 실패 시 로컬 파일 삭제
+      try {
+        await unlink(filePath);
+        console.log('Django 저장 실패로 인한 로컬 파일 삭제 완료');
+      } catch (cleanupError) {
+        console.error('로컬 파일 정리 실패:', cleanupError);
+      }
+      
+      return { 
+        success: false, 
+        error: `Django 저장 실패: ${djangoResult.error}` 
+      };
+    }
+
+    console.log('비디오 메타데이터가 Django에 저장되었습니다:', djangoResult.video);
 
     return {
       success: true,
-      videoId,
+      videoId: djangoResult.video.video_id.toString(),
       filePath: `/uploads/videos/${fileName}`, // 웹 접근 경로 반환
     };
   } catch (error) {
@@ -334,100 +416,33 @@ export async function saveVideoFile(
 // 업로드된 비디오 목록 가져오기
 export async function getUploadedVideos(): Promise<VideoListResponse> {
   try {
-    // 디렉토리 존재 확인
-    await ensureUploadDir();
+    console.log('Django API에서 비디오 목록 가져오는 중...');
 
-    // 비디오 디렉토리 읽기
-    const files = await readdir(UPLOAD_DIR);
-
-    // 비디오 파일만 필터링
-    const videoFiles = files.filter(
-      (file: string) =>
-        file.endsWith('.mp4') ||
-        file.endsWith('.webm') ||
-        file.endsWith('.ogg') ||
-        file.endsWith('.mov')
-    );
-
-    // 메타데이터 파일들을 먼저 읽어서 파일명과 매핑
-    const metadataFiles = await readdir(METADATA_DIR);
-    const metadataMap = new Map<string, UploadedVideo>();
-
-    console.log(`📂 메타데이터 파일 개수: ${metadataFiles.length}`);
-
-    for (const metaFile of metadataFiles) {
-      if (metaFile.endsWith('.json')) {
-        try {
-          const metaPath = join(METADATA_DIR, metaFile);
-          const metaData = await readFile(metaPath, 'utf-8');
-          const videoData = JSON.parse(metaData) as UploadedVideo;
-          metadataMap.set(videoData.name, videoData);
-          console.log(
-            `📄 메타데이터 로드: ${videoData.name} -> ID: ${videoData.id}`
-          );
-        } catch (error) {
-          console.error(`❌ 메타데이터 파일 읽기 실패: ${metaFile}`, error);
-        }
-      }
+    // Django API에서 비디오 목록 가져오기
+    const djangoResult = await getVideosFromDjango();
+    if (!djangoResult.success) {
+      return {
+        success: false,
+        data: [],
+        error: djangoResult.error || '비디오 목록을 불러오는 중 오류가 발생했습니다.',
+      };
     }
 
-    // 각 비디오에 대한 메타데이터 수집
-    const videos: UploadedVideo[] = await Promise.all(
-      videoFiles.map(async (fileName: string) => {
-        const filePath = join(UPLOAD_DIR, fileName);
-        const fileStats = await stat(filePath);
+    // Django 모델을 UploadedVideo 형태로 변환
+    const videos: UploadedVideo[] = (djangoResult.videos || []).map((video: any) => ({
+      id: video.video_id.toString(),
+      name: video.name,
+      filePath: video.file_path || `/uploads/videos/${video.name}`,
+      duration: video.duration,
+      size: video.size,
+      uploadDate: new Date(video.upload_date),
+      thumbnail: video.computed_thumbnail_path || video.thumbnail_path,
+      chatCount: video.chat_count,
+      majorEvent: video.major_event,
+      description: video.major_event || `업로드된 비디오: ${video.name}`,
+    }));
 
-        // 메타데이터에서 실제 비디오 정보 찾기
-        const videoMetadata = metadataMap.get(fileName);
-
-        if (videoMetadata) {
-          // 메타데이터가 있으면 그것을 사용하고 파일 정보만 업데이트
-          console.log(
-            `✅ 메타데이터 발견: ${fileName} -> ID: ${videoMetadata.id}`
-          );
-
-          // 썸네일 경로가 없으면 기본 경로 생성
-          const thumbnailPath =
-            videoMetadata.thumbnail ||
-            `/uploads/thumbnails/${fileName.replace(/\.[^/.]+$/, '')}.png`;
-
-          return {
-            ...videoMetadata,
-            size: fileStats.size,
-            uploadDate: fileStats.birthtime,
-            filePath: `/uploads/videos/${fileName}`,
-            thumbnail: thumbnailPath,
-          };
-        }
-
-        // 메타데이터가 없는 경우 (하위 호환성) - 파일 생성 시간을 ID로 사용
-        console.warn(`⚠️ 메타데이터 없음: ${fileName}, 파일 시간으로 ID 생성`);
-        const id = fileStats.birthtime.getTime().toString();
-
-        // 메타데이터가 없으면 기본값으로 생성 (하위 호환성)
-        const duration = 0;
-        const thumbnailPath = `/uploads/thumbnails/${fileName.replace(
-          /\.[^/.]+$/,
-          ''
-        )}.png`;
-
-        return {
-          id,
-          name: fileName,
-          filePath: `/uploads/videos/${fileName}`, // 웹에서 접근 가능한 경로
-          duration: duration,
-          size: fileStats.size,
-          uploadDate: fileStats.birthtime,
-          thumbnail: thumbnailPath,
-          chatCount: 0, // 실제 구현에서는 DB 조회
-          majorEvent: null, // 실제 구현에서는 분석 결과에서 가져옴
-          description: `업로드된 비디오: ${fileName}`, // 실제 구현에서는 사용자 입력 또는 분석 결과
-        };
-      })
-    );
-
-    // 최신 비디오가 먼저 오도록 정렬
-    videos.sort((a, b) => b.uploadDate.getTime() - a.uploadDate.getTime());
+    console.log(`✅ Django에서 ${videos.length}개 비디오 로드 완료`);
 
     return { success: true, data: videos };
   } catch (error) {
@@ -444,16 +459,16 @@ export async function getUploadedVideos(): Promise<VideoListResponse> {
 export async function deleteVideo(videoId: string): Promise<boolean> {
   console.log(`🗑️ 비디오 삭제 시작: ${videoId}`);
   try {
-    // 먼저 모든 비디오 목록을 가져와서 해당 ID의 비디오 찾기
-    const videosResponse = await getUploadedVideos();
+    // 먼저 Django에서 비디오 정보를 가져와서 파일 경로 확인
+    const videosResponse = await getVideosFromDjango();
     if (!videosResponse.success) {
       console.error('❌ 비디오 목록 조회 실패');
       return false;
     }
 
     // videoId에 해당하는 비디오 찾기
-    const targetVideo = videosResponse.data.find(
-      (video) => video.id === videoId
+    const targetVideo = videosResponse.videos?.find(
+      (video) => video.video_id.toString() === videoId
     );
     if (!targetVideo) {
       console.error(`❌ 비디오를 찾을 수 없음: ${videoId}`);
@@ -461,51 +476,57 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
     }
 
     console.log(`📹 삭제할 비디오:`, {
-      id: targetVideo.id,
+      id: targetVideo.video_id,
       name: targetVideo.name,
-      filePath: targetVideo.filePath,
+      file_path: targetVideo.file_path,
     });
 
-    // 1. 비디오 파일 삭제
+    // 1. Django에서 비디오 삭제 (CASCADE로 관련 데이터도 함께 삭제됨)
+    const djangoDeleteResult = await deleteVideoFromDjango(videoId);
+    if (!djangoDeleteResult.success) {
+      console.error(`❌ Django 비디오 삭제 실패: ${djangoDeleteResult.error}`);
+      return false;
+    }
+
+    console.log(`✅ Django 비디오 삭제 완료`);
+
+    // 2. 로컬 비디오 파일 삭제
     const fileName = targetVideo.name;
     const filePath = join(UPLOAD_DIR, fileName);
 
-    console.log(`📁 비디오 파일 삭제: ${filePath}`);
+    console.log(`📁 로컬 비디오 파일 삭제: ${filePath}`);
 
     if (existsSync(filePath)) {
       await unlink(filePath);
-      console.log(`✅ 비디오 파일 삭제 완료`);
+      console.log(`✅ 로컬 비디오 파일 삭제 완료`);
     } else {
-      console.warn(`⚠️ 비디오 파일이 존재하지 않음: ${filePath}`);
+      console.warn(`⚠️ 로컬 비디오 파일이 존재하지 않음: ${filePath}`);
     }
 
-    // 1-1. 썸네일 파일 삭제 - 메타데이터에서 실제 썸네일 경로 사용
+    // 3. 썸네일 파일 삭제
     let thumbnailDeleted = false;
 
     // 먼저 메타데이터에서 실제 썸네일 경로 확인
-    if (targetVideo.thumbnail) {
-      // 메타데이터에 썸네일 경로가 있으면 그것을 사용
-      const thumbnailWebPath = targetVideo.thumbnail; // e.g., "/uploads/thumbnails/filename.png"
+    if (targetVideo.thumbnail_path) {
+      const thumbnailWebPath = targetVideo.thumbnail_path; // e.g., "/uploads/thumbnails/filename.png"
       const thumbnailFileName = thumbnailWebPath.split('/').pop(); // "filename.png"
 
       if (thumbnailFileName) {
         const thumbnailPath = join(THUMBNAIL_DIR, thumbnailFileName);
 
-        console.log(`🖼️ 메타데이터 기반 썸네일 파일 삭제: ${thumbnailPath}`);
+        console.log(`🖼️ 썸네일 파일 삭제: ${thumbnailPath}`);
 
         if (existsSync(thumbnailPath)) {
           await unlink(thumbnailPath);
           console.log(`✅ 썸네일 파일 삭제 완료`);
           thumbnailDeleted = true;
         } else {
-          console.warn(
-            `⚠️ 메타데이터 기반 썸네일 파일이 존재하지 않음: ${thumbnailPath}`
-          );
+          console.warn(`⚠️ 썸네일 파일이 존재하지 않음: ${thumbnailPath}`);
         }
       }
     }
 
-    // 메타데이터 기반 삭제가 실패했으면 파일명 기반으로 시도
+    // 썸네일 삭제가 실패했으면 파일명 기반으로 시도
     if (!thumbnailDeleted) {
       const thumbnailFileName = fileName.replace(/\.[^/.]+$/, '.png');
       const thumbnailPath = join(THUMBNAIL_DIR, thumbnailFileName);
@@ -517,89 +538,11 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
         console.log(`✅ 썸네일 파일 삭제 완료`);
         thumbnailDeleted = true;
       } else {
-        console.warn(
-          `⚠️ 파일명 기반 썸네일 파일이 존재하지 않음: ${thumbnailPath}`
-        );
+        console.warn(`⚠️ 파일명 기반 썸네일 파일이 존재하지 않음: ${thumbnailPath}`);
       }
     }
 
-    // 2. 메타데이터 파일 삭제 - 모든 메타데이터 파일을 검사해서 매칭되는 것 삭제
-    let metadataDeleted = false;
-    let matchedFiles: string[] = [];
-
-    try {
-      const metadataFiles = await readdir(METADATA_DIR);
-      console.log(`🔍 메타데이터 파일 ${metadataFiles.length}개 검사 시작`);
-      console.log(`🎯 찾는 조건: ID='${videoId}' 또는 파일명='${fileName}'`);
-
-      for (const metaFile of metadataFiles) {
-        if (metaFile.endsWith('.json')) {
-          try {
-            const metaPath = join(METADATA_DIR, metaFile);
-            console.log(`📄 검사 중: ${metaFile}`);
-
-            const metaData = await readFile(metaPath, 'utf-8');
-            const videoData = JSON.parse(metaData) as UploadedVideo;
-
-            console.log(`   - 메타데이터 ID: '${videoData.id}'`);
-            console.log(`   - 메타데이터 파일명: '${videoData.name}'`);
-
-            // ID 또는 파일명이 일치하는 메타데이터 찾기
-            const idMatch = videoData.id === videoId;
-            const nameMatch = videoData.name === fileName;
-
-            if (idMatch || nameMatch) {
-              console.log(`🎯 매칭된 메타데이터 발견!`);
-              console.log(`   - 파일: ${metaFile}`);
-              console.log(
-                `   - ID 매칭: ${idMatch} (${videoData.id} === ${videoId})`
-              );
-              console.log(
-                `   - 파일명 매칭: ${nameMatch} (${videoData.name} === ${fileName})`
-              );
-
-              await unlink(metaPath);
-              console.log(`✅ 메타데이터 삭제 완료: ${metaFile}`);
-              matchedFiles.push(metaFile);
-              metadataDeleted = true;
-            } else {
-              console.log(`   - 매칭 안됨`);
-            }
-          } catch (error) {
-            console.error(`❌ 메타데이터 파일 읽기 실패: ${metaFile}`, error);
-          }
-        }
-      }
-
-      if (!metadataDeleted) {
-        console.warn(`⚠️ 삭제할 메타데이터를 찾을 수 없음`);
-        console.warn(`   조건: ID='${videoId}' 또는 파일명='${fileName}'`);
-
-        // 백업 방법: ID를 파일명으로 한 메타데이터 파일 직접 삭제 시도
-        const directMetaPath = join(METADATA_DIR, `${videoId}.json`);
-        console.log(`🔄 백업 삭제 시도: ${directMetaPath}`);
-
-        if (existsSync(directMetaPath)) {
-          try {
-            await unlink(directMetaPath);
-            console.log(
-              `✅ 백업 방법으로 메타데이터 삭제 성공: ${videoId}.json`
-            );
-            metadataDeleted = true;
-          } catch (error) {
-            console.error(`❌ 백업 삭제 실패:`, error);
-          }
-        } else {
-          console.log(`❌ 백업 파일도 존재하지 않음: ${videoId}.json`);
-        }
-      } else {
-        console.log(`🎉 메타데이터 삭제 성공: ${matchedFiles.join(', ')}`);
-      }
-    } catch (metadataError) {
-      console.error('❌ 메타데이터 디렉토리 읽기 실패:', metadataError);
-    }
-
-    // 3. 관련 세션 삭제
+    // 4. 관련 세션 삭제 (프론트엔드 세션 데이터)
     try {
       await deleteSessionsByVideoId(videoId);
       console.log(`✅ 관련 세션 삭제 완료`);
@@ -607,25 +550,15 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
       console.error('❌ 세션 삭제 실패:', sessionError);
     }
 
-    // 4. 최종 결과 확인
+    // 5. 최종 결과 확인
     const wasVideoDeleted = !existsSync(filePath);
     console.log(`📊 삭제 결과 요약:`);
-    console.log(
-      `   - 비디오 파일 삭제: ${wasVideoDeleted ? '✅ 성공' : '❌ 실패'}`
-    );
-    console.log(
-      `   - 메타데이터 삭제: ${metadataDeleted ? '✅ 성공' : '❌ 실패'}`
-    );
+    console.log(`   - Django 비디오 삭제: ✅ 성공`);
+    console.log(`   - 로컬 비디오 파일 삭제: ${wasVideoDeleted ? '✅ 성공' : '❌ 실패'}`);
+    console.log(`   - 썸네일 삭제: ${thumbnailDeleted ? '✅ 성공' : '⚠️ 없음'}`);
 
-    if (wasVideoDeleted && metadataDeleted) {
-      console.log(`🎉 비디오 삭제 작업 완료: ${videoId}`);
-      return true;
-    } else {
-      console.error(
-        `⚠️ 일부 삭제 실패 - 비디오: ${wasVideoDeleted}, 메타데이터: ${metadataDeleted}`
-      );
-      return false;
-    }
+    console.log(`🎉 비디오 삭제 작업 완료: ${videoId}`);
+    return true;
   } catch (error) {
     console.error('❌ 비디오 삭제 오류:', error);
     return false;
@@ -638,71 +571,39 @@ export async function updateVideoMetadata(
   updates: Partial<UploadedVideo>
 ): Promise<boolean> {
   try {
-    // TODO: 데이터베이스 업데이트
-    console.log('Video metadata updated:', videoId, updates);
-    return true;
+    // Django API로 메타데이터 업데이트
+    const response = await fetch(`${DJANGO_API_BASE}/videos/${videoId}/`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...(updates.name && { name: updates.name }),
+        ...(updates.duration && { duration: updates.duration }),
+        ...(updates.size && { size: updates.size }),
+        ...(updates.thumbnail && { thumbnail_path: updates.thumbnail }),
+        ...(updates.chatCount && { chat_count: updates.chatCount }),
+        ...(updates.majorEvent && { major_event: updates.majorEvent }),
+      }),
+    });
+
+    if (response.ok) {
+      console.log('Django 비디오 메타데이터 업데이트 성공:', videoId, updates);
+      return true;
+    } else {
+      console.error('Django API error:', await response.text());
+      return false;
+    }
   } catch (error) {
     console.error('Video metadata update error:', error);
     return false;
   }
 }
 
-// 고아 메타데이터 파일 정리 함수
-async function cleanupOrphanedMetadata(): Promise<void> {
-  try {
-    const metadataFiles = await readdir(METADATA_DIR);
-    const videoFiles = await readdir(UPLOAD_DIR);
-
-    // 비디오 파일만 필터링
-    const existingVideoFiles = new Set(
-      videoFiles.filter(
-        (file: string) =>
-          file.endsWith('.mp4') ||
-          file.endsWith('.webm') ||
-          file.endsWith('.ogg') ||
-          file.endsWith('.mov')
-      )
-    );
-
-    console.log(`🧹 고아 메타데이터 정리 시작`);
-    console.log(
-      `📹 존재하는 비디오 파일: ${Array.from(existingVideoFiles).join(', ')}`
-    );
-
-    for (const metaFile of metadataFiles) {
-      if (metaFile.endsWith('.json')) {
-        try {
-          const metaPath = join(METADATA_DIR, metaFile);
-          const metaData = await readFile(metaPath, 'utf-8');
-          const videoData = JSON.parse(metaData) as UploadedVideo;
-
-          // 해당하는 비디오 파일이 존재하지 않으면 메타데이터 삭제
-          if (!existingVideoFiles.has(videoData.name)) {
-            console.log(
-              `🗑️ 고아 메타데이터 발견: ${metaFile} (비디오 파일: ${videoData.name})`
-            );
-            await unlink(metaPath);
-            console.log(`✅ 고아 메타데이터 삭제 완료: ${metaFile}`);
-          }
-        } catch (error) {
-          console.error(`❌ 메타데이터 파일 처리 실패: ${metaFile}`, error);
-        }
-      }
-    }
-
-    console.log(`🎉 고아 메타데이터 정리 완료`);
-  } catch (error) {
-    console.error('❌ 고아 메타데이터 정리 실패:', error);
-  }
-}
-
-// 비디오 목록을 가져올 때 고아 메타데이터 정리도 함께 실행
+// 모든 비디오 가져오기 (기존 getAllVideos 함수를 단순화)
 export async function getAllVideos(): Promise<VideoListResponse> {
   try {
-    // 고아 메타데이터 정리 실행
-    await cleanupOrphanedMetadata();
-
-    // 일반적인 비디오 목록 반환
+    // Django API 기반으로 비디오 목록 반환
     return await getUploadedVideos();
   } catch (error) {
     console.error('Failed to get all videos:', error);

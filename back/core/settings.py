@@ -152,6 +152,18 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# 메타데이터 및 썸네일 파일 경로 설정
+PROJECT_ROOT = BASE_DIR.parent  # /home/uns/code/project
+UPLOADS_BASE_DIR = env('UPLOADS_BASE_DIR', default='front/public/uploads')  # front/public/uploads
+METADATA_SUBDIR = env('METADATA_SUBDIR', default='metadata')  # metadata
+THUMBNAIL_SUBDIR = env('THUMBNAIL_SUBDIR', default='thumbnails')  # thumbnails
+VIDEO_SUBDIR = env('VIDEO_SUBDIR', default='videos')  # videos
+
+# 실제 파일 경로들
+METADATA_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, METADATA_SUBDIR)
+THUMBNAIL_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, THUMBNAIL_SUBDIR)
+VIDEO_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, VIDEO_SUBDIR)
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

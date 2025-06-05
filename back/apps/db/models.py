@@ -9,16 +9,17 @@ class Video(models.Model):
     duration = models.IntegerField()  # 분 단위
     size = models.BigIntegerField()  # 바이트
     upload_date = models.DateTimeField(auto_now_add=True)
+    time_in_video = models.DateTimeField(null=True, blank=True)  # 동영상 촬영 시점 (년월일시분)
     thumbnail_path = models.CharField(max_length=500, null= False, blank=False)
     chat_count = models.IntegerField(default=0)
     major_event = models.CharField(max_length=100, null=True, blank=True)
-    video_file = models.FileField(upload_to='videos/%Y/%m/%d/', blank=True, null=True)  # 임시로 nullable로 설정
+    video_file = models.CharField(max_length=500, null=True, blank=True)  # 비디오 파일 경로 저장
     
     @property
     def file_path(self):
         """비디오 파일의 웹 접근 경로를 동적으로 생성"""
         if self.video_file:
-            return f"/uploads/{self.video_file.name}"
+            return self.video_file
         # 레거시 파일들을 위한 fallback (name 기반)
         return f"/uploads/videos/{self.name}"
     
@@ -30,6 +31,66 @@ class Video(models.Model):
         # name에서 확장자 제거하고 .png 추가
         name_without_ext = os.path.splitext(self.name)[0]
         return f"/uploads/thumbnails/{name_without_ext}.png"
+    
+    def delete(self, *args, **kwargs):
+        """비디오 삭제 시 연관된 파일들과 모든 관련 데이터들도 함께 삭제"""
+        from django.conf import settings
+        
+        # 삭제될 데이터 수 카운트 (로깅용)
+        session_count = self.prompt_sessions.count()
+        total_interactions = sum(session.interactions.count() for session in self.prompt_sessions.all())
+        event_count = self.events.count()
+        depth_data_count = self.spatial_data.count()  # DepthData 수
+        display_data_count = self.display_data.count()  # DisplayData 수
+        
+        print(f"비디오 삭제 시작: {self.name}")
+        print(f"삭제될 세션 수: {session_count}개")
+        print(f"삭제될 총 프롬프트 수: {total_interactions}개")
+        print(f"삭제될 이벤트 수: {event_count}개")
+        print(f"삭제될 공간 정보 데이터 수: {depth_data_count}개")
+        print(f"삭제될 진열대 정보 데이터 수: {display_data_count}개")
+        
+        # 1. 비디오 파일 삭제
+        if self.video_file and os.path.exists(self.video_file):
+            try:
+                os.remove(self.video_file)
+                print(f"비디오 파일 삭제됨: {self.video_file}")
+            except OSError as e:
+                print(f"비디오 파일 삭제 실패: {e}")
+        
+        # 2. 썸네일 파일 삭제
+        # thumbnail_path 필드가 있으면 해당 파일 삭제
+        if self.thumbnail_path and os.path.exists(self.thumbnail_path):
+            try:
+                os.remove(self.thumbnail_path)
+                print(f"썸네일 파일 삭제됨: {self.thumbnail_path}")
+            except OSError as e:
+                print(f"썸네일 파일 삭제 실패: {e}")
+        
+        # 기본 썸네일 PNG 파일도 삭제 (파일명 기반)
+        name_without_ext = os.path.splitext(self.name)[0]
+        thumbnail_file_path = os.path.join(settings.THUMBNAIL_DIR, f"{name_without_ext}.png")
+        if os.path.exists(thumbnail_file_path):
+            try:
+                os.remove(thumbnail_file_path)
+                print(f"기본 썸네일 파일 삭제됨: {thumbnail_file_path}")
+            except OSError as e:
+                print(f"기본 썸네일 파일 삭제 실패: {e}")
+        
+        # 4. 세션별 하이라이트 썸네일 파일들 정리 (필요시)
+        if session_count > 0:
+            for session in self.prompt_sessions.all():
+                for interaction in session.interactions.all():
+                    if interaction.highlight_thumbnail_path:
+                        print(f"프롬프트 하이라이트 썸네일: {interaction.highlight_thumbnail_path}")
+        
+        # 5. 데이터베이스에서 비디오 레코드 삭제 (CASCADE로 모든 연관 데이터들이 함께 삭제됨)
+        super().delete(*args, **kwargs)
+        
+        print(f"비디오 삭제 완료: {self.name}")
+        print(f"└─ 총 {session_count}개 세션, {total_interactions}개 프롬프트 삭제")
+        print(f"└─ 총 {event_count}개 이벤트 삭제")
+        print(f"└─ 총 {depth_data_count}개 공간 정보, {display_data_count}개 진열대 정보 삭제")
     
     # Meta 클래스 추가 권장
     class Meta:
@@ -45,7 +106,7 @@ class Video(models.Model):
 class Event(models.Model):
     """비디오 내에서 발생한 이벤트"""
     video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='events', db_column='video_id')
-    timestamp = models.DateTimeField()  # FloatField → DateTimeField로 변경
+    timestamp = models.IntegerField()  # 영상 시작점부터 몇 초에 이벤트 발생했는지 (초 단위)
     obj_id = models.IntegerField()
     age = models.FloatField()  # null=True, blank=True 제거 (DB에서 not null)
     gender = models.CharField(max_length=10)  # null=True, blank=True 제거
@@ -60,8 +121,26 @@ class Event(models.Model):
     
     @property
     def timestamp_display(self):
-        """사용자 친화적 시간 표시"""
-        return self.timestamp.strftime("%H:%M:%S")
+        """사용자 친화적 시간 표시 (MM:SS 형식)"""
+        minutes = int(self.timestamp // 60)
+        seconds = int(self.timestamp % 60)
+        return f"{minutes:02d}:{seconds:02d}"
+    
+    @property
+    def absolute_time(self):
+        """이벤트가 발생한 절대 시간 계산"""
+        if self.video.time_in_video:
+            from datetime import timedelta
+            return self.video.time_in_video + timedelta(seconds=self.timestamp)
+        return None
+    
+    @property
+    def absolute_time_display(self):
+        """절대 시간을 사용자 친화적으로 표시"""
+        abs_time = self.absolute_time
+        if abs_time:
+            return abs_time.strftime("%Y-%m-%d %H:%M:%S")
+        return "시간 정보 없음"
     
     class Meta:
         ordering = ['video', 'timestamp']
@@ -144,6 +223,27 @@ class PromptSession(models.Model):
         if self.main_event:
             return f"{self.main_event.event_type} ({self.main_event.timestamp}초)"
         return "이벤트 미지정"
+    
+    def delete(self, *args, **kwargs):
+        """세션 삭제 시 관련 정보 정리 및 로깅"""
+        # 삭제될 상호작용 수 카운트 (로깅용)
+        interaction_count = self.interactions.count()
+        session_info = f"Session #{self.session_id} ({self.video.name})"
+        
+        print(f"세션 삭제 시작: {session_info}")
+        print(f"삭제될 상호작용 수: {interaction_count}개")
+        
+        # Django의 CASCADE로 자동 삭제되지만, 명시적으로 정리 작업 수행
+        if interaction_count > 0:
+            # 각 상호작용의 썸네일 파일들 정리 (필요시)
+            for interaction in self.interactions.all():
+                if interaction.highlight_thumbnail_path:
+                    # 썸네일 파일이 있다면 정리 로직 추가 가능
+                    print(f"상호작용 #{interaction.id}의 썸네일: {interaction.highlight_thumbnail_path}")
+        
+        # 데이터베이스에서 세션 삭제 (CASCADE로 상호작용들도 함께 삭제됨)
+        super().delete(*args, **kwargs)
+        print(f"세션 삭제 완료: {session_info} (총 {interaction_count}개 상호작용 함께 삭제됨)")
 
 class PromptInteraction(models.Model):
     """각 프롬프트 세션 내의 상호작용"""

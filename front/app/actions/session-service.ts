@@ -9,116 +9,68 @@ export type SessionResponse = {
   error?: string;
 };
 
+// Django API 기본 URL
+const API_BASE_URL = 'http://localhost:8088/api';
+
 // 모든 세션 가져오기
 export async function getAllSessions(): Promise<SessionResponse> {
   try {
-    // 더미 데이터 반환 (실제로는 데이터베이스에서 가져와야 함)
-    const dummyData: ChatSession[] = [
-      {
-        id: 'session_1',
-        title: '주차장_CCTV_2024년1월1일.mp4의 1번째 채팅',
-        createdAt: new Date('2024-01-15T10:30:00'),
-        messages: [
-          { role: 'user', content: '주차장에서 차량 도난 사건이 있었나요?' },
-          {
-            role: 'assistant',
-            content: '15:30 시점에서 의심스러운 활동이 감지되었습니다.',
-            timestamp: 930,
-          },
-        ],
-        videoInfo: {
-          name: '주차장_CCTV_2024년1월1일.mp4',
-          duration: 3600,
-          url: '/uploads/videos/parking_lot_20240101.mp4',
-        },
-        videoId: 'video_1704067200_abc123',
-        eventType: '도난',
+    console.log('🔥 Django API에서 모든 세션 가져오기 시작');
+    
+    const response = await fetch(`${API_BASE_URL}/prompt-sessions/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      {
-        id: 'session_2',
-        title: '주차장_CCTV_2024년1월1일.mp4의 2번째 채팅',
-        createdAt: new Date('2024-01-15T11:45:00'),
-        messages: [
-          { role: 'user', content: '주차장에 몇 대의 차량이 있나요?' },
-          {
-            role: 'assistant',
-            content: '현재 주차장에는 총 12대의 차량이 있습니다.',
-            timestamp: 1200,
-          },
-        ],
-        videoInfo: {
-          name: '주차장_CCTV_2024년1월1일.mp4',
-          duration: 3600,
-          url: '/uploads/videos/parking_lot_20240101.mp4',
-        },
-        videoId: 'video_1704067200_abc123',
-        eventType: null,
-      },
-      {
-        id: 'session_3',
-        title: '매장입구_CCTV_2024년1월2일.mp4의 1번째 채팅',
-        createdAt: new Date('2024-01-14T14:20:00'),
-        messages: [
-          { role: 'user', content: '매장 입구에 사람이 몇 명 들어왔나요?' },
-          {
-            role: 'assistant',
-            content: '총 47명의 고객이 입장했습니다.',
-            timestamp: 1200,
-          },
-        ],
-        videoInfo: {
-          name: '매장입구_CCTV_2024년1월2일.mp4',
-          duration: 7200,
-          url: '/uploads/videos/store_entrance_20240102.mp4',
-        },
-        videoId: 'video_1704153600_def456',
-        eventType: null,
-      },
-      {
-        id: 'session_4',
-        title: '사무실복도_CCTV_2024년1월3일.mp4의 1번째 채팅',
-        createdAt: new Date('2024-01-13T09:15:00'),
-        messages: [
-          { role: 'user', content: '야간에 사무실에 누가 있었나요?' },
-          {
-            role: 'assistant',
-            content: '22:45에 청소 직원이 입장했습니다.',
-            timestamp: 2700,
-          },
-        ],
-        videoInfo: {
-          name: '사무실복도_CCTV_2024년1월3일.mp4',
-          duration: 1800,
-          url: '/uploads/videos/office_hallway_20240103.mp4',
-        },
-        videoId: 'video_1704240000_ghi789',
-        eventType: '쓰러짐',
-      },
-      {
-        id: 'session_5',
-        title: '창고_CCTV_2024년1월4일.mp4의 1번째 채팅',
-        createdAt: new Date('2024-01-12T16:45:00'),
-        messages: [
-          { role: 'user', content: '연기나 화재 징후가 있었나요?' },
-          {
-            role: 'assistant',
-            content: '16:20에 연기가 감지되었습니다.',
-            timestamp: 1180,
-          },
-        ],
-        videoInfo: {
-          name: '창고_CCTV_2024년1월4일.mp4',
-          duration: 5400,
-          url: '/uploads/videos/warehouse_20240104.mp4',
-        },
-        videoId: 'video_1704326400_jkl012',
-        eventType: '폭행',
-      },
-    ];
+    });
 
-    return { success: true, data: dummyData };
+    if (!response.ok) {
+      throw new Error(`API 호출 실패: ${response.status}`);
+    }
+
+    const sessionData = await response.json();
+    console.log('📦 Django API 응답:', sessionData);
+
+    // Django API 응답을 ChatSession 타입으로 변환
+    const sessions: ChatSession[] = sessionData.map((session: any) => {
+      // 첫 번째 interaction을 기반으로 messages 구성
+      const messages = [];
+      
+      if (session.first_prompt) {
+        messages.push({
+          role: 'user' as const,
+          content: session.first_prompt,
+        });
+      }
+      
+      if (session.first_answer) {
+        messages.push({
+          role: 'assistant' as const,
+          content: session.first_answer,
+          timestamp: session.main_event?.timestamp || null,
+        });
+      }
+
+      return {
+        id: session.session_id,
+        title: `${session.video?.name || '알 수 없는 비디오'}의 ${session.interaction_count}번째 채팅`,
+        createdAt: new Date(session.created_at),
+        messages,
+        videoInfo: session.video ? {
+          name: session.video.name,
+          duration: session.video.duration || 0,
+          url: session.video.url || '',
+        } : null,
+        videoId: session.video?.id?.toString() || '',
+        eventType: session.main_event?.action_detected || null,
+      };
+    });
+
+    console.log('✅ 변환된 세션 데이터:', sessions);
+    return { success: true, data: sessions };
+    
   } catch (error) {
-    console.error('Sessions fetch error:', error);
+    console.error('❌ Sessions fetch error:', error);
     return {
       success: false,
       data: [],
@@ -132,17 +84,62 @@ export async function getVideoSessions(
   videoId: string
 ): Promise<SessionResponse> {
   try {
-    const allSessions = await getAllSessions();
-    if (!allSessions.success) {
-      return allSessions;
+    console.log('🔥 특정 비디오의 세션 가져오기:', videoId);
+    
+    const response = await fetch(`${API_BASE_URL}/prompt-sessions/?video=${videoId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`API 호출 실패: ${response.status}`);
     }
 
-    const videoSessions = allSessions.data.filter(
-      (session) => session.videoId === videoId
-    );
-    return { success: true, data: videoSessions };
+    const sessionData = await response.json();
+    console.log('📦 비디오별 세션 API 응답:', sessionData);
+
+    // Django API 응답을 ChatSession 타입으로 변환
+    const sessions: ChatSession[] = sessionData.map((session: any) => {
+      // 첫 번째 interaction을 기반으로 messages 구성
+      const messages = [];
+      
+      if (session.first_prompt) {
+        messages.push({
+          role: 'user' as const,
+          content: session.first_prompt,
+        });
+      }
+      
+      if (session.first_answer) {
+        messages.push({
+          role: 'assistant' as const,
+          content: session.first_answer,
+          timestamp: session.main_event?.timestamp || null,
+        });
+      }
+
+      return {
+        id: session.session_id,
+        title: `${session.video?.name || '알 수 없는 비디오'}의 ${session.interaction_count}번째 채팅`,
+        createdAt: new Date(session.created_at),
+        messages,
+        videoInfo: session.video ? {
+          name: session.video.name,
+          duration: session.video.duration || 0,
+          url: session.video.url || '',
+        } : null,
+        videoId: session.video?.id?.toString() || '',
+        eventType: session.main_event?.action_detected || null,
+      };
+    });
+
+    console.log('✅ 변환된 비디오별 세션 데이터:', sessions);
+    return { success: true, data: sessions };
+    
   } catch (error) {
-    console.error('Video sessions fetch error:', error);
+    console.error('❌ Video sessions fetch error:', error);
     return {
       success: false,
       data: [],
@@ -156,14 +153,63 @@ export async function getSession(
   sessionId: string
 ): Promise<ChatSession | null> {
   try {
-    const allSessions = await getAllSessions();
-    if (!allSessions.success) {
-      return null;
+    console.log('🔥 특정 세션 가져오기:', sessionId);
+    
+    const response = await fetch(`${API_BASE_URL}/prompt-sessions/${sessionId}/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('❌ 세션을 찾을 수 없음:', sessionId);
+        return null;
+      }
+      throw new Error(`API 호출 실패: ${response.status}`);
     }
 
-    return allSessions.data.find((session) => session.id === sessionId) || null;
+    const session = await response.json();
+    console.log('📦 개별 세션 API 응답:', session);
+
+    // Django API 응답을 ChatSession 타입으로 변환
+    const messages = [];
+    
+    if (session.first_prompt) {
+      messages.push({
+        role: 'user' as const,
+        content: session.first_prompt,
+      });
+    }
+    
+    if (session.first_answer) {
+      messages.push({
+        role: 'assistant' as const,
+        content: session.first_answer,
+        timestamp: session.main_event?.timestamp || null,
+      });
+    }
+
+    const chatSession: ChatSession = {
+      id: session.session_id,
+      title: `${session.video?.name || '알 수 없는 비디오'}의 ${session.interaction_count}번째 채팅`,
+      createdAt: new Date(session.created_at),
+      messages,
+      videoInfo: session.video ? {
+        name: session.video.name,
+        duration: session.video.duration || 0,
+        url: session.video.url || '',
+      } : undefined,
+      videoId: session.video?.id?.toString() || '',
+      eventType: session.main_event?.action_detected || null,
+    };
+
+    console.log('✅ 변환된 개별 세션 데이터:', chatSession);
+    return chatSession;
+    
   } catch (error) {
-    console.error('Session fetch error:', error);
+    console.error('❌ Session fetch error:', error);
     return null;
   }
 }

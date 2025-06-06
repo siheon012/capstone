@@ -1,5 +1,7 @@
 'use client';
 
+console.log("🔥 page.tsx 파일이 로드됨 - 최상단");
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -65,6 +67,8 @@ const getVideoDurationFromFile = (file: File): Promise<number> => {
 };
 
 export default function CCTVAnalysis() {
+  console.log("🏠 CCTVAnalysis 컴포넌트 렌더링됨");
+  
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [videoFileName, setVideoFileName] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -80,6 +84,12 @@ export default function CCTVAnalysis() {
     },
   ]);
   const [inputMessage, setInputMessage] = useState('');
+  
+  console.log("🏠 현재 상태:", {
+    videoSrc: !!videoSrc,
+    inputMessage,
+    messagesCount: messages.length
+  });
   const [timeMarkers, setTimeMarkers] = useState<number[]>([]);
   const [currentHistoryId, setCurrentHistoryId] = useState<string>();
 
@@ -283,6 +293,8 @@ export default function CCTVAnalysis() {
   };
 
   useEffect(() => {
+    console.log("🎯 useEffect 실행됨 - 컴포넌트 마운트");
+    
     const checkMobile = () => {
       const userAgent =
         navigator.userAgent || navigator.vendor || (window as any).opera;
@@ -292,12 +304,23 @@ export default function CCTVAnalysis() {
         );
       const isSmallScreen = window.innerWidth <= 768;
       setIsMobile(isMobileDevice || isSmallScreen);
+      console.log("📱 모바일 감지:", { isMobileDevice, isSmallScreen });
     };
 
     // 컴포넌트 마운트 후에만 실행
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    
+    // 전역 클릭 이벤트 리스너 추가 (디버그용)
+    const globalClickHandler = (e: Event) => {
+      console.log("🖱️ 전역 클릭 이벤트:", e.target);
+    };
+    document.addEventListener('click', globalClickHandler);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      document.removeEventListener('click', globalClickHandler);
+    };
   }, []);
 
   // 모바일에서 히스토리 열릴 때 body 스크롤 방지
@@ -391,7 +414,7 @@ export default function CCTVAnalysis() {
       setUploadStage('파일 크기를 확인하는 중...');
       setUploadProgress(15);
       
-      const maxSize = 2 * 1024 * 1024 * 1024;
+      const maxSize = 2 * 1024 * 1024 * 1024 * 512;
       if (file.size > maxSize) {
         setIsUploading(false);
         setVideoLoading(false);
@@ -929,10 +952,20 @@ export default function CCTVAnalysis() {
     }
   }, [videoSrc, isMobile]);
 
+  console.log("📝 handleSendMessage 함수가 정의됨");
+  
   const handleSendMessage = async (e: React.FormEvent) => {
+    console.log("🚀🚀🚀 handleSendMessage 함수 호출됨!!!");
     e.preventDefault();
+    console.log("🚀 handleSendMessage 시작:", {
+      inputMessage: inputMessage.trim(),
+      videoSrc: !!videoSrc,
+      timestamp: new Date().toISOString()
+    });
+    
     if (inputMessage.trim()) {
       const userMessage = inputMessage;
+      console.log("✅ 메시지 전송 조건 만족, 사용자 메시지:", userMessage);
 
       // 사용자 메시지 추가
       setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
@@ -945,41 +978,64 @@ export default function CCTVAnalysis() {
         duration: 2000,
       });
 
-      // AI 응답 시뮬레이션 (타임스탬프 포함)
+      // 실제 AI 응답 호출
       setTimeout(async () => {
+        console.log("⏰ setTimeout 실행됨, AI 서비스 호출 시작");
         try {
-          // 데모 목적으로 랜덤 타임스탬프 생성
-          const videoDuration = duration || videoRef.current?.duration || 60;
-          const randomTimestamp = videoSrc
-            ? Math.random() * videoDuration
-            : null;
+          let assistantMessage;
+          let timestamp: number | undefined = undefined;
+          
+          if (videoSrc) {
+            console.log("📹 비디오 있음, AI 서비스 호출 진행");
+            // AI 서비스 호출
+            const { queryChatbot } = await import('./actions/ai-service');
+            console.log("📦 queryChatbot 함수 로드됨");
+            
+            const result = await queryChatbot(
+              videoFileName || 'default',
+              userMessage,
+              { objectDetections: [], events: [] } // 임시 빈 분석 결과
+            );
+            console.log("🎯 queryChatbot 결과:", result);
 
-          if (randomTimestamp) {
-            setTimeMarkers((prev) => [...prev, randomTimestamp]);
+            // 타임스탬프가 있으면 추가
+            if (result.relevantTimestamps.length > 0) {
+              const validTimestamp = result.relevantTimestamps[0];
+              if (typeof validTimestamp === 'number') {
+                timestamp = validTimestamp;
+                setTimeMarkers((prev) => [...prev, validTimestamp]);
+              }
+              
+              assistantMessage = {
+                role: 'assistant' as const,
+                content: result.answer,
+                timestamp: timestamp,
+              };
+            } else {
+              assistantMessage = {
+                role: 'assistant' as const,
+                content: result.answer,
+              };
+            }
+          } else {
+            console.log("❌ 비디오 없음, 업로드 안내 메시지");
+            assistantMessage = {
+              role: 'assistant' as const,
+              content: '분석을 위해 먼저 영상을 업로드해 주세요.',
+            };
           }
 
-          const assistantMessage = {
-            role: 'assistant' as const,
-            content:
-              '영상 내용을 분석했습니다. ' +
-              (videoSrc
-                ? `${formatTime(
-                    randomTimestamp || 0
-                  )} 시점에서 관련 정보를 찾았습니다. 타임스탬프를 클릭하면 해당 시점으로 이동합니다.`
-                : '분석을 위해 먼저 영상을 업로드해 주세요.'),
-            timestamp: randomTimestamp || undefined,
-          };
-
+          console.log("💬 최종 assistant 메시지:", assistantMessage);
           setMessages((prev) => [...prev, assistantMessage]);
 
           // 툴팁 표시
-          if (randomTimestamp) {
+          if (timestamp) {
             setTooltipData({
               title: '분석 결과',
               content: `${formatTime(
-                randomTimestamp
+                timestamp
               )} 시점에서 중요한 이벤트가 감지되었습니다. 클릭하여 해당 시점으로 이동할 수 있습니다.`,
-              timestamp: randomTimestamp,
+              timestamp: timestamp,
             });
           }
 
@@ -995,6 +1051,7 @@ export default function CCTVAnalysis() {
           if (!currentHistoryId && videoSrc) {
             // prompt_id 형식으로 제목 생성 (실제로는 데이터베이스에서 다음 ID를 가져와야 함)
             const nextPromptId = Date.now() % 10000; // 임시로 타임스탬프 기반 ID 생성
+            const videoDuration = duration || videoRef.current?.duration || 60;
 
             const historyData = {
               title: `prompt_id : ${nextPromptId}`,
@@ -1016,7 +1073,12 @@ export default function CCTVAnalysis() {
             }
           }
         } catch (error) {
-          console.error('Message handling error:', error);
+          console.error('❌ Message handling error:', error);
+          console.error('🔍 Error details:', {
+            name: error instanceof Error ? error.name : 'Unknown',
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          });
           addToast({
             type: 'error',
             title: '분석 실패',
@@ -1027,6 +1089,9 @@ export default function CCTVAnalysis() {
       }, 1000);
 
       setInputMessage('');
+      console.log("🔄 입력 메시지 초기화됨");
+    } else {
+      console.log("⚠️ 입력 메시지가 비어있음");
     }
   };
 
@@ -1114,6 +1179,8 @@ export default function CCTVAnalysis() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    console.log("⌨️ Key pressed:", e.key, "shiftKey:", e.shiftKey);
+    
     // 영상이 없을 때도 입력 감지하여 강조 효과 실행
     if (!videoSrc) {
       handleInputClickWithoutVideo(e as any);
@@ -1121,9 +1188,18 @@ export default function CCTVAnalysis() {
 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // 영상이 있고 메시지가 있을 때만 전송
-      if (videoSrc && inputMessage.trim()) {
+      console.log("✅ Enter 키 감지, 전송 조건 확인:", {
+        hasVideo: !!videoSrc,
+        hasMessage: !!inputMessage.trim(),
+        canSend: !!inputMessage.trim() && !!videoSrc
+      });
+      
+      // 메시지가 있고 비디오가 있을 때만 전송
+      if (inputMessage.trim() && videoSrc) {
+        console.log("🚀 Enter 키로 메시지 전송 시작");
         handleSendMessage(e);
+      } else {
+        console.log("⚠️ 메시지나 비디오가 없어서 전송하지 않음 - 메시지:", !!inputMessage.trim(), "비디오:", !!videoSrc);
       }
     }
   };
@@ -1844,7 +1920,10 @@ export default function CCTVAnalysis() {
 
                   <Separator className="my-3 md:my-4 bg-[#2a3142]" />
 
-                  <form onSubmit={handleSendMessage} className="flex gap-2">
+                  <form onSubmit={(e) => {
+                    console.log("📝 Form onSubmit 이벤트 발생");
+                    handleSendMessage(e);
+                  }} className="flex gap-2">
                     <Textarea
                       placeholder={
                         isAnalyzing
@@ -1854,7 +1933,10 @@ export default function CCTVAnalysis() {
                           : '먼저 영상을 업로드해주세요'
                       }
                       value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
+                      onChange={(e) => {
+                        console.log("✏️ Input change:", e.target.value);
+                        setInputMessage(e.target.value);
+                      }}
                       onKeyDown={handleKeyDown}
                       onClick={handleInputClickWithoutVideo}
                       onFocus={handleInputClickWithoutVideo}
@@ -1868,11 +1950,15 @@ export default function CCTVAnalysis() {
                     />
                     <Button
                       type="submit"
-                      disabled={
-                        !videoSrc || !inputMessage.trim() || isAnalyzing
-                      }
+                      disabled={!inputMessage.trim() || isAnalyzing || !videoSrc}
+                      onClick={(e) => {
+                        console.log("🔘 Button click 이벤트 발생, disabled:", !inputMessage.trim() || isAnalyzing || !videoSrc);
+                        console.log("🔘 Button click - inputMessage:", inputMessage);
+                        console.log("🔘 Button click - isAnalyzing:", isAnalyzing);
+                        console.log("🔘 Button click - videoSrc:", !!videoSrc);
+                      }}
                       className={`px-3 md:px-4 transition-all duration-200 ${
-                        !videoSrc || !inputMessage.trim() || isAnalyzing
+                        !inputMessage.trim() || isAnalyzing || !videoSrc
                           ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
                           : 'bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]'
                       }`}

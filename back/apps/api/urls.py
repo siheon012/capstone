@@ -1,7 +1,15 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from . import views
 
+# DRF Router 설정
+router = DefaultRouter()
+router.register(r'prompt-sessions', views.PromptSessionViewSet)
+
 urlpatterns = [
+    # DRF ViewSet URLs
+    path('', include(router.urls)),
+    
     # 기존 프롬프트 API
     path('prompt/', views.process_prompt, name='process_prompt'),
     path('prompt/history/', views.get_prompt_history, name='get_prompt_history'),

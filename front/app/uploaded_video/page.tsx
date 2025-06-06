@@ -266,6 +266,18 @@ export default function UploadedVideoPage() {
     });
   };
 
+  const formatVideoTime = (date: Date | null | undefined) => {
+    if (!date) return '시간 정보 없음';
+    return new Date(date).toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  };
+
   // 필터링 및 정렬
   const allFilteredAndSortedVideos = videos
     .filter((video) => {
@@ -508,6 +520,13 @@ export default function UploadedVideoPage() {
                               {video.name}
                             </h3>
                           </Link>
+                          
+                          {/* 영상의 실제 시각 정보 */}
+                          <div className="text-sm text-gray-400 mb-2">
+                            <span className="text-[#00e6b4]">영상의 실제 시각:</span>{' '}
+                            <span>{formatVideoTime(video.timeInVideo)}</span>
+                          </div>
+                          
                           {video.description && (
                             <p className="text-sm text-gray-400 mb-2 line-clamp-2">
                               {video.description}

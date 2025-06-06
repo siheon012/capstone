@@ -38,7 +38,7 @@ class VideoViewSet(viewsets.ModelViewSet):
                 )
             
             # 파일 크기 제한
-            max_size = 2 * 1024 * 1024 * 1024
+            max_size = 2 * 1024 * 1024 * 1024 * 512
             if video_file.size > max_size:
                 return Response(
                     {'error': '파일 크기는 2GB를 초과할 수 없습니다.'},

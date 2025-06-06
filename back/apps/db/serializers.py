@@ -4,15 +4,18 @@ from .models import Video, Event, PromptSession, PromptInteraction, DepthData, D
 class VideoSerializer(serializers.ModelSerializer):
     file_path = serializers.ReadOnlyField()
     computed_thumbnail_path = serializers.ReadOnlyField()
+    chat_count = serializers.SerializerMethodField()  # 동적으로 계산
     
     class Meta:
         model = Video
         fields = '__all__'
+    
+    def get_chat_count(self, obj):
+        """실제 PromptSession 수를 계산하여 반환"""
+        return obj.prompt_sessions.count()
 
 class EventSerializer(serializers.ModelSerializer):
     timestamp_display = serializers.ReadOnlyField()
-    absolute_time = serializers.ReadOnlyField()
-    absolute_time_display = serializers.ReadOnlyField()
     
     class Meta:
         model = Event

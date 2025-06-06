@@ -5,16 +5,25 @@ from apps.db.models import Video, Event, PromptSession, PromptInteraction
 from apps.db.serializers import VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer
 import json
 import requests
+import re
 from django.db import connection
 
 @api_view(['POST'])
 def process_prompt(request):
     """프롬프트를 처리하고 응답을 반환하는 API 뷰"""
+    print(f"🔥 API 호출 받음: {request.method} {request.path}")
+    print(f"📦 Request headers: {dict(request.headers)}")
+    print(f"📝 Request data: {request.data}")
+    
     try:
         prompt_text = request.data.get('prompt')
         session_id = request.data.get('session_id')
         
+        print(f"💭 프롬프트: {prompt_text}")
+        print(f"🆔 세션 ID: {session_id}")
+        
         if not prompt_text:
+            print("❌ 프롬프트가 비어있음")
             return Response({"error": "프롬프트가 비어있습니다."}, status=status.HTTP_400_BAD_REQUEST)
         
         # 1. 세션 생성 또는 조회
@@ -32,11 +41,11 @@ def process_prompt(request):
             if not video or not main_event:
                 return Response({"error": "비디오나 이벤트가 없습니다."}, status=status.HTTP_400_BAD_REQUEST)
             
-            title = prompt_text[:50] + "..." if len(prompt_text) > 50 else prompt_text
+            # PromptSession 모델에는 title 필드가 없으므로 제거
             history = PromptSession.objects.create(
-                title=title,
                 video=video,
-                main_event=main_event
+                main_event=main_event,
+                first_prompt=prompt_text[:200] if prompt_text else ""  # first_prompt 필드 사용
             )
         
         # 2. 프롬프트 처리 및 관련 이벤트 검색
@@ -65,14 +74,18 @@ def process_prompt(request):
         if relevant_event:
             result["event"] = {
                 "id": relevant_event.id,
-                "timestamp": relevant_event.timestamp.isoformat(),
+                "timestamp": relevant_event.timestamp,  # 숫자 그대로 반환 (초 단위)
                 "action_detected": relevant_event.action_detected,
                 "location": relevant_event.location
             }
         
+        print(f"✅ API 응답 성공: {result}")
         return Response(result)
         
     except Exception as e:
+        print(f"❌ API 처리 오류: {str(e)}")
+        import traceback
+        print(f"🔍 오류 스택: {traceback.format_exc()}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -104,7 +117,7 @@ def get_prompt_history(request):
                 if history.main_event:
                     history_item['main_event'] = {
                         'id': history.main_event.id,
-                        'timestamp': history.main_event.timestamp.isoformat(),
+                        'timestamp': history.main_event.timestamp,  # 숫자 그대로 반환 (초 단위)
                         'action_detected': history.main_event.action_detected,
                         'location': history.main_event.location
                     }
@@ -241,11 +254,44 @@ def process_prompt_logic(prompt_text):
         print(f"FastAPI 응답: {text2sql_result}")
         
         # 2. SQL 쿼리 추출 및 실행
-        if 'sql' not in text2sql_result:
+        # FastAPI 응답 구조에 맞춰 'result' 키 사용
+        if 'result' not in text2sql_result:
             return "SQL 쿼리가 생성되지 않았습니다.", None
             
-        sql_query = text2sql_result['sql']
+        sql_query = text2sql_result['result']
         print(f"생성된 SQL: {sql_query}")
+        
+        # Django 테이블 이름으로 변환
+        sql_query = sql_query.replace('events', 'db_event')
+        sql_query = sql_query.replace('videos', 'db_video')
+        
+        # PostgreSQL TIME 타입을 초 단위 정수로 변환
+        # 예: TIME '10:00:00' -> 36000 (10시간 * 3600초)
+        # 예: TIME '13:00:00' -> 46800 (13시간 * 3600초)
+        import re
+        
+        def time_to_seconds(time_str):
+            """TIME '10:00:00' -> 36000초 변환"""
+            time_match = re.search(r"TIME '(\d{2}):(\d{2}):(\d{2})'", time_str)
+            if time_match:
+                hours, minutes, seconds = map(int, time_match.groups())
+                total_seconds = hours * 3600 + minutes * 60 + seconds
+                return str(total_seconds)
+            return time_str
+        
+        # timestamp::time 패턴을 timestamp로 변경
+        sql_query = re.sub(r'timestamp::time', 'timestamp', sql_query)
+        
+        # TIME '시:분:초' 패턴을 초 단위로 변환
+        time_pattern = r"TIME '(\d{2}):(\d{2}):(\d{2})'"
+        def replace_time(match):
+            hours, minutes, seconds = map(int, match.groups())
+            total_seconds = hours * 3600 + minutes * 60 + seconds
+            return str(total_seconds)
+        
+        sql_query = re.sub(time_pattern, replace_time, sql_query)
+        
+        print(f"Django 테이블명으로 변환된 SQL: {sql_query}")
         
         # 3. DB에서 쿼리 실행
         with connection.cursor() as cursor:
@@ -283,3 +329,20 @@ def process_prompt_logic(prompt_text):
         return f"FastAPI 연결 오류: {str(e)}", None
     except Exception as e:
         return f"처리 중 오류 발생: {str(e)}", None
+
+
+class PromptSessionViewSet(viewsets.ReadOnlyModelViewSet):
+    """PromptSession ViewSet - 세션 목록 조회용"""
+    queryset = PromptSession.objects.all().order_by('-created_at')
+    serializer_class = PromptSessionSerializer
+    
+    def get_queryset(self):
+        """쿼리셋 필터링"""
+        queryset = super().get_queryset()
+        
+        # 비디오 ID로 필터링
+        video_id = self.request.query_params.get('video', None)
+        if video_id:
+            queryset = queryset.filter(video_id=video_id)
+            
+        return queryset

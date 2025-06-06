@@ -55,27 +55,54 @@ export async function queryChatbot(
   analysisResults: VideoAnalysisResult,
 ): Promise<ChatResponse> {
   try {
-    // 실제 구현에서는 여기서 LLM API를 호출합니다
-    const response = await fetch(`${process.env.LLM_API_URL}/query`, {
+    console.log("🔄 API 호출 시작:", {
+      videoId,
+      question,
+      url: "http://localhost:8088/api/prompt/",
+      timestamp: new Date().toISOString()
+    });
+
+    // Django 백엔드의 process_prompt API 호출
+    const response = await fetch(`http://localhost:8088/api/prompt/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.LLM_API_KEY}`,
       },
       body: JSON.stringify({
-        videoId,
-        question,
-        analysisContext: analysisResults,
+        prompt: question,
+        session_id: null, // 새 세션으로 시작
       }),
     })
 
+    console.log("📡 API 응답 상태:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+
     if (!response.ok) {
-      throw new Error(`LLM API error: ${response.status}`)
+      const errorText = await response.text();
+      console.error("❌ API 에러 응답:", errorText);
+      throw new Error(`Backend API error: ${response.status} - ${errorText}`)
     }
 
-    return await response.json()
+    const result = await response.json()
+    console.log("✅ API 성공 응답:", result);
+    
+    // 백엔드 응답을 ChatResponse 형식으로 변환
+    return {
+      answer: result.response,
+      relevantTimestamps: result.event ? [result.event.timestamp] : [],
+    }
   } catch (error) {
-    console.error("Chatbot query error:", error)
+    console.error("❌ Chatbot query error:", error)
+    console.error("🔍 Error details:", {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
     // 오류 발생 시 기본 응답 반환
     return {
       answer: "죄송합니다. 질문에 답변하는 중 오류가 발생했습니다.",

@@ -5,6 +5,7 @@ export type UploadedVideo = {
   duration: number;
   size: number;
   uploadDate: Date;
+  timeInVideo?: Date | null; // 영상의 실제 촬영 시각
   thumbnail?: string;
   chatCount: number;
   majorEvent?: '도난' | '쓰러짐' | '폭행' | null;

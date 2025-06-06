@@ -300,8 +300,8 @@ export async function saveVideoFile(
       return { success: false, error: '비디오 파일만 업로드 가능합니다.' };
     }
 
-    // 파일 크기 제한 (2GB)
-    const maxSize = 2 * 1024 * 1024 * 1024;
+    // 파일 크기 제한
+    const maxSize = 2 * 1024 * 1024 * 1024 * 512;
     if (file.size > maxSize) {
       return {
         success: false,
@@ -439,7 +439,8 @@ export async function getUploadedVideos(): Promise<VideoListResponse> {
       thumbnail: video.computed_thumbnail_path || video.thumbnail_path,
       chatCount: video.chat_count,
       majorEvent: video.major_event,
-      description: video.major_event || `업로드된 비디오: ${video.name}`,
+      // Django API의 time_in_video 필드를 올바르게 매핑
+      timeInVideo: video.time_in_video ? new Date(video.time_in_video) : null,
     }));
 
     console.log(`✅ Django에서 ${videos.length}개 비디오 로드 완료`);

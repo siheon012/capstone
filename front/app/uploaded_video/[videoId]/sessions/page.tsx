@@ -696,34 +696,57 @@ export default function VideoSessionsPage() {
                         href={`/uploaded_video/${video.id}?sessionId=${session.id}`}
                         className="flex-1 min-w-0 cursor-pointer"
                       >
-                        <div>
-                          <h3 className="text-base sm:text-lg font-semibold text-white mb-2">
-                            {session.title}
+                        <div className="min-w-0">
+                          <h3 className="text-base sm:text-lg font-semibold text-white mb-2 break-words">
+                            <span 
+                              className="inline-block max-w-full"
+                              title={session.title}
+                            >
+                              {session.title && session.title.length > 50 
+                                ? `${session.title.substring(0, 50)}...` 
+                                : session.title
+                              }
+                            </span>
                           </h3>
 
                           {/* 첫 번째 질문과 답변 */}
-                          <div className="space-y-2 mb-3 sm:mb-4">
+                          <div className="space-y-2 mb-3 sm:mb-4 min-w-0">
                             {firstUserMessage && (
-                              <div className="text-xs sm:text-sm">
-                                <span className="text-[#6c5ce7] font-medium">
+                              <div className="text-xs sm:text-sm min-w-0">
+                                <span className="text-[#6c5ce7] font-medium flex-shrink-0">
                                   Q:
                                 </span>
-                                <span className="text-gray-300 ml-2">
-                                  {firstUserMessage.content}
+                                <span 
+                                  className="text-gray-300 ml-2 break-words inline-block max-w-full"
+                                  title={firstUserMessage.content}
+                                  style={{
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'anywhere',
+                                    hyphens: 'auto'
+                                  }}
+                                >
+                                  {firstUserMessage.content && firstUserMessage.content.length > 80
+                                    ? `${firstUserMessage.content.substring(0, 80)}...`
+                                    : firstUserMessage.content}
                                 </span>
                               </div>
                             )}
                             {firstAssistantMessage && (
-                              <div className="text-xs sm:text-sm">
-                                <span className="text-[#00e6b4] font-medium">
+                              <div className="text-xs sm:text-sm min-w-0">
+                                <span className="text-[#00e6b4] font-medium flex-shrink-0">
                                   A:
                                 </span>
-                                <span className="text-gray-300 ml-2">
-                                  {firstAssistantMessage.content.length > 100
-                                    ? firstAssistantMessage.content.substring(
-                                        0,
-                                        100
-                                      ) + '...'
+                                <span 
+                                  className="text-gray-300 ml-2 break-words inline-block max-w-full"
+                                  title={firstAssistantMessage.content}
+                                  style={{
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'anywhere',
+                                    hyphens: 'auto'
+                                  }}
+                                >
+                                  {firstAssistantMessage.content && firstAssistantMessage.content.length > 80
+                                    ? `${firstAssistantMessage.content.substring(0, 80)}...`
                                     : firstAssistantMessage.content}
                                 </span>
                               </div>

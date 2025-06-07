@@ -983,6 +983,56 @@ export default function CCTVAnalysis() {
                   </Card>
                 )}
 
+                {/* Video Summary Card - 새로 추가 */}
+                {videoSrc && video && (
+                  <Card className="mb-3 md:mb-6 bg-[#242a38] border-0 shadow-lg">
+                    <CardContent className="p-3 md:p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-[#6c5ce7]/20 rounded-lg flex items-center justify-center">
+                            <MessageSquare className="h-5 w-5 text-[#6c5ce7]" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm md:text-base font-semibold text-white">
+                              AI 영상 요약
+                            </h3>
+                            <p className="text-xs text-gray-400">
+                              전체 영상 내용을 AI가 분석한 요약 정보
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          className="border-[#00e6b4] text-[#00e6b4] hover:bg-[#00e6b4] hover:text-[#1a1f2c] transition-all duration-200"
+                          onClick={() => {
+                            // TODO: Summary 출력 로직 구현
+                            console.log('Summary 출력 요청');
+                          }}
+                        >
+                          <MessageSquare className="h-4 w-4 mr-2" />
+                          Summary 출력
+                        </Button>
+                      </div>
+                      
+                      {/* Summary 내용이 있을 때 표시될 영역 */}
+                      {video?.summary && (
+                        <div className="mt-4 p-4 bg-[#1a1f2c] rounded-lg border border-[#2a3142] overflow-hidden">
+                          <div 
+                            className="text-sm text-gray-300 whitespace-pre-wrap break-words overflow-wrap-anywhere"
+                            style={{
+                              wordBreak: 'break-word',
+                              overflowWrap: 'anywhere',
+                              hyphens: 'auto'
+                            }}
+                          >
+                            {video.summary}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Event Timeline - 비디오 아래에 추가 */}
                 {videoSrc && video && (
                   <Card className="bg-[#242a38] border-0 shadow-lg">
@@ -1005,16 +1055,24 @@ export default function CCTVAnalysis() {
                 )}
               </div>
 
-              <div className="order-2 lg:order-2">
-                <Card className="h-[60vh] lg:h-full min-h-[400px] max-h-[80vh] bg-[#242a38] border-0 shadow-lg chat-container-flexible">
-                  <CardContent className="p-2 md:p-4 flex flex-col h-full">
+              <div className="order-2 lg:order-2 min-w-0 overflow-hidden">
+                <Card className="h-[60vh] lg:h-full min-h-[400px] max-h-[80vh] bg-[#242a38] border-0 shadow-lg chat-container-flexible overflow-hidden">
+                  <CardContent className="p-2 md:p-4 flex flex-col h-full overflow-hidden">
                     <div className="flex items-center justify-between mb-2 md:mb-4">
-                      <div>
+                      <div className="flex-1 min-w-0 pr-2">
                         <h2 className="text-base md:text-xl font-semibold text-white">
                           새 분석 세션
                         </h2>
-                        <p className="text-xs md:text-sm text-gray-400 break-words">
-                          {video?.name} 영상에 대한 새로운 분석을 시작합니다
+                        <p className="text-xs md:text-sm text-gray-400 break-words overflow-hidden">
+                          <span 
+                            className="inline-block max-w-full truncate"
+                            title={video?.name ? `${video.name} 영상에 대한 새로운 분석을 시작합니다` : ''}
+                          >
+                            {video?.name && video.name.length > 30 
+                              ? `${video.name.substring(0, 30)}...` 
+                              : video?.name || '영상'
+                            } 영상에 대한 새로운 분석을 시작합니다
+                          </span>
                         </p>
                       </div>
                       <Link href="/">
@@ -1041,11 +1099,16 @@ export default function CCTVAnalysis() {
                               }`}
                             >
                               <div
-                                className={`max-w-[90%] md:max-w-[80%] rounded-lg p-2 md:p-3 text-xs md:text-base break-words ${
+                                className={`max-w-[90%] md:max-w-[80%] rounded-lg p-2 md:p-3 text-xs md:text-base break-words overflow-wrap-anywhere word-break ${
                                   message.role === 'user'
                                     ? 'bg-[#6c5ce7] text-white'
                                     : 'bg-[#2a3142] text-gray-200'
                                 }`}
+                                style={{
+                                  wordBreak: 'break-word',
+                                  overflowWrap: 'anywhere',
+                                  hyphens: 'auto'
+                                }}
                               >
                                 {message.content}
                                 {message.timestamp && (

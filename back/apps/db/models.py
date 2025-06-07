@@ -14,6 +14,7 @@ class Video(models.Model):
     chat_count = models.IntegerField(default=0)
     major_event = models.CharField(max_length=100, null=True, blank=True)
     video_file = models.CharField(max_length=500, null=True, blank=True)  # 비디오 파일 경로 저장
+    summary = models.TextField(null=True, blank=True)  # 영상 분석 모델의 최종 분석 결과 (이모지, 특수기호 포함 가능)
     
     @property
     def file_path(self):

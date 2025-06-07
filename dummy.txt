@@ -1,0 +1,55 @@
+python3 manage.py shell -c "
+from apps.db.models import Video, Event
+import random
+
+# 첫 번째 비디오 가져오기
+video = Video.objects.first()
+print(f'테스트 데이터를 생성할 비디오: {video.name} (ID: {video.video_id})')
+
+# 테스트 이벤트 데이터 생성
+events_data = [
+    {
+        'timestamp': 10,
+        'obj_id': 1,
+        'age': 25.5,
+        'gender': 'male',
+        'gender_score': 0.85,
+        'location': '1',
+        'area_of_interest': 1,
+        'action_detected': 'walking',
+        'event_type': 'violance'
+    },
+    {
+        'timestamp': 30,
+        'obj_id': 2,
+        'age': 30.0,
+        'gender': 'female',
+        'gender_score': 0.92,
+        'location': '2',
+        'area_of_interest': 2,
+        'action_detected': 'standing',
+        'event_type': 'violance'
+    },
+    {
+        'timestamp': 60,
+        'obj_id': 1,
+        'age': 25.5,
+        'gender': 'male',
+        'gender_score': 0.85,
+        'location': '3',
+        'area_of_interest': 3,
+        'action_detected': 'picking_item',
+        'event_type': 'violance'
+    }
+]
+
+# 이벤트 생성
+for event_data in events_data:
+    event = Event.objects.create(
+        video=video,
+        **event_data
+    )
+    print(f'이벤트 생성됨: {event.event_type} at {event.timestamp}초')
+
+print(f'\\n총 {Event.objects.count()}개의 이벤트가 생성되었습니다.')
+"

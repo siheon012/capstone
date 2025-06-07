@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 텍스트 오버플로우 방지 */
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+}
+
+.word-break {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+/* 채팅 메시지 텍스트 래핑 */
+.chat-message-text {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  white-space: pre-wrap;
+}
+
 /* 🎨 스크롤바 시스템 - 데스크톱에서만 커스텀 스크롤바 활성화 */
 /* 모바일에서만 네이티브 스크롤바 숨기기 */
 @media (max-width: 768px), (hover: none) and (pointer: coarse) {

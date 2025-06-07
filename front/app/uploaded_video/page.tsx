@@ -358,10 +358,32 @@ export default function UploadedVideoPage() {
       const matchesSearch =
         video.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         video.description?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesFilter =
-        filterEvent === 'all' ||
-        (filterEvent === 'none' && !video.majorEvent) ||
-        video.majorEvent === filterEvent;
+      
+      // 사건 필터링 로직 개선
+      const matchesFilter = (() => {
+        if (filterEvent === 'all') {
+          return true;
+        }
+        
+        if (filterEvent === 'none') {
+          // Event 테이블 통계와 비디오의 majorEvent 모두 없는 경우
+          const mostFrequentEvent = getMostFrequentEventForVideo(video.id);
+          return !mostFrequentEvent && !video.majorEvent;
+        }
+        
+        // 특정 사건으로 필터링하는 경우
+        const mostFrequentEvent = getMostFrequentEventForVideo(video.id);
+        
+        // Event 테이블에서 분석된 이벤트가 있으면 우선 확인
+        if (mostFrequentEvent) {
+          const translatedEventType = translateEventType(mostFrequentEvent.type);
+          return translatedEventType === filterEvent;
+        }
+        
+        // Event 테이블 통계가 없으면 비디오의 majorEvent 확인
+        return video.majorEvent === filterEvent;
+      })();
+      
       return matchesSearch && matchesFilter;
     })
     .sort((a, b) => {

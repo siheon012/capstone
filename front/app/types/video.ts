@@ -10,6 +10,7 @@ export type UploadedVideo = {
   chatCount: number;
   majorEvent?: '도난' | '쓰러짐' | '폭행' | null;
   description?: string;
+  summary?: string; // AI 영상 분석 요약 (이모지, 특수기호 포함 가능)
 };
 
 export type VideoListResponse = {

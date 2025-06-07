@@ -1,5 +1,7 @@
 "use server"
 
+import type { ChatSession } from '@/app/types/session';
+
 // 비디오 분석 결과 타입 정의
 export type VideoAnalysisResult = {
   objectDetections: {
@@ -55,11 +57,18 @@ export async function queryChatbot(
   analysisResults: VideoAnalysisResult,
 ): Promise<ChatResponse> {
   try {
+    const requestData = {
+      prompt: question,
+      session_id: null, // 새 세션으로 시작
+      video_id: videoId, // video_id 추가
+    };
+
     console.log("🔄 API 호출 시작:", {
       videoId,
       question,
       url: "http://localhost:8088/api/prompt/",
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      requestData
     });
 
     // Django 백엔드의 process_prompt API 호출
@@ -68,10 +77,7 @@ export async function queryChatbot(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        prompt: question,
-        session_id: null, // 새 세션으로 시작
-      }),
+      body: JSON.stringify(requestData),
     })
 
     console.log("📡 API 응답 상태:", {
@@ -136,5 +142,90 @@ export async function uploadVideo(formData: FormData): Promise<{ videoId: string
   } catch (error) {
     console.error("Video upload error:", error)
     throw new Error("비디오 업로드 중 오류가 발생했습니다.")
+  }
+}
+
+// 메시지 전송 응답 타입 정의
+export type MessageResponse = {
+  success: boolean;
+  reply?: string;
+  error?: string;
+  timestamp?: number;
+  session?: ChatSession;
+};
+
+// 세션 기반 메시지 전송 함수
+export async function sendMessage(
+  message: string,
+  videoId: string,
+  sessionId?: string | null
+): Promise<MessageResponse> {
+  try {
+    console.log("🔄 sendMessage API 호출 시작:", {
+      message,
+      videoId,
+      sessionId,
+      url: "http://localhost:8088/api/prompt/",
+      timestamp: new Date().toISOString()
+    });
+
+    // Django 백엔드의 process_prompt API 호출
+    const response = await fetch(`http://localhost:8088/api/prompt/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: message,
+        video_id: videoId,
+        session_id: sessionId,
+      }),
+    });
+
+    console.log("📡 sendMessage API 응답 상태:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ sendMessage API 에러 응답:", errorText);
+      return {
+        success: false,
+        error: `Backend API error: ${response.status} - ${errorText}`,
+      };
+    }
+
+    const result = await response.json();
+    console.log("✅ sendMessage API 성공 응답:", result);
+    
+    // 백엔드 응답을 MessageResponse 형식으로 변환
+    return {
+      success: true,
+      reply: result.response,
+      timestamp: result.event?.timestamp,
+      session: result.session_id ? {
+        id: result.session_id,
+        title: result.session_title || `비디오 ${videoId}의 채팅`,
+        videoId: videoId,
+        createdAt: new Date(),
+        messages: [],
+        eventType: result.event?.event_type || null,
+      } : undefined,
+    };
+  } catch (error) {
+    console.error("❌ sendMessage error:", error);
+    console.error("🔍 Error details:", {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
+    return {
+      success: false,
+      error: "메시지 전송 중 오류가 발생했습니다.",
+    };
   }
 }

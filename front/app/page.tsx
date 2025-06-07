@@ -28,6 +28,7 @@ import SmartHeader from '@/components/smart-header';
 import { saveHistory, getHistoryList } from '@/app/actions/history-service';
 import JQueryCounterAnimation from '@/components/jquery-counter-animation';
 import { saveVideoFile } from '@/app/actions/video-service';
+import type { ChatSession } from '@/app/types/session';
 
 // HTML5 Video API를 사용하여 비디오 duration 추출 함수
 const getVideoDurationFromFile = (file: File): Promise<number> => {
@@ -71,6 +72,7 @@ export default function CCTVAnalysis() {
   
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [videoFileName, setVideoFileName] = useState<string>('');
+  const [videoId, setVideoId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -84,6 +86,7 @@ export default function CCTVAnalysis() {
     },
   ]);
   const [inputMessage, setInputMessage] = useState('');
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   
   console.log("🏠 현재 상태:", {
     videoSrc: !!videoSrc,
@@ -174,6 +177,7 @@ export default function CCTVAnalysis() {
       },
     ]);
     setCurrentHistoryId(undefined);
+    setCurrentSession(null);
     
     // 비디오 엘리먼트 정리
     if (videoRef.current) {
@@ -592,7 +596,14 @@ export default function CCTVAnalysis() {
         setVideoSrc(validUrl as string);
         setVideoFileName(file.name);
         setCurrentHistoryId(undefined);
+        setCurrentSession(null);
         setTimeMarkers([]);
+        
+        // 서버에서 받은 videoId 저장 (AI 채팅에서 사용)
+        if (serverSaveResult?.success && serverSaveResult.videoId) {
+          setVideoId(serverSaveResult.videoId);
+          console.log('Video ID captured for AI chat:', serverSaveResult.videoId);
+        }
         
         // 업로드 진행률 완료
         setUploadProgress(100);
@@ -711,113 +722,338 @@ export default function CCTVAnalysis() {
 
   const togglePlayPause = () => {
     try {
-      if (videoRef.current && videoSrc) {
-        // 모바일에서는 더 관대한 조건으로 재생 허용
-        if (videoRef.current.readyState >= 1 || isMobile) {
-          if (isPlaying) {
-            videoRef.current.pause();
-          } else {
-            // 모바일에서 재생 시 음소거 및 인라인 재생 설정
-            if (isMobile) {
-              videoRef.current.muted = true;
-              videoRef.current.playsInline = true;
-            }
+      // 비디오 참조와 소스 유효성 검사
+      if (!videoRef.current) {
+        console.warn('Video reference not available');
+        addToast({
+          type: 'warning',
+          title: '비디오 컨트롤',
+          message: '비디오가 아직 로드되지 않았습니다.',
+          duration: 2000,
+        });
+        return;
+      }
 
-            const playPromise = videoRef.current.play();
-            if (playPromise !== undefined) {
-              playPromise
-                .then(() => {
-                  console.log('Video play started successfully');
-                  setIsPlaying(true);
-                })
-                .catch((error) => {
-                  console.warn('Video play failed:', error);
-                  setIsPlaying(false);
+      if (!videoSrc) {
+        console.warn('Video source not available');
+        addToast({
+          type: 'warning',
+          title: '비디오 컨트롤',
+          message: '비디오 파일을 먼저 업로드해주세요.',
+          duration: 2000,
+        });
+        return;
+      }
 
-                  // 모바일에서 재생 실패 시 사용자에게 안내
-                  if (isMobile) {
-                    addToast({
-                      type: 'info',
-                      title: '재생 안내',
-                      message:
-                        '모바일에서는 화면을 터치하여 비디오를 재생해주세요.',
-                      duration: 3000,
-                    });
-                  }
+      const video = videoRef.current;
+
+      // 비디오 준비 상태 검사 (모바일에서는 더 관대하게)
+      const isVideoReady = video.readyState >= 2 || (isMobile && video.readyState >= 1);
+      
+      if (!isVideoReady && !isMobile) {
+        console.warn('Video not ready to play, readyState:', video.readyState);
+        addToast({
+          type: 'info',
+          title: '비디오 로딩 중',
+          message: '비디오가 로드될 때까지 잠시 기다려주세요.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      if (isPlaying) {
+        // 일시정지
+        video.pause();
+        setIsPlaying(false);
+        console.log('Video paused');
+      } else {
+        // 재생
+        // 모바일에서 재생 시 필수 설정
+        if (isMobile) {
+          video.muted = true;
+          video.playsInline = true;
+        }
+
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('Video play started successfully');
+              setIsPlaying(true);
+            })
+            .catch((error) => {
+              console.warn('Video play failed:', error);
+              setIsPlaying(false);
+
+              // 재생 실패 시 사용자에게 상세한 안내
+              if (isMobile) {
+                addToast({
+                  type: 'info',
+                  title: '재생 안내',
+                  message: '모바일에서는 화면을 직접 터치하여 비디오를 재생해주세요.',
+                  duration: 4000,
                 });
-            }
-          }
+              } else {
+                addToast({
+                  type: 'error',
+                  title: '재생 실패',
+                  message: '비디오 재생에 실패했습니다. 브라우저 설정을 확인해주세요.',
+                  duration: 3000,
+                });
+              }
+            });
         } else {
-          console.warn(
-            'Video not ready to play, readyState:',
-            videoRef.current.readyState
-          );
-
-          // 모바일에서는 강제로 재생 시도
-          if (isMobile) {
-            const playPromise = videoRef.current.play();
-            if (playPromise !== undefined) {
-              playPromise.catch((error) => {
-                console.warn('Force play failed:', error);
-              });
-            }
-          }
+          // play() 메서드가 Promise를 반환하지 않는 경우 (구형 브라우저)
+          setIsPlaying(true);
         }
       }
     } catch (error) {
       console.error('Video control error:', error);
       setIsPlaying(false);
+      addToast({
+        type: 'error',
+        title: '비디오 컨트롤 오류',
+        message: '비디오 컨트롤 중 오류가 발생했습니다.',
+        duration: 3000,
+      });
     }
   };
 
   const skipForward = () => {
     try {
-      if (
-        videoRef.current &&
-        videoSrc &&
-        (videoRef.current.readyState >= 1 || isMobile)
-      ) {
-        const newTime = Math.min(
-          videoRef.current.currentTime + 10,
-          duration || videoRef.current.duration || 0
-        );
-        videoRef.current.currentTime = newTime;
+      // 비디오 참조와 소스 유효성 검사
+      if (!videoRef.current) {
+        console.warn('Video reference not available for skip forward');
+        addToast({
+          type: 'warning',
+          title: '비디오 컨트롤',
+          message: '비디오가 아직 로드되지 않았습니다.',
+          duration: 2000,
+        });
+        return;
       }
+
+      if (!videoSrc) {
+        console.warn('Video source not available for skip forward');
+        addToast({
+          type: 'warning',
+          title: '비디오 컨트롤',
+          message: '비디오 파일을 먼저 업로드해주세요.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      const video = videoRef.current;
+      
+      // 비디오 준비 상태 검사
+      const isVideoReady = video.readyState >= 1 || isMobile;
+      
+      if (!isVideoReady) {
+        console.warn('Video not ready for skip forward, readyState:', video.readyState);
+        addToast({
+          type: 'info',
+          title: '비디오 로딩 중',
+          message: '비디오가 로드될 때까지 잠시 기다려주세요.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      const videoDuration = duration || video.duration || 0;
+      if (videoDuration === 0) {
+        console.warn('Video duration not available');
+        addToast({
+          type: 'warning',
+          title: '비디오 정보',
+          message: '비디오 길이 정보를 가져올 수 없습니다.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      const currentTime = video.currentTime;
+      const newTime = Math.min(currentTime + 10, videoDuration);
+      
+      // 이미 끝에 도달한 경우
+      if (currentTime >= videoDuration - 1) {
+        addToast({
+          type: 'info',
+          title: '비디오 끝',
+          message: '비디오의 끝에 도달했습니다.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      video.currentTime = newTime;
+      console.log(`Skipped forward to: ${newTime.toFixed(2)}s`);
+
     } catch (error) {
       console.error('Skip forward error:', error);
+      addToast({
+        type: 'error',
+        title: '탐색 오류',
+        message: '비디오 앞으로 이동 중 오류가 발생했습니다.',
+        duration: 3000,
+      });
     }
   };
 
   const skipBackward = () => {
     try {
-      if (
-        videoRef.current &&
-        videoSrc &&
-        (videoRef.current.readyState >= 1 || isMobile)
-      ) {
-        const newTime = Math.max(videoRef.current.currentTime - 10, 0);
-        videoRef.current.currentTime = newTime;
+      // 비디오 참조와 소스 유효성 검사
+      if (!videoRef.current) {
+        console.warn('Video reference not available for skip backward');
+        addToast({
+          type: 'warning',
+          title: '비디오 컨트롤',
+          message: '비디오가 아직 로드되지 않았습니다.',
+          duration: 2000,
+        });
+        return;
       }
+
+      if (!videoSrc) {
+        console.warn('Video source not available for skip backward');
+        addToast({
+          type: 'warning',
+          title: '비디오 컨트롤',
+          message: '비디오 파일을 먼저 업로드해주세요.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      const video = videoRef.current;
+      
+      // 비디오 준비 상태 검사
+      const isVideoReady = video.readyState >= 1 || isMobile;
+      
+      if (!isVideoReady) {
+        console.warn('Video not ready for skip backward, readyState:', video.readyState);
+        addToast({
+          type: 'info',
+          title: '비디오 로딩 중',
+          message: '비디오가 로드될 때까지 잠시 기다려주세요.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      const currentTime = video.currentTime;
+      const newTime = Math.max(currentTime - 10, 0);
+      
+      // 이미 시작 부분에 있는 경우
+      if (currentTime <= 1) {
+        addToast({
+          type: 'info',
+          title: '비디오 시작',
+          message: '비디오의 시작 부분입니다.',
+          duration: 2000,
+        });
+        video.currentTime = 0; // 정확히 시작점으로 이동
+        return;
+      }
+
+      video.currentTime = newTime;
+      console.log(`Skipped backward to: ${newTime.toFixed(2)}s`);
+
     } catch (error) {
       console.error('Skip backward error:', error);
+      addToast({
+        type: 'error',
+        title: '탐색 오류',
+        message: '비디오 뒤로 이동 중 오류가 발생했습니다.',
+        duration: 3000,
+      });
     }
   };
 
   const seekToTime = (time: number) => {
     try {
-      if (
-        videoRef.current &&
-        videoSrc &&
-        (videoRef.current.readyState >= 1 || isMobile)
-      ) {
-        const targetTime = Math.min(
-          time,
-          duration || videoRef.current.duration || 0
-        );
-        videoRef.current.currentTime = targetTime;
+      // 입력값 유효성 검사
+      if (typeof time !== 'number' || isNaN(time) || time < 0) {
+        console.warn('Invalid time value for seek:', time);
+        addToast({
+          type: 'warning',
+          title: '탐색 오류',
+          message: '잘못된 시간 값입니다.',
+          duration: 2000,
+        });
+        return;
+      }
 
-        // 모바일에서 타임스탬프 클릭 시 비디오 영역으로 스크롤
-        if (isMobile && videoSectionRef.current) {
+      // 비디오 참조와 소스 유효성 검사
+      if (!videoRef.current) {
+        console.warn('Video reference not available for seek');
+        addToast({
+          type: 'warning',
+          title: '비디오 컨트롤',
+          message: '비디오가 아직 로드되지 않았습니다.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      if (!videoSrc) {
+        console.warn('Video source not available for seek');
+        addToast({
+          type: 'warning',
+          title: '비디오 컨트롤',
+          message: '비디오 파일을 먼저 업로드해주세요.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      const video = videoRef.current;
+      
+      // 비디오 준비 상태 검사
+      const isVideoReady = video.readyState >= 1 || isMobile;
+      
+      if (!isVideoReady) {
+        console.warn('Video not ready for seek, readyState:', video.readyState);
+        addToast({
+          type: 'info',
+          title: '비디오 로딩 중',
+          message: '비디오가 로드될 때까지 잠시 기다려주세요.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      const videoDuration = duration || video.duration || 0;
+      if (videoDuration === 0) {
+        console.warn('Video duration not available for seek');
+        addToast({
+          type: 'warning',
+          title: '비디오 정보',
+          message: '비디오 길이 정보를 가져올 수 없습니다.',
+          duration: 2000,
+        });
+        return;
+      }
+
+      // 유효한 시간 범위로 제한
+      const targetTime = Math.min(Math.max(time, 0), videoDuration);
+      
+      if (time > videoDuration) {
+        console.warn(`Seek time ${time} exceeds video duration ${videoDuration}`);
+        addToast({
+          type: 'warning',
+          title: '탐색 범위 초과',
+          message: '비디오 길이를 초과하는 시간입니다.',
+          duration: 2000,
+        });
+      }
+
+      video.currentTime = targetTime;
+      console.log(`Seeked to: ${targetTime.toFixed(2)}s`);
+
+      // 모바일에서 타임스탬프 클릭 시 비디오 영역으로 스크롤
+      if (isMobile && videoSectionRef.current) {
+        try {
           videoSectionRef.current.scrollIntoView({
             behavior: 'smooth',
             block: 'start',
@@ -826,8 +1062,8 @@ export default function CCTVAnalysis() {
 
           // 스크롤 후 잠시 대기하고 비디오 재생 (선택사항)
           setTimeout(() => {
-            if (videoRef.current && !isPlaying) {
-              const playPromise = videoRef.current.play();
+            if (video && !isPlaying) {
+              const playPromise = video.play();
               if (playPromise !== undefined) {
                 playPromise.catch((error) => {
                   console.warn('Auto play after seek failed:', error);
@@ -835,10 +1071,19 @@ export default function CCTVAnalysis() {
               }
             }
           }, 500);
+        } catch (scrollError) {
+          console.warn('Scroll to video failed:', scrollError);
         }
       }
+
     } catch (error) {
       console.error('Seek error:', error);
+      addToast({
+        type: 'error',
+        title: '탐색 오류',
+        message: '비디오 탐색 중 오류가 발생했습니다.',
+        duration: 3000,
+      });
     }
   };
 
@@ -863,8 +1108,20 @@ export default function CCTVAnalysis() {
     }
 
     const updateTime = () => {
-      if (video.currentTime !== undefined && !isNaN(video.currentTime)) {
-        setCurrentTime(video.currentTime);
+      try {
+        if (video && video.currentTime !== undefined && !isNaN(video.currentTime)) {
+          const newCurrentTime = video.currentTime;
+          // 성능 최적화: 시간이 실제로 변경된 경우에만 상태 업데이트
+          setCurrentTime(prevTime => {
+            // 0.1초 이상 차이가 날 때만 업데이트 (과도한 렌더링 방지)
+            if (Math.abs(newCurrentTime - prevTime) >= 0.1) {
+              return newCurrentTime;
+            }
+            return prevTime;
+          });
+        }
+      } catch (error) {
+        console.warn('Update time error:', error);
       }
     };
 
@@ -909,7 +1166,15 @@ export default function CCTVAnalysis() {
     };
 
     const handleTimeUpdate = () => {
-      updateTime();
+      try {
+        updateTime();
+        // 디버깅용 로그 (개발 중에만 활성화)
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Video time update: ${video.currentTime?.toFixed(2)}s`);
+        }
+      } catch (error) {
+        console.warn('Handle time update error:', error);
+      }
     };
 
     const handlePlay = () => {
@@ -921,7 +1186,13 @@ export default function CCTVAnalysis() {
     };
 
     try {
+      // 시간 업데이트 관련 이벤트들 - 더 많은 이벤트를 등록해서 확실히 작동하도록
       video.addEventListener('timeupdate', handleTimeUpdate);
+      video.addEventListener('progress', handleTimeUpdate); // 추가: 버퍼링 진행 시에도 시간 업데이트
+      video.addEventListener('seeking', handleTimeUpdate); // 추가: 탐색 중에도 시간 업데이트
+      video.addEventListener('seeked', handleTimeUpdate); // 추가: 탐색 완료 시에도 시간 업데이트
+      
+      // 기존 이벤트들
       video.addEventListener('loadedmetadata', handleLoadedMetadata);
       video.addEventListener('loadeddata', handleLoadedData);
       video.addEventListener('canplay', handleCanPlay);
@@ -936,8 +1207,17 @@ export default function CCTVAnalysis() {
         setDuration(video.duration);
       }
 
+      // 초기 currentTime 설정 시도
+      if (video.currentTime !== undefined && !isNaN(video.currentTime)) {
+        setCurrentTime(video.currentTime);
+      }
+
       return () => {
+        // 모든 이벤트 리스너 제거
         video.removeEventListener('timeupdate', handleTimeUpdate);
+        video.removeEventListener('progress', handleTimeUpdate);
+        video.removeEventListener('seeking', handleTimeUpdate);
+        video.removeEventListener('seeked', handleTimeUpdate);
         video.removeEventListener('loadedmetadata', handleLoadedMetadata);
         video.removeEventListener('loadeddata', handleLoadedData);
         video.removeEventListener('canplay', handleCanPlay);
@@ -951,6 +1231,35 @@ export default function CCTVAnalysis() {
       console.error('Video event listener error:', error);
     }
   }, [videoSrc, isMobile]);
+
+  // 시간 업데이트를 위한 추가 useEffect (백업 메커니즘)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoSrc || !isPlaying) return;
+
+    // 재생 중일 때만 주기적으로 시간 업데이트
+    const interval = setInterval(() => {
+      try {
+        if (video.currentTime !== undefined && !isNaN(video.currentTime)) {
+          setCurrentTime(prevTime => {
+            const newTime = video.currentTime;
+            // 시간이 실제로 변경된 경우에만 상태 업데이트
+            if (Math.abs(newTime - prevTime) >= 0.1) {
+              console.log(`[Backup] Time updated: ${newTime.toFixed(2)}s`);
+              return newTime;
+            }
+            return prevTime;
+          });
+        }
+      } catch (error) {
+        console.warn('Backup time update error:', error);
+      }
+    }, 100); // 100ms마다 확인 (너무 자주 하지 않도록)
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [videoSrc, isPlaying]);
 
   console.log("📝 handleSendMessage 함수가 정의됨");
   
@@ -985,40 +1294,46 @@ export default function CCTVAnalysis() {
           let assistantMessage;
           let timestamp: number | undefined = undefined;
           
-          if (videoSrc) {
-            console.log("📹 비디오 있음, AI 서비스 호출 진행");
-            // AI 서비스 호출
-            const { queryChatbot } = await import('./actions/ai-service');
-            console.log("📦 queryChatbot 함수 로드됨");
+          if (videoSrc && videoId) {
+            console.log("📹 비디오 있음, AI 서비스 호출 진행", { videoId, videoFileName, currentSessionId: currentSession?.id });
+            // AI 서비스 호출 - sendMessage 함수 사용
+            const { sendMessage } = await import('./actions/ai-service');
+            console.log("📦 sendMessage 함수 로드됨");
             
-            const result = await queryChatbot(
-              videoFileName || 'default',
+            const result = await sendMessage(
               userMessage,
-              { objectDetections: [], events: [] } // 임시 빈 분석 결과
+              videoId,
+              currentSession?.id || null // 기존 세션 ID 전달
             );
-            console.log("🎯 queryChatbot 결과:", result);
+            console.log("🎯 sendMessage 결과:", result);
 
-            // 타임스탬프가 있으면 추가
-            if (result.relevantTimestamps.length > 0) {
-              const validTimestamp = result.relevantTimestamps[0];
-              if (typeof validTimestamp === 'number') {
-                timestamp = validTimestamp;
-                setTimeMarkers((prev) => [...prev, validTimestamp]);
+            if (result.success && result.reply) {
+              // 타임스탬프가 있으면 추가
+              if (result.timestamp) {
+                timestamp = result.timestamp;
+                setTimeMarkers((prev) => [...prev, result.timestamp!]);
               }
               
               assistantMessage = {
                 role: 'assistant' as const,
-                content: result.answer,
+                content: result.reply,
                 timestamp: timestamp,
               };
+
+              // 새 세션이 생성된 경우 현재 세션 업데이트
+              if (result.session) {
+                setCurrentSession(result.session);
+                console.log("🔄 새 세션 생성됨:", result.session);
+              }
             } else {
+              // 에러 응답 처리
               assistantMessage = {
                 role: 'assistant' as const,
-                content: result.answer,
+                content: result.error || '응답을 생성하는 중 오류가 발생했습니다.',
               };
             }
           } else {
-            console.log("❌ 비디오 없음, 업로드 안내 메시지");
+            console.log("❌ 비디오 없음 또는 videoId 없음, 업로드 안내 메시지", { videoSrc: !!videoSrc, videoId });
             assistantMessage = {
               role: 'assistant' as const,
               content: '분석을 위해 먼저 영상을 업로드해 주세요.',
@@ -1121,6 +1436,7 @@ export default function CCTVAnalysis() {
 
       // 히스토리 및 마커 초기화
       setCurrentHistoryId(undefined);
+      setCurrentSession(null);
       setTimeMarkers([]);
 
       // 툴팁 닫기
@@ -1820,18 +2136,100 @@ export default function CCTVAnalysis() {
 
                       {/* 타임라인 클릭 핸들러 */}
                       <div
-                        className="absolute top-0 left-0 w-full h-full"
+                        className="absolute top-0 left-0 w-full h-full cursor-pointer"
                         onClick={(e) => {
                           try {
-                            if (videoRef.current && videoSrc && duration > 0) {
-                              const rect =
-                                e.currentTarget.getBoundingClientRect();
-                              const pos = (e.clientX - rect.left) / rect.width;
-                              const newTime = pos * duration;
-                              videoRef.current.currentTime = newTime;
+                            // 비디오 참조와 소스 유효성 검사
+                            if (!videoRef.current) {
+                              console.warn('Video reference not available for timeline click');
+                              addToast({
+                                type: 'warning',
+                                title: '비디오 컨트롤',
+                                message: '비디오가 아직 로드되지 않았습니다.',
+                                duration: 2000,
+                              });
+                              return;
                             }
+
+                            if (!videoSrc) {
+                              console.warn('Video source not available for timeline click');
+                              addToast({
+                                type: 'warning',
+                                title: '비디오 컨트롤',
+                                message: '비디오 파일을 먼저 업로드해주세요.',
+                                duration: 2000,
+                              });
+                              return;
+                            }
+
+                            if (!duration || duration <= 0) {
+                              console.warn('Video duration not available for timeline click');
+                              addToast({
+                                type: 'warning',
+                                title: '비디오 정보',
+                                message: '비디오 길이 정보를 가져올 수 없습니다.',
+                                duration: 2000,
+                              });
+                              return;
+                            }
+
+                            const video = videoRef.current;
+                            
+                            // 비디오 준비 상태 검사
+                            const isVideoReady = video.readyState >= 1 || isMobile;
+                            
+                            if (!isVideoReady) {
+                              console.warn('Video not ready for timeline click, readyState:', video.readyState);
+                              addToast({
+                                type: 'info',
+                                title: '비디오 로딩 중',
+                                message: '비디오가 로드될 때까지 잠시 기다려주세요.',
+                                duration: 2000,
+                              });
+                              return;
+                            }
+
+                            // 타임라인 클릭 위치 계산
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            if (rect.width === 0) {
+                              console.warn('Timeline width is zero');
+                              return;
+                            }
+
+                            const clickX = e.clientX - rect.left;
+                            const pos = Math.max(0, Math.min(1, clickX / rect.width));
+                            const newTime = pos * duration;
+
+                            // 유효한 시간 범위 확인
+                            if (newTime < 0 || newTime > duration) {
+                              console.warn('Calculated time is out of bounds:', newTime);
+                              return;
+                            }
+
+                            video.currentTime = newTime;
+                            console.log(`Timeline clicked: seeked to ${newTime.toFixed(2)}s (${(pos * 100).toFixed(1)}%)`);
+
+                            // 모바일에서 타임라인 클릭 시 추가 처리
+                            if (isMobile && videoSectionRef.current) {
+                              try {
+                                videoSectionRef.current.scrollIntoView({
+                                  behavior: 'smooth',
+                                  block: 'start',
+                                  inline: 'nearest',
+                                });
+                              } catch (scrollError) {
+                                console.warn('Scroll to video after timeline click failed:', scrollError);
+                              }
+                            }
+
                           } catch (error) {
                             console.error('Timeline click error:', error);
+                            addToast({
+                              type: 'error',
+                              title: '타임라인 오류',
+                              message: '타임라인 클릭 처리 중 오류가 발생했습니다.',
+                              duration: 3000,
+                            });
                           }
                         }}
                       />
@@ -1842,7 +2240,7 @@ export default function CCTVAnalysis() {
             </div>
 
             <div>
-              <Card className="h-full bg-[#242a38] border-0 shadow-lg">
+              <Card className="h-full min-h-[400px] max-h-[80vh] bg-[#242a38] border-0 shadow-lg chat-container-flexible">
                 <CardContent className="p-3 md:p-4 flex flex-col h-full">
                   <div className="flex items-center justify-between mb-3 md:mb-4">
                     <h2 className="text-lg md:text-xl font-semibold text-white">
@@ -1858,8 +2256,8 @@ export default function CCTVAnalysis() {
                     </Button>
                   </div>
 
-                  <div className="flex-1 overflow-hidden mb-3 md:mb-4 border border-[#2a3142] rounded-md">
-                    <ScrollArea className="h-[250px] md:h-[400px] pr-2">
+                  <div className="flex-1 overflow-hidden mb-3 md:mb-4 border border-[#2a3142] rounded-md chat-messages-area">
+                    <ScrollArea className="h-full pr-2">
                       <div className="space-y-3 md:space-y-4 p-3 md:p-4 overflow-hidden">
                         {messages.map((message, index) => (
                           <div
@@ -1950,15 +2348,16 @@ export default function CCTVAnalysis() {
                     />
                     <Button
                       type="submit"
-                      disabled={!inputMessage.trim() || isAnalyzing || !videoSrc}
+                      disabled={!inputMessage.trim() || isAnalyzing || !videoSrc || !videoId}
                       onClick={(e) => {
-                        console.log("🔘 Button click 이벤트 발생, disabled:", !inputMessage.trim() || isAnalyzing || !videoSrc);
+                        console.log("🔘 Button click 이벤트 발생, disabled:", !inputMessage.trim() || isAnalyzing || !videoSrc || !videoId);
                         console.log("🔘 Button click - inputMessage:", inputMessage);
                         console.log("🔘 Button click - isAnalyzing:", isAnalyzing);
                         console.log("🔘 Button click - videoSrc:", !!videoSrc);
+                        console.log("🔘 Button click - videoId:", videoId);
                       }}
                       className={`px-3 md:px-4 transition-all duration-200 ${
-                        !inputMessage.trim() || isAnalyzing || !videoSrc
+                        !inputMessage.trim() || isAnalyzing || !videoSrc || !videoId
                           ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
                           : 'bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]'
                       }`}

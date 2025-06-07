@@ -18,9 +18,11 @@ def process_prompt(request):
     try:
         prompt_text = request.data.get('prompt')
         session_id = request.data.get('session_id')
+        video_id = request.data.get('video_id')  # 비디오 ID 추가
         
         print(f"💭 프롬프트: {prompt_text}")
         print(f"🆔 세션 ID: {session_id}")
+        print(f"🎥 비디오 ID: {video_id}")
         
         if not prompt_text:
             print("❌ 프롬프트가 비어있음")
@@ -33,35 +35,42 @@ def process_prompt(request):
             except PromptSession.DoesNotExist:
                 return Response({"error": "존재하지 않는 세션입니다."}, status=status.HTTP_404_NOT_FOUND)
         else:
-            # 새 세션 생성 - video와 main_event 필요
-            # 임시로 첫 번째 비디오와 이벤트 사용 (실제로는 요청에서 받아야 함)
-            video = Video.objects.first()
-            main_event = Event.objects.first()
+            # 새 세션 생성 - 전달받은 video_id 사용
+            if not video_id:
+                return Response({"error": "새 세션 생성을 위해서는 video_id가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
             
-            if not video or not main_event:
-                return Response({"error": "비디오나 이벤트가 없습니다."}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                video = Video.objects.get(video_id=video_id)
+            except Video.DoesNotExist:
+                return Response({"error": "존재하지 않는 비디오입니다."}, status=status.HTTP_404_NOT_FOUND)
             
-            # PromptSession 모델에는 title 필드가 없으므로 제거
+            # PromptSession 생성 - main_event는 초기에 None으로 설정
             history = PromptSession.objects.create(
                 video=video,
-                main_event=main_event,
-                first_prompt=prompt_text[:200] if prompt_text else ""  # first_prompt 필드 사용
+                main_event=None,  # 초기에는 None, 나중에 relevant_event로 설정
+                first_prompt=prompt_text[:200] if prompt_text else ""
             )
         
-        # 2. 프롬프트 처리 및 관련 이벤트 검색
-        response_text, relevant_event = process_prompt_logic(prompt_text)
+        # 2. 프롬프트 처리 및 관련 이벤트 검색 (해당 비디오의 이벤트만)
+        response_text, relevant_event = process_prompt_logic(prompt_text, history.video)
         
         # 3. 세션의 main_event 설정 (첫 프롬프트인 경우)
         if not session_id and relevant_event and not history.main_event:
-            history.main_event = relevant_event
-            history.save()
+            # 해당 비디오의 이벤트인지 다시 한 번 확인
+            if relevant_event.video == history.video:
+                history.main_event = relevant_event
+                history.save()
+            else:
+                print(f"⚠️ 경고: 다른 비디오의 이벤트가 반환됨. 세션 비디오: {history.video.name}, 이벤트 비디오: {relevant_event.video.name}")
+                relevant_event = None  # 잘못된 이벤트는 무시
         
-        # 4. 상호작용 저장
+        # 4. 상호작용 저장 (찾은 이벤트 포함)
         interaction = PromptInteraction.objects.create(
             session=history,
             video=history.video,  # video 필드 추가
             input_prompt=prompt_text,
-            output_response=response_text
+            output_response=response_text,
+            detected_event=relevant_event  # 찾은 이벤트 저장
         )
         
         # 5. 응답 반환
@@ -92,7 +101,7 @@ def process_prompt(request):
 def get_prompt_history(request):
     """모든 프롬프트 세션 목록을 반환하는 API 뷰"""
     try:
-        histories = PromptSession.objects.all().order_by('-updated_at')
+        histories = PromptSession.objects.all().order_by('created_at')
         result = []
         
         for history in histories:
@@ -147,16 +156,10 @@ def get_session_detail(request, session_id):
                 'input_prompt': interaction.input_prompt,
                 'output_response': interaction.output_response,
                 'timestamp': interaction.timestamp.isoformat(),
-                'event': None
+                'timeline_points': interaction.timeline_points,  # 타임라인 포인트 추가
+                'found_events_count': interaction.found_events_count,
+                'processing_status': interaction.processing_status,
             }
-            
-            if interaction.event:
-                item['event'] = {
-                    'id': interaction.event.id,
-                    'timestamp': interaction.event.timestamp.isoformat(),
-                    'action_detected': interaction.event.action_detected,
-                    'location': interaction.event.location
-                }
             
             result.append(item)
         
@@ -221,16 +224,20 @@ def check_duplicate_video(request):
     except ValueError:
         return Response({"error": "size는 숫자여야 합니다."}, status=status.HTTP_400_BAD_REQUEST)
 
-def process_prompt_logic(prompt_text):
+def process_prompt_logic(prompt_text, video=None):
     """
     프롬프트 처리 로직 - FastAPI text2sql 호출
     
     1. FastAPI에 프롬프트 전송하여 SQL 생성
     2. 생성된 SQL로 타임스탬프 추출
-    3. DB 쿼리 실행
+    3. DB 쿼리 실행 (특정 비디오로 제한)
     4. 타임라인 추출 → 영상 캡쳐
     5. VLM에 캡쳐 이미지 + 프롬프트 전송
     6. 응답 생성
+    
+    Args:
+        prompt_text: 사용자 프롬프트
+        video: 대상 비디오 객체 (None이면 전체 검색)
     """
     try:
         # 1. FastAPI text2sql 호출
@@ -264,6 +271,20 @@ def process_prompt_logic(prompt_text):
         # Django 테이블 이름으로 변환
         sql_query = sql_query.replace('events', 'db_event')
         sql_query = sql_query.replace('videos', 'db_video')
+        
+        # 특정 비디오로 제한하는 WHERE 조건 추가
+        if video:
+            # 기존 WHERE 절이 있는지 확인
+            if 'WHERE' in sql_query.upper():
+                # 기존 WHERE 절에 AND 조건 추가
+                sql_query = sql_query.replace('WHERE', f'WHERE db_event.video_id = {video.video_id} AND')
+            else:
+                # WHERE 절이 없으면 추가
+                # FROM 절 다음에 WHERE 절 추가
+                sql_query = re.sub(r'(FROM\s+\w+)', r'\1 WHERE db_event.video_id = ' + str(video.video_id), sql_query, flags=re.IGNORECASE)
+            
+            print(f"비디오 필터링 적용됨: video_id = {video.video_id}")
+            print(f"필터링된 SQL: {sql_query}")
         
         # PostgreSQL TIME 타입을 초 단위 정수로 변환
         # 예: TIME '10:00:00' -> 36000 (10시간 * 3600초)
@@ -299,29 +320,65 @@ def process_prompt_logic(prompt_text):
             query_results = cursor.fetchall()
             
         if not query_results:
-            return "쿼리 결과가 없습니다.", None
+            return "요청하신 조건에 해당하는 이벤트를 찾을 수 없습니다.", None
             
         print(f"쿼리 결과: {query_results}")
         
-        # 4. 타임라인 추출 (첫 번째 결과 사용)
-        # TODO: 영상 캡쳐 로직 구현
-        # TODO: VLM 호출 로직 구현
-        
-        # 임시 응답 생성
-        response_text = f"FastAPI text2sql 처리 완료. {len(query_results)}개의 결과를 찾았습니다."
-        
-        # 관련 이벤트 반환 (첫 번째 결과)
+        # 4. 실제 이벤트 데이터 조회하여 상세 응답 생성
+        found_events = []
         relevant_event = None
-        if query_results:
-            # Event 모델의 필드 순서에 맞춰 결과 매핑
-            # 실제 구현에서는 쿼리 결과의 구조에 따라 조정 필요
+        
+        for result in query_results:
             try:
-                first_result = query_results[0]
-                events = Event.objects.filter(id=first_result[0])
+                event_id = result[0]
+                # 해당 비디오의 이벤트만 검색
+                if video:
+                    events = Event.objects.filter(id=event_id, video=video)
+                else:
+                    events = Event.objects.filter(id=event_id)
+                    
                 if events.exists():
-                    relevant_event = events.first()
+                    event = events.first()
+                    found_events.append(event)
+                    
+                    # 첫 번째 이벤트를 relevant_event로 설정
+                    if relevant_event is None:
+                        relevant_event = event
+                        print(f"✅ 주요 이벤트 매핑: ID={relevant_event.id}, 비디오={relevant_event.video.name}, 타입={relevant_event.event_type}")
+                else:
+                    print(f"⚠️ 해당 비디오에서 이벤트 ID {event_id}를 찾을 수 없음")
             except Exception as e:
                 print(f"이벤트 매핑 오류: {e}")
+        
+        # 5. 상세한 응답 텍스트 생성
+        if not found_events:
+            response_text = "데이터베이스에서 해당 이벤트 정보를 찾을 수 없습니다."
+        else:
+            response_parts = [f"총 {len(found_events)}개의 이벤트를 찾았습니다:\n"]
+            
+            for i, event in enumerate(found_events, 1):
+                # 타임스탬프를 시:분:초 형식으로 변환
+                hours = event.timestamp // 3600
+                minutes = (event.timestamp % 3600) // 60
+                seconds = event.timestamp % 60
+                time_str = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
+                
+                # 이벤트 타입 한국어 변환
+                event_type_kr = {
+                    'theft': '도난',
+                    'collapse': '쓰러짐', 
+                    'violence': '폭행'
+                }.get(event.event_type, event.event_type)
+                
+                event_info = f"{i}. [{time_str}] {event_type_kr}"
+                if event.location:
+                    event_info += f" - 위치: {event.location}"
+                if event.action_detected:
+                    event_info += f" - 상세: {event.action_detected}"
+                
+                response_parts.append(event_info)
+            
+            response_text = "\n".join(response_parts)
         
         return response_text, relevant_event
         
@@ -331,9 +388,9 @@ def process_prompt_logic(prompt_text):
         return f"처리 중 오류 발생: {str(e)}", None
 
 
-class PromptSessionViewSet(viewsets.ReadOnlyModelViewSet):
-    """PromptSession ViewSet - 세션 목록 조회용"""
-    queryset = PromptSession.objects.all().order_by('-created_at')
+class PromptSessionViewSet(viewsets.ModelViewSet):
+    """PromptSession ViewSet - 세션 CRUD 작업용"""
+    queryset = PromptSession.objects.all().order_by('created_at')
     serializer_class = PromptSessionSerializer
     
     def get_queryset(self):

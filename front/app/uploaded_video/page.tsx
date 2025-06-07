@@ -30,7 +30,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { UploadedVideo } from '@/app/types/video';
-import { getUploadedVideos, deleteVideo } from '@/app/actions/video-service';
+import type { ChatSession } from '@/app/types/session';
+import { getUploadedVideos, deleteVideo, getVideoEventStats } from '@/app/actions/video-service';
+import { getAllSessions } from '@/app/actions/session-service';
 import Link from 'next/link';
 import SmartHeader from '@/components/smart-header';
 import DynamicHistorySidebar from '@/components/dynamic-history-sidebar';
@@ -41,6 +43,7 @@ import ToastNotification, { type Toast } from '@/components/toast-notification';
 
 export default function UploadedVideoPage() {
   const [videos, setVideos] = useState<UploadedVideo[]>([]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEvent, setFilterEvent] = useState<string>('all');
@@ -54,6 +57,8 @@ export default function UploadedVideoPage() {
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+  // Event 테이블에서 가져온 비디오별 이벤트 통계
+  const [videoEventStats, setVideoEventStats] = useState<{ [videoId: string]: { eventType: string; count: number } }>({});
 
   // useToast 훅 제거 - 자체 토스트 시스템 사용
   // const { toast } = useToast();
@@ -125,12 +130,50 @@ export default function UploadedVideoPage() {
   const loadVideos = async () => {
     setLoading(true);
     try {
-      const response = await getUploadedVideos();
-      if (response.success) {
-        setVideos(response.data);
+      // 비디오 목록과 세션 목록을 병렬로 로드
+      const [videoResponse, sessionResponse] = await Promise.all([
+        getUploadedVideos(),
+        getAllSessions()
+      ]);
+      
+      console.log('비디오 응답:', videoResponse);
+      console.log('세션 응답:', sessionResponse);
+      
+      if (videoResponse.success) {
+        setVideos(videoResponse.data);
+        
+        // 각 비디오에 대한 Event 테이블 통계 로드
+        const eventStatsPromises = videoResponse.data.map(async (video) => {
+          const statsResponse = await getVideoEventStats(video.id);
+          if (statsResponse.success && statsResponse.data?.mostFrequentEvent) {
+            return {
+              videoId: video.id,
+              eventType: statsResponse.data.mostFrequentEvent.eventType,
+              count: statsResponse.data.mostFrequentEvent.count,
+            };
+          }
+          return null;
+        });
+        
+        const eventStats = await Promise.all(eventStatsPromises);
+        const validEventStats = eventStats.filter(stat => stat !== null) as Array<{ videoId: string; eventType: string; count: number }>;
+        
+        // 통계를 상태에 저장
+        const statsMap: { [videoId: string]: { eventType: string; count: number } } = {};
+        validEventStats.forEach(stat => {
+          statsMap[stat.videoId] = { eventType: stat.eventType, count: stat.count };
+        });
+        setVideoEventStats(statsMap);
+        
+        console.log('로드된 비디오 이벤트 통계:', statsMap);
+      }
+      
+      if (sessionResponse.success) {
+        setSessions(sessionResponse.data);
+        console.log('로드된 세션들:', sessionResponse.data);
       }
     } catch (error) {
-      console.error('Failed to load videos:', error);
+      console.error('Failed to load videos and sessions:', error);
     } finally {
       setLoading(false);
     }
@@ -234,6 +277,37 @@ export default function UploadedVideoPage() {
         setDeletingVideoId(null);
       }
     }
+  };
+
+  // 이벤트 타입 번역 함수
+  const translateEventType = (eventType: string) => {
+    switch (eventType) {
+      case 'theft':
+        return '도난';
+      case 'collapse':
+        return '쓰러짐';
+      case 'violence':
+        return '폭행';
+      default:
+        return eventType;
+    }
+  };
+
+  // Event 테이블에서 가져온 통계를 기반으로 가장 많이 발생한 이벤트 반환
+  const getMostFrequentEventForVideo = (videoId: string) => {
+    const eventStat = videoEventStats[videoId];
+    
+    if (eventStat) {
+      console.log(`비디오 ${videoId}의 Event 테이블 통계:`, eventStat);
+      return {
+        type: eventStat.eventType,
+        count: eventStat.count,
+        total: eventStat.count, // Event 테이블 기반이므로 총 이벤트 수와 동일
+      };
+    }
+    
+    console.log(`비디오 ${videoId}에 대한 Event 통계가 없음`);
+    return null;
   };
 
   const formatFileSize = (bytes: number) => {
@@ -534,22 +608,51 @@ export default function UploadedVideoPage() {
                           )}
                         </div>
 
-                        {/* 주요 사건 배지 */}
-                        {video.majorEvent && (
-                          <Badge
-                            className={`flex-shrink-0 text-xs ${
-                              video.majorEvent === '도난'
-                                ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
-                                : video.majorEvent === '쓰러짐'
-                                ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                : video.majorEvent === '폭행'
-                                ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
-                                : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
-                            }`}
-                          >
-                            {video.majorEvent}
-                          </Badge>
-                        )}
+                        {/* 주요 사건 배지 - Event 테이블에서 가져온 통계 또는 비디오의 majorEvent */}
+                        {(() => {
+                          const mostFrequentEvent = getMostFrequentEventForVideo(video.id);
+                          
+                          // Event 테이블에서 분석된 이벤트가 있으면 우선 표시
+                          if (mostFrequentEvent) {
+                            const eventText = translateEventType(mostFrequentEvent.type);
+                            return (
+                              <Badge
+                                className={`flex-shrink-0 text-xs whitespace-nowrap ${
+                                  eventText === '도난'
+                                    ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
+                                    : eventText === '쓰러짐'
+                                    ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
+                                    : eventText === '폭행'
+                                    ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
+                                    : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
+                                }`}
+                              >
+                                주요 사건: {eventText}({mostFrequentEvent.count} times)
+                              </Badge>
+                            );
+                          }
+                          
+                          // 비디오의 majorEvent가 있으면 표시
+                          if (video.majorEvent) {
+                            return (
+                              <Badge
+                                className={`flex-shrink-0 text-xs whitespace-nowrap ${
+                                  video.majorEvent === '도난'
+                                    ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
+                                    : video.majorEvent === '쓰러짐'
+                                    ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
+                                    : video.majorEvent === '폭행'
+                                    ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
+                                    : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
+                                }`}
+                              >
+                                주요 사건: {video.majorEvent}
+                              </Badge>
+                            );
+                          }
+                          
+                          return null;
+                        })()}
                       </div>
 
                       {/* 메타데이터 */}
@@ -595,7 +698,7 @@ export default function UploadedVideoPage() {
                               className="bg-[#6c5ce7] hover:bg-[#5a4fcf] text-white w-full sm:w-auto text-xs sm:text-sm"
                             >
                               <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                              세션
+                              list
                             </Button>
                           </Link>
 
@@ -608,7 +711,7 @@ export default function UploadedVideoPage() {
                               className="bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c] w-full sm:w-auto text-xs sm:text-sm"
                             >
                               <Play className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                              분석
+                              new
                             </Button>
                           </Link>
                         </div>

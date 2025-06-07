@@ -8,6 +8,7 @@ import { deleteSessionsByVideoId } from './session-service';
 
 // Django API URL 설정
 const DJANGO_API_BASE = process.env.DJANGO_API_URL || 'http://localhost:8088/api';
+const DJANGO_DB_BASE = process.env.DJANGO_DB_URL || 'http://localhost:8088/db';
 
 // Django Video API 통신 함수들
 async function createVideoInDjango(videoData: {
@@ -414,7 +415,7 @@ export async function saveVideoFile(
 }
 
 // 업로드된 비디오 목록 가져오기
-export async function getUploadedVideos(): Promise<VideoListResponse> {
+export async function getUploadedVideos(cleanupThumbnails: boolean = false): Promise<VideoListResponse> {
   try {
     console.log('Django API에서 비디오 목록 가져오는 중...');
 
@@ -444,6 +445,18 @@ export async function getUploadedVideos(): Promise<VideoListResponse> {
     }));
 
     console.log(`✅ Django에서 ${videos.length}개 비디오 로드 완료`);
+
+    // 옵션으로 고아 썸네일 정리 실행
+    if (cleanupThumbnails) {
+      try {
+        const cleanupResult = await cleanupOrphanedThumbnails();
+        if (cleanupResult.success && cleanupResult.deletedCount > 0) {
+          console.log(`🧹 고아 썸네일 ${cleanupResult.deletedCount}개 정리 완료`);
+        }
+      } catch (cleanupError) {
+        console.warn('⚠️ 고아 썸네일 정리 중 오류 발생:', cleanupError);
+      }
+    }
 
     return { success: true, data: videos };
   } catch (error) {
@@ -504,42 +517,86 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
       console.warn(`⚠️ 로컬 비디오 파일이 존재하지 않음: ${filePath}`);
     }
 
-    // 3. 썸네일 파일 삭제
+    // 3. 썸네일 파일 삭제 - 더 강력한 로직
     let thumbnailDeleted = false;
+    const possibleThumbnailPaths: string[] = [];
 
-    // 먼저 메타데이터에서 실제 썸네일 경로 확인
+    // 가능한 썸네일 경로들을 모두 수집
     if (targetVideo.thumbnail_path) {
       const thumbnailWebPath = targetVideo.thumbnail_path; // e.g., "/uploads/thumbnails/filename.png"
       const thumbnailFileName = thumbnailWebPath.split('/').pop(); // "filename.png"
-
       if (thumbnailFileName) {
-        const thumbnailPath = join(THUMBNAIL_DIR, thumbnailFileName);
-
-        console.log(`🖼️ 썸네일 파일 삭제: ${thumbnailPath}`);
-
-        if (existsSync(thumbnailPath)) {
-          await unlink(thumbnailPath);
-          console.log(`✅ 썸네일 파일 삭제 완료`);
-          thumbnailDeleted = true;
-        } else {
-          console.warn(`⚠️ 썸네일 파일이 존재하지 않음: ${thumbnailPath}`);
-        }
+        possibleThumbnailPaths.push(join(THUMBNAIL_DIR, thumbnailFileName));
       }
     }
 
-    // 썸네일 삭제가 실패했으면 파일명 기반으로 시도
+    // computed_thumbnail_path도 확인
+    if (targetVideo.computed_thumbnail_path) {
+      const computedThumbnailWebPath = targetVideo.computed_thumbnail_path;
+      const computedThumbnailFileName = computedThumbnailWebPath.split('/').pop();
+      if (computedThumbnailFileName) {
+        possibleThumbnailPaths.push(join(THUMBNAIL_DIR, computedThumbnailFileName));
+      }
+    }
+
+    // 파일명 기반 썸네일 경로들 추가
+    const baseFileName = fileName.replace(/\.[^/.]+$/, ''); // 확장자 제거
+    const thumbnailExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+    
+    for (const ext of thumbnailExtensions) {
+      possibleThumbnailPaths.push(join(THUMBNAIL_DIR, `${baseFileName}${ext}`));
+    }
+
+    // 번호가 붙은 파일명들도 확인 (예: filename(1).png)
+    const numberMatch = fileName.match(/^(.+?)(\(\d+\))\.([^.]+)$/);
+    if (numberMatch) {
+      const [, baseName, numberPart, extension] = numberMatch;
+      for (const ext of thumbnailExtensions) {
+        possibleThumbnailPaths.push(join(THUMBNAIL_DIR, `${baseName}${numberPart}${ext}`));
+        possibleThumbnailPaths.push(join(THUMBNAIL_DIR, `${baseName}${ext}`)); // 번호 없는 버전도
+      }
+    }
+
+    // 중복 제거
+    const uniqueThumbnailPaths = [...new Set(possibleThumbnailPaths)];
+
+    console.log(`🖼️ 썸네일 삭제 시도할 경로들:`, uniqueThumbnailPaths);
+
+    // 모든 가능한 썸네일 파일 삭제
+    for (const thumbnailPath of uniqueThumbnailPaths) {
+      try {
+        if (existsSync(thumbnailPath)) {
+          await unlink(thumbnailPath);
+          console.log(`✅ 썸네일 파일 삭제 완료: ${thumbnailPath}`);
+          thumbnailDeleted = true;
+        }
+      } catch (deleteError) {
+        console.error(`❌ 썸네일 파일 삭제 실패: ${thumbnailPath}`, deleteError);
+      }
+    }
+
+    // 썸네일 디렉토리에서 관련된 모든 파일 찾아서 삭제 (마지막 수단)
     if (!thumbnailDeleted) {
-      const thumbnailFileName = fileName.replace(/\.[^/.]+$/, '.png');
-      const thumbnailPath = join(THUMBNAIL_DIR, thumbnailFileName);
-
-      console.log(`🖼️ 파일명 기반 썸네일 파일 삭제: ${thumbnailPath}`);
-
-      if (existsSync(thumbnailPath)) {
-        await unlink(thumbnailPath);
-        console.log(`✅ 썸네일 파일 삭제 완료`);
-        thumbnailDeleted = true;
-      } else {
-        console.warn(`⚠️ 파일명 기반 썸네일 파일이 존재하지 않음: ${thumbnailPath}`);
+      try {
+        const thumbnailFiles = await readdir(THUMBNAIL_DIR);
+        const baseNameForSearch = baseFileName.toLowerCase();
+        
+        for (const file of thumbnailFiles) {
+          const fileLower = file.toLowerCase();
+          // 파일명이 비슷한 썸네일들 찾기
+          if (fileLower.includes(baseNameForSearch) || baseNameForSearch.includes(fileLower.replace(/\.[^.]+$/, ''))) {
+            const fullPath = join(THUMBNAIL_DIR, file);
+            try {
+              await unlink(fullPath);
+              console.log(`✅ 유사 썸네일 파일 삭제 완료: ${fullPath}`);
+              thumbnailDeleted = true;
+            } catch (deleteError) {
+              console.error(`❌ 유사 썸네일 파일 삭제 실패: ${fullPath}`, deleteError);
+            }
+          }
+        }
+      } catch (readError) {
+        console.error('❌ 썸네일 디렉토리 읽기 실패:', readError);
       }
     }
 
@@ -602,10 +659,10 @@ export async function updateVideoMetadata(
 }
 
 // 모든 비디오 가져오기 (기존 getAllVideos 함수를 단순화)
-export async function getAllVideos(): Promise<VideoListResponse> {
+export async function getAllVideos(cleanupThumbnails: boolean = true): Promise<VideoListResponse> {
   try {
-    // Django API 기반으로 비디오 목록 반환
-    return await getUploadedVideos();
+    // Django API 기반으로 비디오 목록 반환하고 기본적으로 썸네일 정리 실행
+    return await getUploadedVideos(cleanupThumbnails);
   } catch (error) {
     console.error('Failed to get all videos:', error);
     return {
@@ -613,5 +670,144 @@ export async function getAllVideos(): Promise<VideoListResponse> {
       data: [],
       error: '비디오 목록을 불러오는 중 오류가 발생했습니다.',
     };
+  }
+}
+
+// 고아 썸네일 파일 정리 함수
+export async function cleanupOrphanedThumbnails(): Promise<{
+  success: boolean;
+  deletedCount: number;
+  error?: string;
+}> {
+  try {
+    console.log('🧹 고아 썸네일 파일 정리 시작...');
+
+    // 1. Django에서 현재 비디오 목록 가져오기
+    const videosResponse = await getVideosFromDjango();
+    if (!videosResponse.success) {
+      return { success: false, deletedCount: 0, error: videosResponse.error };
+    }
+
+    const videos = videosResponse.videos || [];
+    const validThumbnails = new Set<string>();
+
+    // 2. 유효한 썸네일 파일명들 수집
+    for (const video of videos) {
+      if (video.thumbnail_path) {
+        const thumbnailFileName = video.thumbnail_path.split('/').pop();
+        if (thumbnailFileName) {
+          validThumbnails.add(thumbnailFileName);
+        }
+      }
+
+      if (video.computed_thumbnail_path) {
+        const computedThumbnailFileName = video.computed_thumbnail_path.split('/').pop();
+        if (computedThumbnailFileName) {
+          validThumbnails.add(computedThumbnailFileName);
+        }
+      }
+
+      // 비디오 파일명 기반 썸네일도 유효한 것으로 간주
+      const baseFileName = video.name.replace(/\.[^/.]+$/, '');
+      const thumbnailExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+      for (const ext of thumbnailExtensions) {
+        validThumbnails.add(`${baseFileName}${ext}`);
+      }
+    }
+
+    console.log(`📋 유효한 썸네일 파일 ${validThumbnails.size}개 확인됨`);
+
+    // 3. 썸네일 디렉토리의 모든 파일 확인
+    if (!existsSync(THUMBNAIL_DIR)) {
+      console.log('📁 썸네일 디렉토리가 존재하지 않음');
+      return { success: true, deletedCount: 0 };
+    }
+
+    const thumbnailFiles = await readdir(THUMBNAIL_DIR);
+    let deletedCount = 0;
+
+    console.log(`📂 썸네일 디렉토리에 ${thumbnailFiles.length}개 파일 존재`);
+
+    // 4. 고아 파일들 삭제
+    for (const fileName of thumbnailFiles) {
+      const fullPath = join(THUMBNAIL_DIR, fileName);
+      
+      // 파일인지 확인 (디렉토리 제외)
+      try {
+        const stats = await stat(fullPath);
+        if (!stats.isFile()) {
+          continue;
+        }
+      } catch (statError) {
+        console.warn(`⚠️ 파일 정보 확인 실패: ${fullPath}`);
+        continue;
+      }
+
+      // 유효한 썸네일인지 확인
+      if (!validThumbnails.has(fileName)) {
+        try {
+          await unlink(fullPath);
+          console.log(`🗑️ 고아 썸네일 삭제: ${fileName}`);
+          deletedCount++;
+        } catch (deleteError) {
+          console.error(`❌ 고아 썸네일 삭제 실패: ${fileName}`, deleteError);
+        }
+      }
+    }
+
+    console.log(`✅ 고아 썸네일 정리 완료: ${deletedCount}개 파일 삭제됨`);
+
+    return { success: true, deletedCount };
+  } catch (error) {
+    console.error('❌ 고아 썸네일 정리 실패:', error);
+    return { success: false, deletedCount: 0, error: '고아 썸네일 정리 중 오류가 발생했습니다.' };
+  }
+}
+
+// Event 테이블에서 비디오별 이벤트 타입 통계 가져오기
+export async function getVideoEventStats(videoId: string): Promise<{
+  success: boolean;
+  data?: {
+    videoId: string;
+    mostFrequentEvent?: {
+      eventType: string;
+      count: number;
+    };
+    stats: Array<{
+      event_type: string;
+      count: number;
+    }>;
+  };
+  error?: string;
+}> {
+  try {
+    const response = await fetch(`${DJANGO_DB_BASE}/events/video-stats/?video_id=${videoId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      return {
+        success: true,
+        data: {
+          videoId: result.video_id,
+          mostFrequentEvent: result.most_frequent_event ? {
+            eventType: result.most_frequent_event.event_type,
+            count: result.most_frequent_event.count,
+          } : undefined,
+          stats: result.stats,
+        },
+      };
+    } else {
+      const errorText = await response.text();
+      console.error('Event stats API error:', errorText);
+      return { success: false, error: `이벤트 통계 조회 실패: ${response.status}` };
+    }
+  } catch (error) {
+    console.error('Event stats fetch error:', error);
+    return { success: false, error: '이벤트 통계 조회 중 오류가 발생했습니다.' };
   }
 }

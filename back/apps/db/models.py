@@ -170,17 +170,17 @@ class PromptSession(models.Model):
     
     # 세션 요약 정보 (성능 최적화용)
     first_prompt = models.TextField(blank=True)  # 첫 번째 프롬프트 (미리보기용)
-    last_response = models.TextField(blank=True)  # 마지막 응답 (미리보기용)
+    first_response = models.TextField(blank=True)  # 첫 번째 응답 (미리보기용)
     interaction_count = models.IntegerField(default=0)  # 대화 횟수
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        ordering = ['-updated_at']  # 최근 업데이트 순
+        ordering = ['created_at']  # 생성 시간 순 (오래된 것부터)
         indexes = [
-            models.Index(fields=['video', '-updated_at']),  # 비디오별 최신 세션 조회
-            models.Index(fields=['-created_at']),           # 전체 최신 세션 조회
+            models.Index(fields=['video', 'created_at']),  # 비디오별 시간순 세션 조회
+            models.Index(fields=['created_at']),           # 전체 시간순 세션 조회
         ]
         
     def get_session_number(self):  # ← 누락된 메서드 추가
@@ -273,6 +273,7 @@ class PromptInteraction(models.Model):
     # 검색 결과 관련 필드
     found_events_count = models.IntegerField(default=0)  # 찾은 이벤트 수
     timeline_points = models.JSONField(null=True, blank=True)  # 추출된 정확한 시간 지점들 [{"time": "10:30", "event_type": "person_detected"}, ...]
+    detected_event = models.ForeignKey('Event', on_delete=models.SET_NULL, null=True, blank=True, related_name='prompt_interactions')  # 이 프롬프트로 찾은 이벤트
     
     # 메타데이터
     timestamp = models.DateTimeField(auto_now_add=True)  # 프롬프트 입력 시간
@@ -355,17 +356,21 @@ class PromptInteraction(models.Model):
             
             if interactions_count == 1:  # 진짜 첫 번째
                 session.first_prompt = self.input_prompt
+                session.first_response = self.output_response  # 첫 번째 응답 저장
+                session.save(update_fields=['first_prompt', 'first_response', 'interaction_count'])
             
-            # 항상 마지막 응답과 카운트 업데이트
-            session.last_response = self.output_response
+            # 카운트 업데이트 (first가 아닌 경우)
             session.interaction_count = interactions_count
-            session.save(update_fields=['first_prompt', 'last_response', 'interaction_count'])
+            if interactions_count > 1:
+                session.save(update_fields=['interaction_count'])
         else:
-            # 기존 interaction 수정인 경우 마지막 응답만 업데이트 (마지막 것이라면)
-            latest_interaction = session.interactions.order_by('-timestamp').first()
-            if latest_interaction == self:
-                session.last_response = self.output_response
-                session.save(update_fields=['last_response'])
+            # 기존 interaction 수정인 경우
+            first_interaction = session.interactions.order_by('timestamp').first()
+            
+            # 첫 번째 interaction을 수정한 경우 first_response 업데이트
+            if first_interaction == self:
+                session.first_response = self.output_response
+                session.save(update_fields=['first_response'])
     
     def mark_completed(self, thumbnail_path="", vlm_summary=""):
         """처리 완료 표시"""

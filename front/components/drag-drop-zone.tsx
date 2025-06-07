@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Upload, FileVideo, X, MessageSquare, CirclePlay, CalendarDays, Check, Play, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import CustomDateTimePicker from "./custom-date-time-picker"
 
 interface DragDropZoneProps {
   onFileUpload: (file: File, videoDateTime?: string) => void
@@ -133,13 +134,15 @@ export default function DragDropZone({ onFileUpload, isVisible, onClose }: DragD
 
   // 날짜/시간 선택 핸들러
   const handleDateTimeSelect = () => {
-    // 현재 날짜와 시간을 기본값으로 설정
+    // 서울 시간 기준으로 현재 날짜와 시간을 기본값으로 설정
     const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    const day = String(now.getDate()).padStart(2, '0')
-    const hours = String(now.getHours()).padStart(2, '0')
-    const minutes = String(now.getMinutes()).padStart(2, '0')
+    const seoulTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Seoul"}))
+    
+    const year = seoulTime.getFullYear()
+    const month = String(seoulTime.getMonth() + 1).padStart(2, '0')
+    const day = String(seoulTime.getDate()).padStart(2, '0')
+    const hours = String(seoulTime.getHours()).padStart(2, '0')
+    const minutes = String(seoulTime.getMinutes()).padStart(2, '0')
     
     const dateTimeString = `${year}-${month}-${day}T${hours}:${minutes}`
     setSelectedDateTime(dateTimeString)
@@ -372,7 +375,15 @@ export default function DragDropZone({ onFileUpload, isVisible, onClose }: DragD
                 <p className="text-gray-400 mb-8 leading-relaxed text-center">
                   {selectedDateTime ? (
                     <>
-                      설정된 시간: {new Date(selectedDateTime).toLocaleString('ko-KR')}
+                      설정된 시간: {new Date(selectedDateTime).toLocaleString('ko-KR', {
+                        timeZone: 'Asia/Seoul',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                      })}
                       <br />
                       <span className="text-[#00e6b4]">✓ 시간 설정 완료</span>
                     </>
@@ -390,12 +401,10 @@ export default function DragDropZone({ onFileUpload, isVisible, onClose }: DragD
                 {/* 날짜/시간 선택 버튼 또는 변경 버튼 */}
                 {!isDragOver && (
                   <div className="flex flex-col gap-4 w-full max-w-xs">
-                    {/* 날짜/시간 입력 필드 */}
-                    <input
-                      type="datetime-local"
+                    {/* 커스텀 날짜/시간 선택기 */}
+                    <CustomDateTimePicker
                       value={selectedDateTime}
-                      onChange={(e) => setSelectedDateTime(e.target.value)}
-                      className="w-full px-4 py-3 bg-[#1a1f2c] border border-[#2a3142] rounded-lg text-white focus:border-[#00e6b4] focus:outline-none"
+                      onChange={setSelectedDateTime}
                     />
                     
                     {!selectedDateTime ? (

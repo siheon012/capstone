@@ -108,10 +108,331 @@
   overscroll-behavior: none;
 }
 
-/* 커스텀 스크롤바 스타일 */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* 🎨 창의적인 커스텀 스크롤바 스타일 */
+/* 스크롤바 애니메이션 키프레임 */
+@keyframes scrollbar-rainbow {
+  0% { background: linear-gradient(45deg, #00e6b4, #4ecdc4); }
+  14% { background: linear-gradient(45deg, #4ecdc4, #96ceb4); }
+  28% { background: linear-gradient(45deg, #96ceb4, #6c5ce7); }
+  42% { background: linear-gradient(45deg, #6c5ce7, #a29bfe); }
+  57% { background: linear-gradient(45deg, #a29bfe, #74b9ff); }
+  71% { background: linear-gradient(45deg, #74b9ff, #fd79a8); }
+  85% { background: linear-gradient(45deg, #fd79a8, #e84393); }
+  100% { background: linear-gradient(45deg, #e84393, #00e6b4); }
+}
+
+@keyframes scrollbar-glow {
+  0%, 100% { 
+    box-shadow: 0 0 10px rgba(108, 92, 231, 0.5);
+    transform: scaleY(1);
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(108, 92, 231, 0.8);
+    transform: scaleY(1.1);
+  }
+}
+
+@keyframes scrollbar-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* 기본 스크롤바 설정 - 전역 영향 최소화 */
+/* 헤더나 다른 컴포넌트에 영향을 주지 않도록 범위 제한 */
+:not(.no-custom-scrollbar)::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  background: transparent;
+  /* 모바일에서도 스크롤바 표시 강제 */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* 모바일 디바이스에서 스크롤바 강제 표시 */
+@media (max-width: 768px) {
+  :not(.no-custom-scrollbar)::-webkit-scrollbar {
+    width: 8px !important;
+    height: 8px !important;
+    display: block !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+  }
+}
+
+/* 모바일에서 스크롤바 활성화 - 강화된 설정 */
+.mobile-scrollbar-enabled :not(.no-custom-scrollbar) {
+  /* 스크롤바 항상 표시 */
+  scrollbar-width: thick !important;
+  scrollbar-color: #00e6b4 rgba(26, 31, 44, 1) !important;
+  /* 모바일에서 스크롤바 강제 표시 */
+  overflow: auto !important;
+}
+
+/* 🚀 ULTRA 강화된 모바일 스크롤바 - 전역 적용 */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  .mobile-scrollbar-enabled *::-webkit-scrollbar {
+    width: 20px !important;
+    height: 20px !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background: rgba(26, 31, 44, 1) !important;
+    border-radius: 10px !important;
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    z-index: 999999 !important;
+  }
+  
+  .mobile-scrollbar-enabled *::-webkit-scrollbar-track {
+    background: rgba(26, 31, 44, 1) !important;
+    border-radius: 10px !important;
+    border: 3px solid rgba(0, 230, 180, 0.7) !important;
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+  
+  .mobile-scrollbar-enabled *::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, 
+      #00e6b4 0%, 
+      #4ecdc4 50%, 
+      #96ceb4 100%
+    ) !important;
+    border-radius: 8px !important;
+    border: 4px solid rgba(255, 255, 255, 0.8) !important;
+    min-height: 100px !important;
+    box-shadow: 
+      0 0 20px rgba(0, 230, 180, 0.8),
+      0 4px 20px rgba(0, 230, 180, 0.6),
+      inset 0 2px 4px rgba(255, 255, 255, 0.5) !important;
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+  
+  .mobile-scrollbar-enabled *::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, 
+      #ffffff 0%, 
+      #f8fafc 50%, 
+      #e2e8f0 100%
+    ) !important;
+    box-shadow: 
+      0 0 25px rgba(255, 255, 255, 0.9),
+      0 4px 20px rgba(255, 255, 255, 0.7) !important;
+  }
+}
+
+/* 강제로 모든 모바일 디바이스에서 스크롤바 표시 */
+.mobile-scrollbar-enabled :not(.no-custom-scrollbar)::-webkit-scrollbar {
+  width: 14px !important;
+  height: 14px !important;
+  -webkit-appearance: none !important;
+  background: rgba(26, 31, 44, 0.8) !important;
+  border-radius: 7px !important;
+  display: block !important;
+}
+
+.mobile-scrollbar-enabled :not(.no-custom-scrollbar)::-webkit-scrollbar-track {
+  background: rgba(26, 31, 44, 0.8) !important;
+  border-radius: 7px !important;
+  border: 2px solid rgba(0, 230, 180, 0.4) !important;
+  backdrop-filter: blur(5px) !important;
+  display: block !important;
+}
+
+.mobile-scrollbar-enabled :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, 
+    #00e6b4 0%, 
+    #4ecdc4 50%, 
+    #96ceb4 100%
+  ) !important;
+  border-radius: 5px !important;
+  border: 2px solid rgba(255, 255, 255, 0.5) !important;
+  min-height: 50px !important;
+  box-shadow: 0 3px 12px rgba(0, 230, 180, 0.4) !important;
+  display: block !important;
+}
+
+.mobile-scrollbar-enabled :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(135deg, 
+    #ffffff 0%, 
+    #f8fafc 50%, 
+    #e2e8f0 100%
+  ) !important;
+  box-shadow: 0 3px 12px rgba(255, 255, 255, 0.6) !important;
+}
+
+/* 모바일 전용 스크롤바 스타일 - 더 두껍고 잘 보이게 */
+@media (hover: none) and (pointer: coarse) {
+  .mobile-scrollbar-enabled :not(.no-custom-scrollbar)::-webkit-scrollbar {
+    width: 16px !important;
+    height: 16px !important;
+    -webkit-appearance: none !important;
+    background: rgba(26, 31, 44, 0.9) !important;
+    border-radius: 8px !important;
+    display: block !important;
+    opacity: 1 !important;
+  }
+  
+  .mobile-scrollbar-enabled :not(.no-custom-scrollbar)::-webkit-scrollbar-track {
+    background: rgba(26, 31, 44, 0.9) !important;
+    border-radius: 8px !important;
+    border: 2px solid rgba(0, 230, 180, 0.5) !important;
+    backdrop-filter: blur(5px) !important;
+    display: block !important;
+    opacity: 1 !important;
+  }
+  
+  .mobile-scrollbar-enabled :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, 
+      #00e6b4 0%, 
+      #4ecdc4 50%, 
+      #96ceb4 100%
+    ) !important;
+    border-radius: 6px !important;
+    border: 3px solid rgba(255, 255, 255, 0.6) !important;
+    min-height: 60px !important;
+    box-shadow: 0 4px 16px rgba(0, 230, 180, 0.5) !important;
+    display: block !important;
+    opacity: 1 !important;
+  }
+  
+  .mobile-scrollbar-enabled :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, 
+      #ffffff 0%, 
+      #f8fafc 50%, 
+      #e2e8f0 100%
+    ) !important;
+    box-shadow: 0 2px 12px rgba(255, 255, 255, 0.5) !important;
+  }
+  
+  /* 모바일에서 스크롤바를 더 오래 표시 */
+  .mobile-scrollbar-enabled :not(.no-custom-scrollbar) {
+    scrollbar-width: auto !important;
+    scrollbar-color: #00e6b4 rgba(26, 31, 44, 0.6) !important;
+    overflow: auto !important;
+  }
+}
+
+/* iOS Safari 전용 최적화 */
+@supports (-webkit-touch-callout: none) {
+  .mobile-scrollbar-enabled :not(.no-custom-scrollbar)::-webkit-scrollbar {
+    width: 14px !important;
+    height: 14px !important;
+    -webkit-appearance: none !important;
+    background: rgba(26, 31, 44, 0.7) !important;
+    border-radius: 7px !important;
+  }
+  
+  .mobile-scrollbar-enabled :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, 
+      #00e6b4 0%, 
+      #4ecdc4 50%, 
+      #96ceb4 100%
+    ) !important;
+    border-radius: 7px !important;
+    border: 3px solid rgba(255, 255, 255, 0.5) !important;
+    min-height: 50px !important;
+    box-shadow: 
+      0 0 10px rgba(0, 230, 180, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+  }
+}
+
+:not(.no-custom-scrollbar)::-webkit-scrollbar-track {
+  background: rgba(26, 31, 44, 0.8);
+  border-radius: 10px;
+  border: 2px solid rgba(0, 230, 180, 0.1);
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+}
+
+:not(.no-custom-scrollbar)::-webkit-scrollbar-track::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(0, 230, 180, 0.1) 50%, 
+    transparent 100%
+  );
+  animation: scrollbar-pulse 3s infinite;
+}
+
+:not(.no-custom-scrollbar)::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, 
+    #00e6b4 0%, 
+    #4ecdc4 50%, 
+    #96ceb4 100%
+  ) !important;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 0 15px rgba(0, 230, 180, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+:not(.no-custom-scrollbar)::-webkit-scrollbar-thumb::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.3) 50%, 
+    transparent 100%
+  );
+  transition: left 0.5s ease;
+}
+
+:not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, 
+    #6c5ce7 0%, 
+    #a29bfe 25%,
+    #74b9ff 50%,
+    #fd79a8 75%,
+    #e84393 100%
+  ) !important;
+  transform: scale(1.1);
+  box-shadow: 
+    0 0 25px rgba(108, 92, 231, 0.6),
+    0 0 35px rgba(162, 155, 254, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  animation: scrollbar-glow 2s infinite;
+}
+
+:not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:hover::before {
+  left: 100%;
+}
+
+:not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(135deg, 
+    #ff9a9e 0%, 
+    #fecfef 25%,
+    #fecfef 50%,
+    #ffd1dc 75%,
+    #a8e6cf 100%
+  );
+  transform: scale(0.95);
+  box-shadow: 
+    0 0 30px rgba(255, 107, 107, 0.8),
+    inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 코너 스타일링 */
+:not(.no-custom-scrollbar)::-webkit-scrollbar-corner {
+  background: rgba(26, 31, 44, 0.9);
+  border-radius: 10px;
+  border: 2px solid rgba(0, 230, 180, 0.2);
 }
 
 /* 업로드 영역 애니메이션 */
@@ -160,30 +481,136 @@
   }
 }
 
-/* Firefox 스크롤바 */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #00e6b4 #1a1f2c;
+/* 🦊 Firefox 창의적 스크롤바 - 범위 제한 */
+body:not(.no-custom-scrollbar),
+.custom-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: #00e6b4 rgba(26, 31, 44, 0.8);
+  scrollbar-gutter: stable;
 }
 
-/* 히스토리 사이드바 전용 스크롤바 */
+/* Firefox에서 스크롤바 호버 효과 (CSS 변수 활용) */
+html {
+  --scrollbar-thumb: #00e6b4;
+  --scrollbar-track: rgba(26, 31, 44, 0.8);
+}
+
+html:hover {
+  --scrollbar-thumb: #6c5ce7;
+}
+
+body:not(.no-custom-scrollbar),
+.custom-scrollbar {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* 🎭 히스토리 사이드바 전용 재밌는 스크롤바 */
 .history-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  background: transparent;
 }
 
 .history-scrollbar::-webkit-scrollbar-track {
-  background: #242a38;
-  border-radius: 3px;
+  background: rgba(36, 42, 56, 0.6);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 230, 180, 0.2);
+  backdrop-filter: blur(5px);
+  position: relative;
+  overflow: hidden;
+}
+
+.history-scrollbar::-webkit-scrollbar-track::before {
+  content: '✨';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  opacity: 0.3;
+  animation: scrollbar-pulse 4s infinite;
 }
 
 .history-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #00e6b4 0%, #6c5ce7 100%);
-  border-radius: 3px;
-  border: 1px solid #2a3142;
+  background: linear-gradient(180deg, 
+    #00e6b4 0%, 
+    #4ecdc4 25%,
+    #6c5ce7 50%,
+    #a29bfe 75%,
+    #fd79a8 100%
+  );
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 0 10px rgba(0, 230, 180, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.history-scrollbar::-webkit-scrollbar-thumb::before {
+  content: '🎵';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .history-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #6c5ce7 0%, #00e6b4 100%);
+  background: linear-gradient(180deg, 
+    #fd79a8 0%, 
+    #fdcb6e 25%,
+    #6c5ce7 50%,
+    #74b9ff 75%,
+    #00e6b4 100%
+  );
+  transform: scaleX(1.3);
+  box-shadow: 
+    0 0 15px rgba(108, 92, 231, 0.5),
+    0 0 25px rgba(0, 230, 180, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.history-scrollbar::-webkit-scrollbar-thumb:hover::before {
+  opacity: 0.7;
+  animation: bounce-gentle 1s infinite;
+}
+
+/* 스크롤 중일 때 특별한 효과 */
+.history-scrollbar.scrolling::-webkit-scrollbar-thumb {
+  animation: scrollbar-rainbow 3s infinite;
+  box-shadow: 
+    0 0 20px rgba(0, 230, 180, 0.6),
+    0 0 30px rgba(108, 92, 231, 0.4);
+}
+
+/* 히스토리 사이드바 모바일 overflow 방지 */
+@media (max-width: 768px) {
+  [data-history-sidebar="true"] {
+    overflow: hidden !important;
+    max-width: 100vw !important;
+    width: 100vw !important;
+  }
+
+  [data-history-sidebar="true"] * {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    max-width: 100% !important;
+  }
+
+  [data-history-sidebar="true"] .truncate {
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+  }
+
+  [data-history-sidebar="true"] .whitespace-nowrap {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
 }
 
 /* Custom animations for professional UI */
@@ -206,5 +633,725 @@
   }
   50% {
     box-shadow: 0 0 50px rgba(108, 92, 231, 0.8), 0 20px 40px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* CustomDateTimePicker 애니메이션 */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-mint {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 230, 180, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(0, 230, 180, 0);
+  }
+}
+
+@keyframes bounce-gentle {
+  0%,
+  20%,
+  50%,
+  80%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-2px);
+  }
+  60% {
+    transform: translateY(-1px);
+  }
+}
+
+/* 모바일 달력 모달 애니메이션 */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out forwards;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s ease-in forwards;
+}
+
+/* 모바일 터치 최적화 */
+@media (hover: none) and (pointer: coarse) {
+  .mobile-optimized {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* 채팅창 유연한 높이 스타일 */
+.chat-container-flexible {
+  height: clamp(350px, 70vh, 600px);
+  display: flex;
+  flex-direction: column;
+  min-height: 350px;
+  max-height: 80vh;
+}
+
+.chat-messages-area {
+  flex: 1;
+  min-height: 0; /* flexbox에서 overflow가 제대로 작동하도록 */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 작은 화면에서 더 큰 채팅창 */
+@media (max-width: 768px) {
+  .chat-container-flexible {
+    height: clamp(400px, 65vh, 600px);
+    min-height: 400px;
+    max-height: 75vh;
+  }
+}
+
+/* 중간 화면 최적화 */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .chat-container-flexible {
+    height: clamp(400px, 65vh, 550px);
+    min-height: 400px;
+    max-height: 70vh;
+  }
+}
+
+/* 큰 화면에서 더 여유롭게 */
+@media (min-width: 1200px) {
+  .chat-container-flexible {
+    height: clamp(450px, 75vh, 700px);
+    min-height: 450px;
+    max-height: 85vh;
+  }
+}
+
+/* 매우 큰 화면 (4K 등) */
+@media (min-width: 1920px) {
+  .chat-container-flexible {
+    height: clamp(500px, 80vh, 800px);
+    min-height: 500px;
+    max-height: 90vh;
+  }
+}
+
+/* 가로 모드 모바일 최적화 - 더 큰 채팅창 */
+@media (max-width: 768px) and (orientation: landscape) {
+  .chat-container-flexible {
+    height: clamp(300px, 70vh, 450px);
+    min-height: 300px;
+    max-height: 80vh;
+  }
+}
+
+/* ScrollArea 최적화 */
+.chat-messages-area [data-radix-scroll-area-viewport] {
+  height: 100% !important;
+  max-height: 100% !important;
+}
+
+.chat-messages-area [data-radix-scroll-area-content] {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+/* 히스토리 사이드바 모바일 overflow 방지 */
+@media (max-width: 768px) {
+  [data-history-sidebar="true"] {
+    overflow: hidden !important;
+    max-width: 100vw !important;
+    width: 100vw !important;
+  }
+
+  [data-history-sidebar="true"] * {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    max-width: 100% !important;
+  }
+
+  [data-history-sidebar="true"] .truncate {
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+  }
+
+  [data-history-sidebar="true"] .whitespace-nowrap {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+}
+
+/* 🎮 재밌는 스크롤바 테마 클래스들 */
+/* 네온 사이버펑크 테마 */
+.scrollbar-cyberpunk::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, 
+    #ff00ff 0%, 
+    #00ffff 25%,
+    #ffff00 50%,
+    #ff00ff 75%,
+    #00ffff 100%
+  );
+  box-shadow: 
+    0 0 20px #ff00ff,
+    0 0 30px #00ffff,
+    inset 0 0 10px rgba(255, 255, 255, 0.2);
+  animation: scrollbar-rainbow 2s infinite;
+}
+
+.scrollbar-cyberpunk::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid #ff00ff;
+  box-shadow: 
+    inset 0 0 10px #ff00ff,
+    0 0 15px rgba(255, 0, 255, 0.3);
+}
+
+/* 우주 갤럭시 테마 */
+.scrollbar-galaxy::-webkit-scrollbar-thumb {
+  background: 
+    radial-gradient(circle at 20% 80%, #ff6b9d 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, #c44569 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, #f8b500 0%, transparent 50%),
+    linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  animation: scrollbar-glow 3s infinite;
+}
+
+.scrollbar-galaxy::-webkit-scrollbar-track {
+  background: 
+    radial-gradient(2px 2px at 20px 30px, #fff, transparent),
+    radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1px 1px at 90px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.8), transparent),
+    #0f0f23;
+}
+
+/* 무지개 파티 테마 */
+.scrollbar-party::-webkit-scrollbar-thumb {
+  background: conic-gradient(
+    #ff0080, #ff8c00, #ffd700, #00ff00, 
+    #00bfff, #8a2be2, #ff1493, #ff0080
+  );
+  animation: scrollbar-rainbow 1s infinite linear;
+  border-radius: 20px;
+}
+
+.scrollbar-party::-webkit-scrollbar-thumb:hover {
+  animation: 
+    scrollbar-rainbow 0.5s infinite linear,
+    scrollbar-glow 1s infinite;
+  transform: scale(1.2) rotate(360deg);
+  transition: transform 0.5s ease;
+}
+
+/* 미니멀 엘레간트 테마 */
+.scrollbar-elegant::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-elegant::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, 
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.scrollbar-elegant::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+/* 게이머 테마 */
+.scrollbar-gamer::-webkit-scrollbar-thumb {
+  background: 
+    linear-gradient(45deg, 
+      #00ff41 0%, 
+      #00d4aa 25%,
+      #ff6b35 50%,
+      #f7931e 75%,
+      #00ff41 100%
+    );
+  border: 2px solid #000;
+  box-shadow: 
+    0 0 10px #00ff41,
+    inset 0 0 5px rgba(0, 255, 65, 0.3);
+}
+
+.scrollbar-gamer::-webkit-scrollbar-track {
+  background: 
+    repeating-linear-gradient(
+      45deg,
+      #1a1a1a 0px,
+      #1a1a1a 2px,
+      #2a2a2a 2px,
+      #2a2a2a 4px
+    );
+  border: 1px solid #00ff41;
+}
+
+/* 🎪 스크롤 이벤트 기반 애니메이션 */
+@keyframes scrollbar-celebration {
+  0% { 
+    background: conic-gradient(#00e6b4, #4ecdc4, #96ceb4, #6c5ce7, #a29bfe, #74b9ff, #fd79a8, #00e6b4);
+    transform: scale(1) rotate(0deg);
+  }
+  25% { 
+    transform: scale(1.1) rotate(90deg);
+  }
+  50% { 
+    background: conic-gradient(#74b9ff, #fd79a8, #00e6b4, #4ecdc4, #96ceb4, #6c5ce7, #a29bfe, #74b9ff);
+    transform: scale(1.2) rotate(180deg);
+  }
+  75% { 
+    transform: scale(1.1) rotate(270deg);
+  }
+  100% { 
+    background: conic-gradient(#00e6b4, #4ecdc4, #96ceb4, #6c5ce7, #a29bfe, #74b9ff, #fd79a8, #00e6b4);
+    transform: scale(1) rotate(360deg);
+  }
+}
+
+/* 스크롤 속도에 따른 이펙트 */
+.fast-scroll::-webkit-scrollbar-thumb {
+  animation: scrollbar-celebration 0.5s infinite;
+  box-shadow: 
+    0 0 30px rgba(0, 230, 180, 0.8),
+    0 0 40px rgba(108, 92, 231, 0.6),
+    0 0 50px rgba(116, 185, 255, 0.4);
+}
+
+/* 모바일 터치 스크롤 효과 */
+@media (hover: none) and (pointer: coarse) {
+  /* 모바일에서도 스크롤바 강제 표시 */
+  :not(.no-custom-scrollbar)::-webkit-scrollbar {
+    width: 8px !important;
+    height: 8px !important;
+    background: transparent !important;
+    display: block !important;
+  }
+
+  :not(.no-custom-scrollbar)::-webkit-scrollbar-track {
+    background: rgba(26, 31, 44, 0.6) !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(0, 230, 180, 0.2) !important;
+    backdrop-filter: blur(5px) !important;
+  }
+
+  :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, 
+      #00e6b4 0%, 
+      #4ecdc4 50%, 
+      #96ceb4 100%
+    ) !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 
+      0 0 10px rgba(0, 230, 180, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+    min-height: 30px !important; /* 터치하기 쉽도록 최소 높이 설정 */
+  }
+
+  /* 모바일에서 호버 대신 터치 활성화 효과 */
+  :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, 
+      #6c5ce7 0%, 
+      #a29bfe 25%,
+      #74b9ff 50%,
+      #fd79a8 75%,
+      #e84393 100%
+    ) !important;
+    transform: scale(1.1) !important;
+    box-shadow: 
+      0 0 15px rgba(108, 92, 231, 0.6),
+      0 0 25px rgba(162, 155, 254, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+  }
+
+  .mobile-scroll::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, 
+      #00e6b4 0%, 
+      #4ecdc4 50%, 
+      #96ceb4 100%
+    ) !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  }
+  
+  .mobile-scroll::-webkit-scrollbar-track {
+    background: rgba(26, 31, 44, 0.6) !important;
+    border-radius: 8px !important;
+  }
+}
+
+/* 🎨 계절별 테마 */
+/* 봄 테마 */
+.scrollbar-spring::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom,
+    #ff9a9e 0%,  /* 벚꽃 */
+    #a8e6cf 25%, /* 새순 */
+    #ffd3a5 50%, /* 따뜻한 햇살 */
+    #fd9853 75%, /* 꽃잎 */
+    #ff9a9e 100%
+  );
+}
+
+/* 여름 테마 */
+.scrollbar-summer::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom,
+    #4facfe 0%,  /* 파란 하늘 */
+    #00f2fe 25%, /* 시원한 바다 */
+    #ffd89b 50%, /* 태양 */
+    #19547b 75%, /* 깊은 바다 */
+    #4facfe 100%
+  );
+}
+
+/* 가을 테마 */
+.scrollbar-autumn::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom,
+    #d299c2 0%,  /* 코스모스 */
+    #fef9d7 25%, /* 황금 들판 */
+    #d69e2e 50%, /* 단풍 */
+    #c53030 75%, /* 빨간 단풍 */
+    #d299c2 100%
+  );
+}
+
+/* 겨울 테마 */
+.scrollbar-winter::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom,
+    #e0eafc 0%,  /* 눈 */
+    #cfdef3 25%, /* 서리 */
+    #a8edea 50%, /* 얼음 */
+    #fed6e3 75%, /* 겨울 석양 */
+    #e0eafc 100%
+  );
+}
+
+/* 🌟 동적 스크롤바 효과를 위한 CSS 변수 */
+:root {
+  --dynamic-scrollbar-color: #00e6b4;
+  --scrollbar-celebration-speed: 2s;
+}
+
+/* 동적 색상 변수를 사용하는 스크롤바 */
+.dynamic-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, 
+    var(--dynamic-scrollbar-color) 0%, 
+    color-mix(in srgb, var(--dynamic-scrollbar-color) 80%, #ffffff 20%) 50%,
+    var(--dynamic-scrollbar-color) 100%
+  );
+  transition: background 0.3s ease;
+}
+
+/* 스크롤 중일 때의 특별한 효과 */
+.scrolling {
+  --scrollbar-celebration-speed: 1s;
+}
+
+.scrolling .history-scrollbar::-webkit-scrollbar-thumb {
+  animation: scrollbar-rainbow var(--scrollbar-celebration-speed) infinite;
+  box-shadow: 
+    0 0 20px rgba(0, 230, 180, 0.6),
+    0 0 30px rgba(108, 92, 231, 0.4);
+}
+
+/* 축하 모드 */
+.scrollbar-celebration::-webkit-scrollbar-thumb {
+  animation: scrollbar-celebration 0.5s infinite;
+  box-shadow: 
+    0 0 30px rgba(0, 230, 180, 0.8),
+    0 0 40px rgba(108, 92, 231, 0.6),
+    0 0 50px rgba(116, 185, 255, 0.4),
+    0 0 60px rgba(253, 121, 168, 0.3);
+}
+
+/* 🎵 스크롤바 음악 시각화 효과 */
+@keyframes scrollbar-beat {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.3); }
+}
+
+.scrollbar-music::-webkit-scrollbar-thumb {
+  animation: scrollbar-beat 0.5s infinite;
+}
+
+/* 🎆 특별한 날을 위한 축제 스크롤바 */
+.scrollbar-fireworks::-webkit-scrollbar-track {
+  background: 
+    radial-gradient(circle at 10% 20%, rgba(0, 230, 180, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(108, 92, 231, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(116, 185, 255, 0.3) 0%, transparent 50%),
+    #0a0a0a;
+  animation: scrollbar-pulse 2s infinite;
+}
+
+.scrollbar-fireworks::-webkit-scrollbar-thumb {
+  background: conic-gradient(
+    from 0deg,
+    #00e6b4, #4ecdc4, #96ceb4, #6c5ce7, 
+    #a29bfe, #74b9ff, #fd79a8, #e84393,
+    #6c5ce7, #a29bfe, #00e6b4, #4ecdc4
+  );
+  animation: scrollbar-celebration 1s infinite linear;
+}
+
+/* 🌊 물결 효과 스크롤바 */
+@keyframes scrollbar-wave {
+  0% { clip-path: polygon(0% 100%, 100% 100%, 100% 80%, 0% 60%); }
+  25% { clip-path: polygon(0% 100%, 100% 100%, 100% 60%, 0% 80%); }
+  50% { clip-path: polygon(0% 100%, 100% 100%, 100% 80%, 0% 40%); }
+  75% { clip-path: polygon(0% 100%, 100% 100%, 100% 40%, 0% 60%); }
+  100% { clip-path: polygon(0% 100%, 100% 100%, 100% 80%, 0% 60%); }
+}
+
+.scrollbar-wave::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #0f7ddb, #42a5f5, #81c784);
+  animation: scrollbar-wave 3s infinite ease-in-out;
+}
+
+/* 💎 다이아몬드 패턴 스크롤바 */
+.scrollbar-diamond::-webkit-scrollbar-track {
+  background: 
+    repeating-conic-gradient(
+      from 0deg at 50% 50%,
+      #2a2a2a 0deg 45deg,
+      #3a3a3a 45deg 90deg,
+      #2a2a2a 90deg 135deg,
+      #3a3a3a 135deg 180deg
+    );
+}
+
+.scrollbar-diamond::-webkit-scrollbar-thumb {
+  background: 
+    linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.3) 50%, transparent 70%),
+    linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+}
+
+/* 🔥 불꽃 효과 스크롤바 */
+@keyframes scrollbar-fire {
+  0%, 100% { 
+    background: linear-gradient(to top, #ff4500 0%, #ffa500 50%, #ffff00 100%);
+    transform: scaleY(1);
+  }
+  25% { 
+    background: linear-gradient(to top, #ff6500 0%, #ff8500 50%, #ffff20 100%);
+    transform: scaleY(1.1);
+  }
+  50% { 
+    background: linear-gradient(to top, #ff8500 0%, #ffb500 50%, #ffff40 100%);
+    transform: scaleY(1.2);
+  }
+  75% { 
+    background: linear-gradient(to top, #ff6500 0%, #ff9500 50%, #ffff30 100%);
+    transform: scaleY(1.1);
+  }
+}
+
+.scrollbar-fire::-webkit-scrollbar-thumb {
+  animation: scrollbar-fire 1s infinite;
+  box-shadow: 
+    0 0 10px #ff4500,
+    0 0 20px #ffa500,
+    0 0 30px #ffff00;
+}
+
+/* 🌈 프라이드 플래그 스크롤바 */
+.scrollbar-pride::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom,
+    #e40303 0%,   /* 빨강 */
+    #ff8c00 16.67%, /* 주황 */
+    #ffed00 33.33%, /* 노랑 */
+    #008018 50%,    /* 초록 */
+    #0066ff 66.67%, /* 파랑 */
+    #732982 83.33%, /* 남색 */
+    #e40303 100%    /* 보라 */
+  );
+  border-radius: 0; /* 플래그 느낌을 위해 각진 모서리 */
+}
+
+.scrollbar-pride::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 🔍 헤더 아이콘 디버깅용 임시 스타일 */
+.no-custom-scrollbar .lucide {
+  background-color: rgba(255, 0, 0, 0.2) !important;
+  border: 1px solid #ff0000 !important;
+  padding: 2px !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+}
+
+/* 헤더 버튼 디버깅 */
+.no-custom-scrollbar button {
+  border: 1px solid rgba(0, 255, 0, 0.3) !important;
+  background-color: rgba(0, 255, 0, 0.1) !important;
+}
+
+/* SVG 아이콘 강제 표시 */
+.no-custom-scrollbar svg {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}
+
+/* 모바일 디바이스에서 스크롤바가 확실히 보이도록 강화된 CSS 추가 */
+/* 모바일 디바이스에서 스크롤바 강제 표시 - 최종 강화 버전 */
+@media screen and (max-width: 768px) {
+  body.mobile-scrollbar-enabled,
+  body.mobile-scrollbar-enabled * {
+    scrollbar-width: thick !important;
+    scrollbar-color: #00e6b4 rgba(26, 31, 44, 1) !important;
+  }
+  
+  body.mobile-scrollbar-enabled *::-webkit-scrollbar {
+    width: 20px !important;
+    height: 20px !important;
+    -webkit-appearance: none !important;
+    background: rgba(26, 31, 44, 1) !important;
+    border-radius: 10px !important;
+    display: block !important;
+    opacity: 1 !important;
+    position: relative !important;
+    z-index: 999999 !important;
+  }
+  
+  body.mobile-scrollbar-enabled *::-webkit-scrollbar-track {
+    background: rgba(26, 31, 44, 1) !important;
+    border-radius: 10px !important;
+    border: 3px solid rgba(0, 230, 180, 0.7) !important;
+    display: block !important;
+    opacity: 1 !important;
+  }
+  
+  body.mobile-scrollbar-enabled *::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, 
+      #00e6b4 0%, 
+      #4ecdc4 30%, 
+      #96ceb4 60%,
+      #00e6b4 100%
+    ) !important;
+    border-radius: 7px !important;
+    border: 4px solid rgba(255, 255, 255, 0.8) !important;
+    min-height: 80px !important;
+    box-shadow: 
+      0 0 15px rgba(0, 230, 180, 0.8),
+      inset 0 0 10px rgba(255, 255, 255, 0.3) !important;
+    display: block !important;
+    opacity: 1 !important;
+  }
+  
+  body.mobile-scrollbar-enabled *::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, 
+      #ffffff 0%, 
+      #f1f5f9 25%,
+      #e2e8f0 50%,
+      #cbd5e1 75%,
+      #94a3b8 100%
+    ) !important;
+    box-shadow: 
+      0 0 20px rgba(255, 255, 255, 1),
+      inset 0 0 15px rgba(0, 230, 180, 0.5) !important;
+  }
+}
+
+/* 터치 디바이스 전용 강화 */
+@media (hover: none) and (pointer: coarse) and (max-width: 768px) {
+  body.mobile-scrollbar-enabled *::-webkit-scrollbar {
+    width: 22px !important;
+    height: 22px !important;
+    background: linear-gradient(90deg, 
+      rgba(26, 31, 44, 1) 0%, 
+      rgba(30, 35, 50, 1) 50%,
+      rgba(26, 31, 44, 1) 100%) !important;
+  }
+  
+  body.mobile-scrollbar-enabled *::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, 
+      #00e6b4 0%, 
+      #4ecdc4 25%, 
+      #96ceb4 50%,
+      #4ecdc4 75%,
+      #00e6b4 100%
+    ) !important;
+    border: 5px solid rgba(255, 255, 255, 0.9) !important;
+    min-height: 100px !important;
+    box-shadow: 
+      0 0 25px rgba(0, 230, 180, 1),
+      inset 0 0 15px rgba(255, 255, 255, 0.4),
+      0 5px 15px rgba(0, 0, 0, 0.3) !important;
+  }
+}
+
+/* Android Chrome 전용 */
+@media screen and (-webkit-min-device-pixel-ratio: 1) and (max-width: 768px) {
+  body.mobile-scrollbar-enabled *::-webkit-scrollbar {
+    width: 24px !important;
+    background: #1a1f2c !important;
+    border: 2px solid #00e6b4 !important;
+  }
+  
+  body.mobile-scrollbar-enabled *::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, 
+      #00e6b4 0%, 
+      #4ecdc4 50%, 
+      #96ceb4 100%
+    ) !important;
+    border-radius: 12px !important;
+    border: 6px solid rgba(255, 255, 255, 1) !important;
+    min-height: 120px !important;
+    box-shadow: 
+      0 0 30px rgba(0, 230, 180, 1),
+      inset 0 0 20px rgba(255, 255, 255, 0.5) !important;
   }
 }

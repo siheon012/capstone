@@ -12,7 +12,7 @@ export type HistoryItem = {
     duration: number
     url: string
   }
-  eventType?: "도난" | "쓰러짐" | "폭행" | null // 주요 사건 타입 추가
+  eventType?: "theft" | "collapse" | "violence" | null // 주요 사건 타입 추가
 }
 
 export type HistoryResponse = {

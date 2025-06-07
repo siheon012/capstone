@@ -72,6 +72,65 @@ class VideoViewSet(viewsets.ModelViewSet):
 class EventViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.all()
     serializer_class = EventSerializer
+    
+    def get_queryset(self):
+        queryset = Event.objects.all()
+        video = self.request.query_params.get('video', None)
+        event_type = self.request.query_params.get('event_type', None)
+        
+        if video is not None:
+            queryset = queryset.filter(video_id=video)
+        if event_type is not None:
+            queryset = queryset.filter(event_type__icontains=event_type)
+            
+        return queryset.order_by('timestamp')
+    
+    @action(detail=False, methods=['get'], url_path='video-stats')
+    def video_stats(self, request):
+        """비디오별 이벤트 타입 통계"""
+        video_id = request.query_params.get('video_id')
+        if not video_id:
+            return Response(
+                {'error': 'video_id 파라미터가 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # 해당 비디오의 이벤트들을 이벤트 타입별로 그룹화하여 카운트
+            from django.db.models import Count
+            
+            event_stats = (
+                Event.objects
+                .filter(video_id=video_id)
+                .values('event_type')
+                .annotate(count=Count('event_type'))
+                .order_by('-count')
+            )
+            
+            if not event_stats:
+                return Response({
+                    'video_id': video_id,
+                    'most_frequent_event': None,
+                    'stats': []
+                })
+            
+            # 가장 많이 발생한 이벤트 타입
+            most_frequent = event_stats[0]
+            
+            return Response({
+                'video_id': video_id,
+                'most_frequent_event': {
+                    'event_type': most_frequent['event_type'],
+                    'count': most_frequent['count']
+                },
+                'stats': list(event_stats)
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'통계 조회 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class PromptSessionViewSet(viewsets.ModelViewSet):
     queryset = PromptSession.objects.all()

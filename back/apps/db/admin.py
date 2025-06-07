@@ -19,7 +19,7 @@ class EventAdmin(admin.ModelAdmin):
 class PromptSessionAdmin(admin.ModelAdmin):
     list_display = ['session_id', 'video', 'interaction_count', 'created_at', 'updated_at']
     list_filter = ['created_at', 'updated_at']
-    search_fields = ['first_prompt', 'last_response']
+    search_fields = ['first_prompt', 'first_response']
     raw_id_fields = ['video', 'main_event']
     readonly_fields = ['created_at', 'updated_at']
 

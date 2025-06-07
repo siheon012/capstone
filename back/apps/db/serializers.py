@@ -16,6 +16,8 @@ class VideoSerializer(serializers.ModelSerializer):
 
 class EventSerializer(serializers.ModelSerializer):
     timestamp_display = serializers.ReadOnlyField()
+    absolute_time = serializers.ReadOnlyField()
+    absolute_time_display = serializers.ReadOnlyField()
     
     class Meta:
         model = Event
@@ -25,10 +27,31 @@ class PromptSessionSerializer(serializers.ModelSerializer):
     display_title = serializers.ReadOnlyField()
     timeline_summary = serializers.ReadOnlyField()
     main_event_display = serializers.ReadOnlyField()
+    main_event = EventSerializer(read_only=True)  # Event 정보를 포함하여 반환
+    video = VideoSerializer(read_only=True)  # Video 정보를 포함하여 반환
+    detected_events = serializers.SerializerMethodField()  # 프롬프트에서 찾은 이벤트들
     
     class Meta:
         model = PromptSession
         fields = '__all__'
+    
+    def get_detected_events(self, obj):
+        """세션의 모든 프롬프트 인터랙션에서 찾은 이벤트들을 반환"""
+        detected_events = []
+        interactions = obj.interactions.filter(detected_event__isnull=False).select_related('detected_event')
+        
+        for interaction in interactions:
+            if interaction.detected_event:
+                event_info = {
+                    'event_type': interaction.detected_event.event_type,
+                    'action_detected': interaction.detected_event.action_detected,
+                    'timestamp': interaction.detected_event.timestamp,
+                    'location': interaction.detected_event.location,
+                    'prompt': interaction.input_prompt[:100] + '...' if len(interaction.input_prompt) > 100 else interaction.input_prompt  # 프롬프트 일부만 포함
+                }
+                detected_events.append(event_info)
+        
+        return detected_events
 
 class PromptInteractionSerializer(serializers.ModelSerializer):
     interaction_number = serializers.ReadOnlyField()

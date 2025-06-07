@@ -36,7 +36,7 @@ export async function getHistoryList(): Promise<HistoryResponse> {
           duration: 3600,
           url: "/videos/parking_lot.mp4",
         },
-        eventType: "도난",
+        eventType: "theft",
       },
       {
         id: "2",
@@ -56,7 +56,7 @@ export async function getHistoryList(): Promise<HistoryResponse> {
           { role: "user", content: "야간에 사무실에 누가 있었나요?" },
           { role: "assistant", content: "22:45에 청소 직원이 입장했습니다.", timestamp: 2700 },
         ],
-        eventType: "쓰러짐",
+        eventType: "collapse",
       },
       {
         id: "4",
@@ -66,7 +66,7 @@ export async function getHistoryList(): Promise<HistoryResponse> {
           { role: "user", content: "연기나 화재 징후가 있었나요?" },
           { role: "assistant", content: "16:20에 연기가 감지되었습니다.", timestamp: 1180 },
         ],
-        eventType: "폭행",
+        eventType: "violence",
       },
       {
         id: "5",
@@ -76,7 +76,7 @@ export async function getHistoryList(): Promise<HistoryResponse> {
           { role: "user", content: "매장에서 이상한 행동이 있었나요?" },
           { role: "assistant", content: "11:15에 의심스러운 행동이 감지되었습니다.", timestamp: 675 },
         ],
-        eventType: "도난",
+        eventType: "theft",
       },
     ]
 

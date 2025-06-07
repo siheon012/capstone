@@ -22,11 +22,14 @@ import DynamicHistorySidebar from '@/components/dynamic-history-sidebar';
 import DraggableTooltip from '@/components/draggable-tooltip';
 import ToastNotification, { type Toast } from '@/components/toast-notification';
 import VideoMinimap from '@/components/video-minimap';
+import EventTimeline from '@/components/event-timeline';
 import type { ChatSession } from '@/app/types/session';
 import { getUploadedVideos } from '@/app/actions/video-service';
+import { getSession } from '@/app/actions/session-service';
+import { sendMessage } from '@/app/actions/ai-service';
 import type { UploadedVideo } from '@/app/types/video';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import SmartHeader from '@/components/smart-header';
 import {
   getVideoMetadataFromUrl,
@@ -36,7 +39,9 @@ import {
 
 export default function CCTVAnalysis() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const videoId = params.videoId as string;
+  const sessionId = searchParams.get('sessionId');
 
   const [video, setVideo] = useState<UploadedVideo | null>(null);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
@@ -96,10 +101,13 @@ export default function CCTVAnalysis() {
       setIsAnalyzing(true);
       setAnalysisProgress(0);
 
+      // sessionId가 있으면 기존 세션을 가져오는 메시지, 없으면 새 영상 로드 메시지
       setMessages([
         {
           role: 'assistant',
-          content: '영상 로드 중... 기존 세션을 가져오고 있습니다.',
+          content: sessionId 
+            ? '영상 로드 중... 기존 세션을 가져오고 있습니다.'
+            : '영상을 업로드 중입니다. 잠시만 기다려주세요.',
         },
       ]);
 
@@ -175,9 +183,18 @@ export default function CCTVAnalysis() {
                   setMessages([
                     {
                       role: 'assistant',
-                      content: `"${foundVideo.name}" 영상이 로드되었습니다. 영상 내용에 대해 질문할 수 있습니다.`,
+                      content: sessionId 
+                        ? `"${foundVideo.name}" 영상이 로드되었습니다. 기존 대화를 불러오고 있습니다.`
+                        : `"${foundVideo.name}" 영상이 로드되었습니다. 영상 내용에 대해 질문할 수 있습니다.`,
                     },
                   ]);
+
+                  // 세션 ID가 있으면 세션 데이터 로드
+                  if (sessionId) {
+                    setTimeout(() => {
+                      loadSessionData(sessionId);
+                    }, 500);
+                  }
                 }, 500);
 
                 return 100;
@@ -203,6 +220,79 @@ export default function CCTVAnalysis() {
       setLoading(false); // 로딩 상태 해제 추가
     }
   };
+
+  // 세션 로딩 함수 추가
+  const loadSessionData = async (sessionId: string) => {
+    try {
+      console.log('[LoadSession] Loading session data for:', sessionId);
+      const sessionData = await getSession(sessionId);
+
+      if (sessionData) {
+        console.log('[LoadSession] Session data loaded:', sessionData);
+
+        // 기존 메시지에 세션 메시지들을 추가
+        setMessages((prevMessages) => {
+          // 현재 마지막 메시지가 "영상이 로드되었습니다" 메시지인 경우
+          const lastMessage = prevMessages[prevMessages.length - 1];
+
+          if (lastMessage && lastMessage.content.includes('영상이 로드되었습니다')) {
+            // 세션 메시지들을 추가
+            const sessionMessages = sessionData.messages || [];
+            return [...prevMessages, ...sessionMessages];
+          } else {
+            // 다른 경우에는 세션 메시지들로 교체
+            return sessionData.messages || [];
+          }
+        });
+
+        // 세션 정보 설정
+        setCurrentSession(sessionData);
+
+        // 타임스탬프 마커 복원
+        const timestamps = (sessionData.messages || [])
+          .filter((msg: any) => msg.timestamp)
+          .map((msg: any) => msg.timestamp!);
+        setTimeMarkers(timestamps);
+
+        addToast({
+          type: 'success',
+          title: '세션 로드 완료',
+          message: '기존 대화 내용을 불러왔습니다.',
+          duration: 3000,
+        });
+      } else {
+        console.warn('[LoadSession] Session not found or failed to load');
+        addToast({
+          type: 'warning',
+          title: '세션 로드',
+          message: '기존 세션을 찾을 수 없습니다.',
+          duration: 2000,
+        });
+      }
+    } catch (error) {
+      console.error('[LoadSession] Error loading session:', error);
+      addToast({
+        type: 'error',
+        title: '세션 로드 실패',
+        message: '기존 세션을 불러오는 중 오류가 발생했습니다.',
+        duration: 3000,
+      });
+    }
+  };
+
+  // sessionId가 있을 때 세션 로드 - loadVideoFromId에서 직접 처리하므로 비활성화
+  /*
+  useEffect(() => {
+    if (sessionId && !isAnalyzing) {
+      // 영상 로드가 완료된 후에 세션 로드
+      const timer = setTimeout(() => {
+        loadSessionData(sessionId);
+      }, 1000); // 영상 로드 완료 메시지가 표시된 후 1초 대기
+
+      return () => clearTimeout(timer);
+    }
+  }, [sessionId, isAnalyzing]);
+  */
 
   // loadVideoData 함수 전체를 제거하거나 주석 처리
 
@@ -294,8 +384,10 @@ export default function CCTVAnalysis() {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (inputMessage.trim()) {
-      const userMessage = inputMessage;
+      const userMessage = inputMessage.trim();
+      setInputMessage(''); // 입력 필드 즉시 클리어
 
+      // 사용자 메시지 추가
       setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
 
       addToast({
@@ -305,29 +397,74 @@ export default function CCTVAnalysis() {
         duration: 2000,
       });
 
-      setTimeout(() => {
-        const randomTimestamp = Math.random() * (duration || 60);
-        setTimeMarkers((prev) => [...prev, randomTimestamp]);
+      try {
+        // AI 서비스를 통해 실제 응답 받기
+        const response = await sendMessage(
+          userMessage,
+          videoId,
+          currentSession?.id || null
+        );
 
-        const assistantMessage = {
+        if (response.success && response.reply) {
+          // AI 응답 메시지 추가
+          const assistantMessage = {
+            role: 'assistant' as const,
+            content: response.reply,
+            timestamp: response.timestamp,
+          };
+
+          setMessages((prev) => [...prev, assistantMessage]);
+
+          // 타임스탬프가 있으면 마커에 추가
+          if (response.timestamp) {
+            setTimeMarkers((prev) => [...prev, response.timestamp!]);
+          }
+
+          // 새 세션이 생성된 경우 현재 세션 업데이트
+          if (response.session) {
+            setCurrentSession(response.session);
+          }
+
+          addToast({
+            type: 'success',
+            title: '분석 완료',
+            message: 'AI 분석이 완료되었습니다.',
+            duration: 3000,
+          });
+        } else {
+          // 에러 응답 처리
+          const errorMessage = {
+            role: 'assistant' as const,
+            content: response.error || '응답을 생성하는 중 오류가 발생했습니다.',
+          };
+
+          setMessages((prev) => [...prev, errorMessage]);
+
+          addToast({
+            type: 'error',
+            title: '분석 실패',
+            message: response.error || 'AI 분석 중 오류가 발생했습니다.',
+            duration: 3000,
+          });
+        }
+      } catch (error) {
+        console.error('Send message error:', error);
+        
+        // 에러 시 기본 응답 추가
+        const errorMessage = {
           role: 'assistant' as const,
-          content: `영상 내용을 분석했습니다. ${formatTime(
-            randomTimestamp
-          )} 시점에서 관련 정보를 찾았습니다.`,
-          timestamp: randomTimestamp,
+          content: '죄송합니다. 현재 서비스에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.',
         };
 
-        setMessages((prev) => [...prev, assistantMessage]);
+        setMessages((prev) => [...prev, errorMessage]);
 
         addToast({
-          type: 'success',
-          title: '분석 완료',
-          message: 'AI 분석이 완료되었습니다.',
+          type: 'error',
+          title: '연결 오류',
+          message: '서버와의 연결에 문제가 발생했습니다.',
           duration: 3000,
         });
-      }, 1000);
-
-      setInputMessage('');
+      }
     }
   };
 
@@ -490,7 +627,9 @@ export default function CCTVAnalysis() {
       <div className="min-h-screen bg-[#1a1f2c] text-gray-100 flex items-center justify-center">
         <div className="animate-pulse text-center">
           <div className="w-16 h-16 bg-[#00e6b4] rounded-full mx-auto mb-4 animate-bounce"></div>
-          <p className="text-white text-lg">비디오 로딩 중...</p>
+          <p className="text-white text-lg">
+            {sessionId ? '기존 세션을 불러오는 중...' : '비디오 로딩 중...'}
+          </p>
         </div>
       </div>
     );
@@ -603,11 +742,13 @@ export default function CCTVAnalysis() {
                               </div>
                             </div>
                             <p className="text-white text-sm md:text-base font-medium mb-2">
-                              영상 로드 중...
+                              {sessionId ? '영상 로드 중...' : '영상 업로드 중...'}
                             </p>
                             <p className="text-gray-300 text-xs md:text-sm text-center px-4">
-                              기존 세션을 가져오고 있습니다. 잠시만
-                              기다려주세요.
+                              {sessionId 
+                                ? '기존 세션을 가져오고 있습니다. 잠시만 기다려주세요.'
+                                : '영상을 분석 중입니다. 잠시만 기다려주세요.'
+                              }
                             </p>
                           </div>
                         ) : null}
@@ -841,10 +982,31 @@ export default function CCTVAnalysis() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Event Timeline - 비디오 아래에 추가 */}
+                {videoSrc && video && (
+                  <Card className="bg-[#242a38] border-0 shadow-lg">
+                    <CardContent className="p-3 md:p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm md:text-base font-semibold text-white">
+                          이벤트 타임라인
+                        </h3>
+                        <span className="text-xs text-gray-400">
+                          실시간 이벤트 감지
+                        </span>
+                      </div>
+                      <EventTimeline 
+                        video={video}
+                        currentTime={currentTime}
+                        onSeekToEvent={seekToTime}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               <div className="order-2 lg:order-2">
-                <Card className="h-[60vh] lg:h-full bg-[#242a38] border-0 shadow-lg">
+                <Card className="h-[60vh] lg:h-full min-h-[400px] max-h-[80vh] bg-[#242a38] border-0 shadow-lg chat-container-flexible">
                   <CardContent className="p-2 md:p-4 flex flex-col h-full">
                     <div className="flex items-center justify-between mb-2 md:mb-4">
                       <div>
@@ -866,8 +1028,8 @@ export default function CCTVAnalysis() {
                       </Link>
                     </div>
 
-                    <div className="flex-1 overflow-hidden mb-2 md:mb-4 border border-[#2a3142] rounded-md">
-                      <ScrollArea className="h-[35vh] lg:h-[400px] pr-1 md:pr-2">
+                    <div className="flex-1 overflow-hidden mb-2 md:mb-4 border border-[#2a3142] rounded-md chat-messages-area">
+                      <ScrollArea className="h-full pr-1 md:pr-2">
                         <div className="space-y-2 md:space-y-4 p-2 md:p-4">
                           {messages.map((message, index) => (
                             <div

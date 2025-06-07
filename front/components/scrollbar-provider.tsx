@@ -48,8 +48,7 @@ export default function ScrollbarProvider({
       manager.setTheme('default');
     }
 
-    // 모바일 최적화
-    manager.enableMobileOptimization();
+    // 모바일 최적화 제거됨 - 모바일 브라우저에서 커스텀 스크롤바 지원이 제한적이므로
 
     // 특별한 날 체크 - default 테마가 아닐 때만
     if (theme !== 'default' && !autoSeasonal && !autoTimeBasedTheme) {

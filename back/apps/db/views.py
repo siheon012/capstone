@@ -5,6 +5,8 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 import os
 import json
 from datetime import datetime
@@ -14,10 +16,11 @@ from .serializers import (
     DepthDataSerializer, DisplayDataSerializer, DepthDataBulkCreateSerializer, DisplayDataBulkCreateSerializer
 )
 
+@method_decorator(csrf_exempt, name='dispatch')
 class VideoViewSet(viewsets.ModelViewSet):
     queryset = Video.objects.all()
     serializer_class = VideoSerializer
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     @action(detail=False, methods=['post'], url_path='upload')
     def upload_video(self, request):
@@ -38,10 +41,10 @@ class VideoViewSet(viewsets.ModelViewSet):
                 )
             
             # 파일 크기 제한
-            max_size = 2 * 1024 * 1024 * 1024 * 512
+            max_size = 5 * 1024 * 1024 * 1024
             if video_file.size > max_size:
                 return Response(
-                    {'error': '파일 크기는 2GB를 초과할 수 없습니다.'},
+                    {'error': '파일 크기는 5GB를 초과할 수 없습니다.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -68,10 +71,99 @@ class VideoViewSet(viewsets.ModelViewSet):
                 {'error': f'업로드 중 오류가 발생했습니다: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
+    @action(detail=True, methods=['patch'], url_path='update-progress')
+    def update_analysis_progress(self, request, pk=None):
+        """분석 모델에서 진행률 업데이트를 위한 API"""
+        try:
+            video = self.get_object()
+            progress = request.data.get('progress')
+            analysis_status = request.data.get('status', 'processing')
+            
+            # 진행률 유효성 검사
+            if progress is None:
+                return Response(
+                    {'error': 'progress 값이 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                progress = int(progress)
+                if not (0 <= progress <= 100):
+                    raise ValueError("진행률은 0-100 사이여야 합니다.")
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': '진행률은 0-100 사이의 정수여야 합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 분석 상태 유효성 검사
+            valid_statuses = ['pending', 'processing', 'completed', 'failed']
+            if analysis_status not in valid_statuses:
+                return Response(
+                    {'error': f'유효하지 않은 상태입니다. 가능한 값: {valid_statuses}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 진행률과 상태 업데이트
+            video.analysis_progress = progress
+            video.analysis_status = analysis_status
+            
+            # 완료 시 자동으로 진행률을 100으로 설정
+            if analysis_status == 'completed':
+                video.analysis_progress = 100
+            
+            video.save(update_fields=['analysis_progress', 'analysis_status'])
+            
+            return Response({
+                'success': True,
+                'message': f'진행률이 {progress}%로 업데이트되었습니다.',
+                'video_id': video.video_id,
+                'progress': video.analysis_progress,
+                'status': video.analysis_status
+            }, status=status.HTTP_200_OK)
+            
+        except Video.DoesNotExist:
+            return Response(
+                {'error': '존재하지 않는 비디오입니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'진행률 업데이트 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'], url_path='progress')
+    def get_analysis_progress(self, request, pk=None):
+        """분석 진행률 조회 API"""
+        try:
+            video = self.get_object()
+            
+            return Response({
+                'video_id': video.video_id,
+                'progress': video.analysis_progress,
+                'status': video.analysis_status,
+                'is_completed': video.analysis_status == 'completed',
+                'is_failed': video.analysis_status == 'failed'
+            }, status=status.HTTP_200_OK)
+            
+        except Video.DoesNotExist:
+            return Response(
+                {'error': '존재하지 않는 비디오입니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'진행률 조회 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
+@method_decorator(csrf_exempt, name='dispatch')
 class EventViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.all()
     serializer_class = EventSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     
     def get_queryset(self):
         queryset = Event.objects.all()

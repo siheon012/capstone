@@ -164,6 +164,29 @@ METADATA_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, METADATA_SUBDIR)
 THUMBNAIL_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, THUMBNAIL_SUBDIR)
 VIDEO_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, VIDEO_SUBDIR)
 
+# Django REST Framework 설정
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+}
+
+# CSRF 설정 (API에서는 비활성화)
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8088',
+    'http://127.0.0.1:8088',
+    'http://host.docker.internal:8088',
+]
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

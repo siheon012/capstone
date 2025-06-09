@@ -63,9 +63,8 @@ export default function CCTVAnalysis() {
   const [videoReady, setVideoReady] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null); // 비디오 에러 상태 추가
 
-  // 분석 상태와 진행도를 관리하는 새로운 state 추가 (메인 페이지와 동일):
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState(0);
+  // 로딩 애니메이션 상태 (분석 진행률과는 별개)
+  const [isLoading, setIsLoading] = useState(false);
 
   // UI 상태
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -98,16 +97,15 @@ export default function CCTVAnalysis() {
     try {
       setLoading(true);
       setVideoReady(false);
-      setIsAnalyzing(true);
-      setAnalysisProgress(0);
+      setIsLoading(true); // 로딩 애니메이션 시작
 
-      // sessionId가 있으면 기존 세션을 가져오는 메시지, 없으면 새 영상 로드 메시지
+      // 이미 분석된 비디오를 로드하는 메시지
       setMessages([
         {
           role: 'assistant',
           content: sessionId 
             ? '영상 로드 중... 기존 세션을 가져오고 있습니다.'
-            : '영상을 업로드 중입니다. 잠시만 기다려주세요.',
+            : '영상을 로드하고 있습니다.',
         },
       ]);
 
@@ -117,99 +115,73 @@ export default function CCTVAnalysis() {
         if (foundVideo) {
           setVideo(foundVideo);
 
-          // 메인 페이지와 완전히 동일한 로직 적용
+          // 비디오 파일 준비
           if (
             foundVideo.filePath &&
             !foundVideo.filePath.includes('placeholder.svg')
           ) {
-            console.log(
-              '[LoadVideo] Starting video preparation like main page...'
-            );
+            console.log('[LoadVideo] 비디오 파일 로드 시작...');
 
             try {
-              // 1단계: 메인 페이지의 getVideoDurationFromFile과 동일하게 메타데이터 검증
+              // 메타데이터 검증
               const metadata = await getVideoMetadataFromUrl(
                 foundVideo.filePath
               );
-              console.log('[LoadVideo] Video metadata validated:', metadata);
+              console.log('[LoadVideo] 비디오 메타데이터 검증 완료:', metadata);
 
-              // 2단계: 메타데이터에서 추출한 duration 우선 사용
               const validatedDuration =
                 metadata.duration || foundVideo.duration;
               setDuration(validatedDuration);
-
-              // 3단계: 비디오 소스 설정 (메인 페이지와 동일한 순서)
               setVideoSrc(foundVideo.filePath);
 
-              // 4단계: 비디오 엘리먼트 준비 대기 (메인 페이지처럼 시간 여유 제공)
+              // 비디오 준비 완료
               setTimeout(() => {
-                // 메인 페이지에서는 이미 검증된 상태로 VideoMinimap에 전달
-                // 여기서도 동일하게 videoReady를 true로 설정
                 setVideoReady(true);
-                console.log(
-                  '[LoadVideo] Video ready for VideoMinimap (validated metadata)'
-                );
-              }, 300); // 메인 페이지와 유사한 안정화 시간
+                console.log('[LoadVideo] 비디오 준비 완료');
+              }, 300);
             } catch (metadataError) {
               console.warn(
-                '[LoadVideo] Metadata validation failed, using basic fallback:',
+                '[LoadVideo] 메타데이터 검증 실패, 기본값 사용:',
                 metadataError
               );
 
-              // 메타데이터 검증 실패 시에도 기본적인 준비는 진행
               setVideoSrc(foundVideo.filePath);
               setDuration(foundVideo.duration);
 
               setTimeout(() => {
                 setVideoReady(true);
-                console.log('[LoadVideo] Video ready (fallback mode)');
+                console.log('[LoadVideo] 비디오 준비 완료 (fallback)');
               }, 500);
             }
           }
 
           setVideoFileName(foundVideo.name);
 
-          // 진행도 애니메이션 시뮬레이션 (메인 페이지와 동일한 로직)
-          const progressInterval = setInterval(() => {
-            setAnalysisProgress((prev) => {
-              const newProgress = prev + Math.random() * 3 + 5;
+          // 이미 분석된 비디오이므로 바로 완료 메시지 표시
+          setTimeout(() => {
+            setIsLoading(false); // 로딩 애니메이션 종료
+            setMessages([
+              {
+                role: 'assistant',
+                content: sessionId 
+                  ? `"${foundVideo.name}" 영상이 로드되었습니다. 기존 대화를 불러오고 있습니다.`
+                  : `"${foundVideo.name}" 영상이 로드되었습니다. 영상 내용에 대해 질문할 수 있습니다.`,
+              },
+            ]);
 
-              if (newProgress >= 100) {
-                clearInterval(progressInterval);
-
-                setTimeout(() => {
-                  setIsAnalyzing(false);
-                  setAnalysisProgress(100);
-                  setMessages([
-                    {
-                      role: 'assistant',
-                      content: sessionId 
-                        ? `"${foundVideo.name}" 영상이 로드되었습니다. 기존 대화를 불러오고 있습니다.`
-                        : `"${foundVideo.name}" 영상이 로드되었습니다. 영상 내용에 대해 질문할 수 있습니다.`,
-                    },
-                  ]);
-
-                  // 세션 ID가 있으면 세션 데이터 로드
-                  if (sessionId) {
-                    setTimeout(() => {
-                      loadSessionData(sessionId);
-                    }, 500);
-                  }
-                }, 500);
-
-                return 100;
-              }
-
-              return newProgress;
-            });
-          }, 800);
+            // 세션 ID가 있으면 세션 데이터 로드
+            if (sessionId) {
+              setTimeout(() => {
+                loadSessionData(sessionId);
+              }, 500);
+            }
+          }, 1000);
         }
       }
     } catch (error) {
       console.error('Failed to load video:', error);
-      setIsAnalyzing(false);
-      setAnalysisProgress(0);
       setVideoReady(false);
+      setIsLoading(false); // 에러 시에도 로딩 애니메이션 종료
       addToast({
         type: 'error',
         title: '로드 실패',
@@ -217,7 +189,7 @@ export default function CCTVAnalysis() {
         duration: 3000,
       });
     } finally {
-      setLoading(false); // 로딩 상태 해제 추가
+      setLoading(false);
     }
   };
 
@@ -280,19 +252,7 @@ export default function CCTVAnalysis() {
     }
   };
 
-  // sessionId가 있을 때 세션 로드 - loadVideoFromId에서 직접 처리하므로 비활성화
-  /*
-  useEffect(() => {
-    if (sessionId && !isAnalyzing) {
-      // 영상 로드가 완료된 후에 세션 로드
-      const timer = setTimeout(() => {
-        loadSessionData(sessionId);
-      }, 1000); // 영상 로드 완료 메시지가 표시된 후 1초 대기
-
-      return () => clearTimeout(timer);
-    }
-  }, [sessionId, isAnalyzing]);
-  */
+  // sessionId는 loadVideoFromId에서 직접 처리됩니다.
 
   // loadVideoData 함수 전체를 제거하거나 주석 처리
 
@@ -694,60 +654,20 @@ export default function CCTVAnalysis() {
                   <CardContent className="p-2 md:p-6">
                     {videoSrc ? (
                       <div className="relative">
-                        {isAnalyzing ? (
-                          // 분석 중일 때 프로그레스 오버레이 (메인 페이지와 동일)
+                        {isLoading ? (
+                          // 영상 로딩 중일 때 프로그레스 오버레이
                           <div className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10">
                             <div className="relative w-24 h-24 md:w-32 md:h-32 mb-4">
-                              {/* 배경 원 */}
-                              <svg
-                                className="w-full h-full transform -rotate-90"
-                                viewBox="0 0 100 100"
-                              >
-                                <circle
-                                  cx="50"
-                                  cy="50"
-                                  r="45"
-                                  stroke="#2a3142"
-                                  strokeWidth="8"
-                                  fill="none"
-                                />
-                                {/* 진행도 원 */}
-                                <circle
-                                  cx="50"
-                                  cy="50"
-                                  r="45"
-                                  stroke="#00e6b4"
-                                  strokeWidth="8"
-                                  fill="none"
-                                  strokeLinecap="round"
-                                  strokeDasharray={`${2 * Math.PI * 45}`}
-                                  strokeDashoffset={`${
-                                    2 *
-                                    Math.PI *
-                                    45 *
-                                    (1 - analysisProgress / 100)
-                                  }`}
-                                  className="transition-all duration-300 ease-out"
-                                  style={{
-                                    filter:
-                                      'drop-shadow(0 0 8px rgba(0, 230, 180, 0.6))',
-                                  }}
-                                />
-                              </svg>
-                              {/* 진행도 텍스트 */}
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-[#00e6b4] font-bold text-lg md:text-xl">
-                                  {Math.round(analysisProgress)}%
-                                </span>
-                              </div>
+                              {/* 회전하는 로딩 애니메이션 */}
+                              <div className="w-full h-full border-8 border-gray-600 border-t-[#00e6b4] rounded-full animate-spin"></div>
                             </div>
                             <p className="text-white text-sm md:text-base font-medium mb-2">
-                              {sessionId ? '영상 로드 중...' : '영상 업로드 중...'}
+                              {sessionId ? '영상 로드 중...' : '영상 로드 중...'}
                             </p>
                             <p className="text-gray-300 text-xs md:text-sm text-center px-4">
                               {sessionId 
                                 ? '기존 세션을 가져오고 있습니다. 잠시만 기다려주세요.'
-                                : '영상을 분석 중입니다. 잠시만 기다려주세요.'
+                                : '영상을 준비하고 있습니다. 잠시만 기다려주세요.'
                               }
                             </p>
                           </div>
@@ -756,7 +676,7 @@ export default function CCTVAnalysis() {
                         <video
                           ref={videoRef}
                           className={`w-full h-auto rounded-md bg-black ${
-                            isAnalyzing ? 'opacity-50' : 'opacity-100'
+                            isLoading ? 'opacity-50' : 'opacity-100'
                           } transition-opacity duration-300`}
                           src={videoSrc}
                           muted={isMobile} // 모바일에서 음소거
@@ -898,12 +818,12 @@ export default function CCTVAnalysis() {
                             variant="outline"
                             size="icon"
                             className={`border-[#2a3142] h-9 w-9 md:h-10 md:w-10 ${
-                              videoReady && !isAnalyzing
+                              videoReady && !isLoading
                                 ? 'text-gray-300 hover:text-[#00e6b4] hover:border-[#00e6b4] cursor-pointer'
                                 : 'text-gray-500 cursor-not-allowed opacity-50'
                             }`}
                             onClick={skipBackward}
-                            disabled={!videoReady || isAnalyzing}
+                            disabled={!videoReady || isLoading}
                           >
                             <SkipBack className="h-3 w-3 md:h-4 md:w-4" />
                           </Button>
@@ -911,12 +831,12 @@ export default function CCTVAnalysis() {
                             variant="outline"
                             size="icon"
                             className={`border-[#2a3142] h-9 w-9 md:h-10 md:w-10 ${
-                              videoReady && !isAnalyzing
+                              videoReady && !isLoading
                                 ? 'text-gray-300 hover:text-[#00e6b4] hover:border-[#00e6b4] cursor-pointer'
                                 : 'text-gray-500 cursor-not-allowed opacity-50'
                             }`}
                             onClick={togglePlayPause}
-                            disabled={!videoReady || isAnalyzing}
+                            disabled={!videoReady || isLoading}
                           >
                             {isPlaying ? (
                               <Pause className="h-3 w-3 md:h-4 md:w-4" />
@@ -928,12 +848,12 @@ export default function CCTVAnalysis() {
                             variant="outline"
                             size="icon"
                             className={`border-[#2a3142] h-9 w-9 md:h-10 md:w-10 ${
-                              videoReady && !isAnalyzing
+                              videoReady && !isLoading
                                 ? 'text-gray-300 hover:text-[#00e6b4] hover:border-[#00e6b4] cursor-pointer'
                                 : 'text-gray-500 cursor-not-allowed opacity-50'
                             }`}
                             onClick={skipForward}
-                            disabled={!videoReady || isAnalyzing}
+                            disabled={!videoReady || isLoading}
                           >
                             <SkipForward className="h-3 w-3 md:h-4 md:w-4" />
                           </Button>
@@ -1138,22 +1058,22 @@ export default function CCTVAnalysis() {
                         placeholder="영상 내용에 대해 질문하세요..."
                         value={inputMessage}
                         onChange={(e) => setInputMessage(e.target.value)}
-                        disabled={isAnalyzing}
+                        disabled={isLoading}
                         className={`flex-1 resize-none border-[#2a3142] text-gray-200 placeholder:text-gray-500 text-sm md:text-base bg-[#1a1f2c] hover:border-[#00e6b4] focus:border-[#00e6b4] ${
-                          isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''
+                          isLoading ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                         rows={3}
                       />
                       <Button
                         type="submit"
-                        disabled={!inputMessage.trim() || isAnalyzing}
+                        disabled={!inputMessage.trim() || isLoading}
                         className={`px-3 md:px-4 text-sm md:text-sm transition-all duration-200 ${
-                          !inputMessage.trim() || isAnalyzing
+                          !inputMessage.trim() || isLoading
                             ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
                             : 'bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]'
                         }`}
                       >
-                        {isAnalyzing ? '로드 중...' : '전송'}
+                        {isLoading ? '로드 중...' : '전송'}
                       </Button>
                     </form>
                   </CardContent>

@@ -302,11 +302,11 @@ export async function saveVideoFile(
     }
 
     // 파일 크기 제한
-    const maxSize = 2 * 1024 * 1024 * 1024 * 512;
+    const maxSize = 5 * 1024 * 1024 * 1024;
     if (file.size > maxSize) {
       return {
         success: false,
-        error: '파일 크기는 2GB를 초과할 수 없습니다.',
+        error: '파일 크기는 5GB를 초과할 수 없습니다.',
       };
     }
 

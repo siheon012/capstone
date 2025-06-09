@@ -16,6 +16,15 @@ class Video(models.Model):
     video_file = models.CharField(max_length=500, null=True, blank=True)  # 비디오 파일 경로 저장
     summary = models.TextField(null=True, blank=True)  # 영상 분석 모델의 최종 분석 결과 (이모지, 특수기호 포함 가능)
     
+    # 분석 진행률 필드 추가
+    analysis_progress = models.IntegerField(default=0)  # 분석 진행률 (0-100)
+    analysis_status = models.CharField(max_length=20, default='pending', choices=[
+        ('pending', '대기중'),
+        ('processing', '분석중'), 
+        ('completed', '완료'),
+        ('failed', '실패')
+    ])
+    
     @property
     def file_path(self):
         """비디오 파일의 웹 접근 경로를 동적으로 생성"""
@@ -112,9 +121,9 @@ class Event(models.Model):
     age = models.FloatField()  # null=True, blank=True 제거 (DB에서 not null)
     gender = models.CharField(max_length=10)  # null=True, blank=True 제거
     gender_score = models.FloatField()  # null=True, blank=True 제거
-    location = models.CharField(max_length=255)
+    location = models.IntegerField()
     area_of_interest = models.IntegerField()
-    action_detected = models.CharField(max_length=255)
+    action_detected = models.CharField(max_length=255, null=True)
     event_type = models.CharField(max_length=255)
     scene_analysis = models.CharField(max_length=255, null=True, blank=True)  # 분석 결과 (예: VLM 요약)
     orientataion= models.CharField(max_length=50, null=True, blank=True)  # 객체 방향 (예: left, right)

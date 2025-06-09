@@ -330,7 +330,7 @@ export default function DragDropZone({ onFileUpload, isVisible, onClose }: DragD
                 {/* 지원 형식 */}
                 <div className="mt-8 text-sm text-gray-500 text-center">
                   <p>지원 형식: MP4, AVI, MOV, WMV, MKV</p>
-                  <p>최대 파일 크기: 2GB</p>
+                  <p>최대 파일 크기: 5GB</p>
                 </div>
               </div>
 

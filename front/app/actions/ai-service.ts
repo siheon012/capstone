@@ -19,28 +19,478 @@ export type VideoAnalysisResult = {
   }[]
 }
 
-// 비디오 분석 요청 함수
-export async function analyzeVideo(videoId: string): Promise<VideoAnalysisResult> {
+// 비디오 분석 시작 함수 (비동기 처리)
+export async function startAnalyzeVideo(videoId: string): Promise<{ success: boolean; message: string }> {
   try {
-    // 실제 구현에서는 여기서 컴퓨터 비전 API를 호출합니다
-    const response = await fetch(`${process.env.VISION_API_URL}/analyze`, {
+    console.log("🔄 영상 분석 시작 API 호출:", {
+      videoId,
+      url: "http://localhost:7500/analyze",
+      timestamp: new Date().toISOString()
+    });
+
+    // 먼저 Django에서 비디오 정보를 가져와서 파일 경로 확인
+    const videoInfoResponse = await fetch(`http://localhost:8088/db/videos/${videoId}/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!videoInfoResponse.ok) {
+      throw new Error(`비디오 정보를 가져올 수 없습니다. (${videoInfoResponse.status})`);
+    }
+
+    const videoInfo = await videoInfoResponse.json();
+    console.log("📝 [AI Service] Django에서 비디오 정보 조회:", {
+      videoId,
+      videoInfo: {
+        name: videoInfo.name,
+        video_file: videoInfo.video_file,
+        file_path: videoInfo.file_path
+      }
+    });
+
+    // 비디오 파일 경로 결정 (우선순위: video_file > file_path > name 기반)
+    let videoPath = '';
+    if (videoInfo.video_file) {
+      videoPath = videoInfo.video_file;
+    } else if (videoInfo.file_path) {
+      videoPath = videoInfo.file_path;
+    } else {
+      videoPath = `/uploads/videos/${videoInfo.name}`;
+    }
+
+    // 상대 경로를 절대 경로로 변환 (AI 모델에서 접근 가능하도록)
+    let containerPath = '';
+    if (videoPath.startsWith('/uploads/')) {
+      // Docker 컨테이너 내부 경로로 변환
+      // 호스트의 /home/uns/code/project/front/public/uploads/videos -> 컨테이너의 /workspace
+      const fileName = videoPath.split('/').pop();
+      containerPath = `/workspace/${fileName}`;
+    } else if (videoPath.includes('/home/uns/code/project/front/public/uploads/videos/')) {
+      // 이미 절대 경로인 경우 컨테이너 경로로 변환
+      const fileName = videoPath.split('/').pop();
+      containerPath = `/workspace/${fileName}`;
+    } else {
+      // 기본값: videoInfo.name을 사용
+      containerPath = `/workspace/${videoInfo.name}`;
+    }
+    
+    videoPath = containerPath;
+
+    console.log("📍 [AI Service] 비디오 파일 경로:", videoPath);
+
+    // Docker 7500 포트의 영상 분석 모델 API 호출
+    const response = await fetch("http://localhost:7500/analyze", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.VISION_API_KEY}`,
       },
-      body: JSON.stringify({ videoId }),
-    })
+      body: JSON.stringify({ 
+        video_id: parseInt(videoId), // 정수형으로 변환
+        video_path: videoPath        // 비디오 파일 경로 추가
+      }),
+    });
+
+    console.log("📡 영상 분석 시작 API 응답 상태:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    });
 
     if (!response.ok) {
-      throw new Error(`Vision API error: ${response.status}`)
+      const errorText = await response.text();
+      const errorDetails = {
+        status: response.status,
+        statusText: response.statusText,
+        videoId,
+        url: "http://localhost:7500/analyze",
+        errorBody: errorText,
+        timestamp: new Date().toISOString()
+      };
+      
+      console.error("❌ [AI Service] 영상 분석 시작 API 에러:", errorDetails);
+      
+      // HTTP 상태 코드별 에러 메시지
+      let errorMessage = `Vision API error: ${response.status}`;
+      
+      switch (response.status) {
+        case 400:
+          errorMessage = "잘못된 요청입니다. 비디오 ID를 확인해주세요.";
+          break;
+        case 404:
+          errorMessage = "비디오 파일을 찾을 수 없습니다.";
+          break;
+        case 500:
+          errorMessage = "AI 분석 서버에 오류가 발생했습니다.";
+          break;
+        case 503:
+          errorMessage = "AI 분석 서버가 일시적으로 사용할 수 없습니다.";
+          break;
+        case 408:
+          errorMessage = "분석 요청 시간이 초과되었습니다.";
+          break;
+        default:
+          errorMessage = `서버 오류 (${response.status}): ${errorText}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
-    return await response.json()
+    const result = await response.json();
+    console.log("✅ [AI Service] 영상 분석 시작 성공 응답:", {
+      videoId,
+      success: result.success,
+      message: result.message,
+      timestamp: new Date().toISOString()
+    });
+
+    return {
+      success: result.success || true,
+      message: result.message || "영상 분석이 시작되었습니다."
+    };
   } catch (error) {
-    console.error("Video analysis error:", error)
-    // 오류 발생 시 빈 결과 반환
-    return { objectDetections: [], events: [] }
+    const errorDetails = {
+      videoId,
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.error("❌ [AI Service] Video analysis start error:", errorDetails);
+    
+    // 네트워크 에러 처리
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error("🌐 [AI Service] 네트워크 연결 오류 - AI 서버에 접근할 수 없습니다");
+      throw new Error("AI 분석 서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.");
+    }
+    
+    throw error;
+  }
+}
+
+// 비디오 분석 결과 조회 함수 (기존 analyzeVideo를 분리)
+export async function getAnalysisResult(videoId: string): Promise<VideoAnalysisResult> {
+  try {
+    console.log("🔍 [AI Service] 분석 결과 조회 시작:", videoId);
+    
+    const eventsResponse = await fetch(`http://localhost:8088/db/events/?video=${videoId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (eventsResponse.ok) {
+      const eventsData = await eventsResponse.json();
+      const events = Array.isArray(eventsData) ? eventsData : eventsData.results || [];
+      
+      console.log("📊 [AI Service] 분석 결과 조회 완료:", {
+        videoId,
+        eventsCount: events.length,
+        events: events.slice(0, 3) // 처음 3개만 로깅
+      });
+      
+      // DB에서 가져온 실제 데이터를 VideoAnalysisResult 형식으로 변환
+      const analysisResult: VideoAnalysisResult = {
+        objectDetections: events.map((event: any) => ({
+          timestamp: event.timestamp,
+          objects: [{
+            type: event.event_type,
+            confidence: event.gender_score >= 1 ? event.gender_score / 100 : event.gender_score, // 0-1 범위로 정규화
+            boundingBox: {
+              x: 0, // AI 모델에서 제공되지 않는 정보
+              y: 0,
+              width: 0,
+              height: 0
+            }
+          }]
+        })),
+        events: events.map((event: any) => ({
+          timestamp: event.timestamp,
+          type: event.event_type,
+          description: `${event.action_detected} - ${event.location} (${event.gender}, ${event.age}세)${event.scene_analysis ? ' - ' + event.scene_analysis : ''}`
+        }))
+      };
+
+      return analysisResult;
+    } else {
+      console.warn("⚠️ [AI Service] 분석 결과 조회 실패:", {
+        videoId,
+        status: eventsResponse.status,
+        statusText: eventsResponse.statusText
+      });
+      
+      // 빈 결과 반환
+      return {
+        objectDetections: [],
+        events: []
+      };
+    }
+  } catch (error) {
+    console.error("❌ [AI Service] 분석 결과 조회 중 오류:", {
+      videoId,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
+    // 빈 결과 반환
+    return {
+      objectDetections: [],
+      events: []
+    };
+  }
+}
+
+// 비디오 분석 요청 함수 (기존 - 호환성 유지)
+export async function analyzeVideo(videoId: string): Promise<VideoAnalysisResult> {
+  try {
+    console.log("🔄 영상 분석 API 호출 시작:", {
+      videoId,
+      url: "http://localhost:7500/analyze",
+      timestamp: new Date().toISOString()
+    });
+
+    // 먼저 Django에서 비디오 정보를 가져와서 파일 경로 확인
+    const videoInfoResponse = await fetch(`http://localhost:8088/db/videos/${videoId}/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!videoInfoResponse.ok) {
+      throw new Error(`비디오 정보를 가져올 수 없습니다. (${videoInfoResponse.status})`);
+    }
+
+    const videoInfo = await videoInfoResponse.json();
+    console.log("📝 [AI Service] Django에서 비디오 정보 조회:", {
+      videoId,
+      videoInfo: {
+        name: videoInfo.name,
+        video_file: videoInfo.video_file,
+        file_path: videoInfo.file_path
+      }
+    });
+
+    // 비디오 파일 경로 결정 (우선순위: video_file > file_path > name 기반)
+    let videoPath = '';
+    if (videoInfo.video_file) {
+      videoPath = videoInfo.video_file;
+    } else if (videoInfo.file_path) {
+      videoPath = videoInfo.file_path;
+    } else {
+      videoPath = `/uploads/videos/${videoInfo.name}`;
+    }
+
+    // 상대 경로를 절대 경로로 변환 (AI 모델에서 접근 가능하도록)
+    let containerPath = '';
+    if (videoPath.startsWith('/uploads/')) {
+      // Docker 컨테이너 내부 경로로 변환
+      // 호스트의 /home/uns/code/project/front/public/uploads/videos -> 컨테이너의 /workspace
+      const fileName = videoPath.split('/').pop();
+      containerPath = `/workspace/${fileName}`;
+    } else if (videoPath.includes('/home/uns/code/project/front/public/uploads/videos/')) {
+      // 이미 절대 경로인 경우 컨테이너 경로로 변환
+      const fileName = videoPath.split('/').pop();
+      containerPath = `/workspace/${fileName}`;
+    } else {
+      // 기본값: videoInfo.name을 사용
+      containerPath = `/workspace/${videoInfo.name}`;
+    }
+    
+    videoPath = containerPath;
+
+    console.log("📍 [AI Service] 비디오 파일 경로:", videoPath);
+
+    // Docker 7500 포트의 영상 분석 모델 API 호출
+    const response = await fetch("http://localhost:7500/analyze", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ 
+        video_id: parseInt(videoId), // 정수형으로 변환
+        video_path: videoPath        // 비디오 파일 경로 추가
+      }),
+    });
+
+    console.log("📡 영상 분석 API 응답 상태:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const errorDetails = {
+        status: response.status,
+        statusText: response.statusText,
+        videoId,
+        url: "http://localhost:7500/analyze",
+        errorBody: errorText,
+        timestamp: new Date().toISOString()
+      };
+      
+      console.error("❌ [AI Service] 영상 분석 API 에러:", errorDetails);
+      
+      // HTTP 상태 코드별 에러 메시지
+      let errorMessage = `Vision API error: ${response.status}`;
+      
+      switch (response.status) {
+        case 400:
+          errorMessage = "잘못된 요청입니다. 비디오 ID를 확인해주세요.";
+          break;
+        case 404:
+          errorMessage = "비디오 파일을 찾을 수 없습니다.";
+          break;
+        case 500:
+          errorMessage = "AI 분석 서버에 오류가 발생했습니다.";
+          break;
+        case 503:
+          errorMessage = "AI 분석 서버가 일시적으로 사용할 수 없습니다.";
+          break;
+        case 408:
+          errorMessage = "분석 요청 시간이 초과되었습니다.";
+          break;
+        default:
+          errorMessage = `서버 오류 (${response.status}): ${errorText}`;
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    const result = await response.json();
+    console.log("✅ [AI Service] 영상 분석 API 성공 응답:", {
+      videoId,
+      success: result.success,
+      message: result.message,
+      timestamp: new Date().toISOString()
+    });
+
+    // AI 모델이 직접 데이터베이스에 저장하므로, 
+    // 여기서는 성공 메시지만 받고 실제 데이터는 DB에서 조회
+    if (result.success) {
+      console.log("📝 [AI Service] AI 모델이 Events 테이블에 데이터 저장 완료");
+      
+      // 저장된 이벤트들을 조회하여 반환 (선택적)
+      try {
+        console.log("🔍 [AI Service] 저장된 이벤트 데이터 조회 시작:", videoId);
+        
+        const eventsResponse = await fetch(`http://localhost:8088/db/events/?video=${videoId}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (eventsResponse.ok) {
+          const eventsData = await eventsResponse.json();
+          const events = Array.isArray(eventsData) ? eventsData : eventsData.results || [];
+          
+          console.log("📊 [AI Service] 저장된 이벤트 데이터 조회 완료:", {
+            videoId,
+            eventsCount: events.length,
+            events: events.slice(0, 3) // 처음 3개만 로깅
+          });
+          
+          // DB에서 가져온 실제 데이터를 VideoAnalysisResult 형식으로 변환
+          const analysisResult: VideoAnalysisResult = {
+            objectDetections: events.map((event: any) => ({
+              timestamp: event.timestamp,
+              objects: [{
+                type: event.event_type,
+                confidence: event.gender_score >= 1 ? event.gender_score / 100 : event.gender_score, // 0-1 범위로 정규화
+                boundingBox: {
+                  x: 0, // AI 모델에서 제공되지 않는 정보
+                  y: 0,
+                  width: 0,
+                  height: 0
+                }
+              }]
+            })),
+            events: events.map((event: any) => ({
+              timestamp: event.timestamp,
+              type: event.event_type,
+              description: `${event.action_detected} - ${event.location} (${event.gender}, ${event.age}세)${event.scene_analysis ? ' - ' + event.scene_analysis : ''}`
+            }))
+          };
+
+          return analysisResult;
+        } else {
+          console.warn("⚠️ [AI Service] 이벤트 데이터 조회 실패:", {
+            videoId,
+            status: eventsResponse.status,
+            statusText: eventsResponse.statusText
+          });
+        }
+      } catch (dbError) {
+        console.error("❌ [AI Service] 이벤트 데이터 조회 중 오류:", {
+          videoId,
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+          stack: dbError instanceof Error ? dbError.stack : undefined
+        });
+        console.warn("⚠️ 저장된 이벤트 조회 실패:", dbError);
+      }
+    }
+
+    // AI 모델 응답을 VideoAnalysisResult 형식으로 변환 (fallback)
+    const analysisResult: VideoAnalysisResult = {
+      objectDetections: result.object_detections?.map((detection: any) => ({
+        timestamp: detection.timestamp,
+        objects: detection.objects?.map((obj: any) => ({
+          type: obj.type || obj.label,
+          confidence: obj.confidence,
+          boundingBox: {
+            x: obj.bbox?.x || obj.x || 0,
+            y: obj.bbox?.y || obj.y || 0,
+            width: obj.bbox?.width || obj.w || 0,
+            height: obj.bbox?.height || obj.h || 0
+          }
+        })) || []
+      })) || [],
+      events: result.events?.map((event: any) => ({
+        timestamp: event.timestamp,
+        type: event.type || event.event_type,
+        description: event.description
+      })) || []
+    };
+
+    return analysisResult;
+  } catch (error) {
+    const errorDetails = {
+      videoId,
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.error("❌ [AI Service] Video analysis error:", errorDetails);
+    
+    // 네트워크 에러 처리
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error("🌐 [AI Service] 네트워크 연결 오류 - AI 서버에 접근할 수 없습니다");
+      throw new Error("AI 분석 서버에 연결할 수 없습니다. 서버 상태를 확인해주세요.");
+    }
+    
+    // 타임아웃 에러 처리
+    if (error instanceof Error && error.message.includes('timeout')) {
+      console.error("⏱️ [AI Service] 요청 시간 초과");
+      throw new Error("분석 요청 시간이 초과되었습니다. 파일 크기가 클 수 있습니다.");
+    }
+    
+    // JSON 파싱 에러 처리
+    if (error instanceof SyntaxError) {
+      console.error("📄 [AI Service] 응답 파싱 오류");
+      throw new Error("서버 응답을 처리할 수 없습니다. 서버 오류일 수 있습니다.");
+    }
+    
+    // 기타 에러는 그대로 전파
+    throw error;
   }
 }
 
@@ -226,6 +676,104 @@ export async function sendMessage(
     return {
       success: false,
       error: "메시지 전송 중 오류가 발생했습니다.",
+    };
+  }
+}
+
+// 실제 분석 진행률 조회 함수
+export async function getAnalysisProgress(videoId: string): Promise<{
+  progress: number;
+  status: string;
+  is_completed: boolean;
+  is_failed: boolean;
+}> {
+  try {
+    console.log("🔍 [AI Service] 진행률 조회 시작:", {
+      videoId,
+      url: `http://localhost:8088/db/videos/${videoId}/progress/`,
+      timestamp: new Date().toISOString()
+    });
+
+    const response = await fetch(`http://localhost:8088/db/videos/${videoId}/progress/`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    console.log("📡 [AI Service] 진행률 API 응답 상태:", {
+      videoId,
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const errorDetails = {
+        videoId,
+        status: response.status,
+        statusText: response.statusText,
+        errorBody: errorText,
+        timestamp: new Date().toISOString()
+      };
+      
+      console.error("❌ [AI Service] 진행률 API 에러:", errorDetails);
+      
+      // HTTP 상태 코드별 처리
+      let errorMessage = `Progress API error: ${response.status}`;
+      
+      switch (response.status) {
+        case 404:
+          errorMessage = "비디오를 찾을 수 없습니다.";
+          break;
+        case 500:
+          errorMessage = "서버 내부 오류가 발생했습니다.";
+          break;
+        case 503:
+          errorMessage = "서비스를 일시적으로 사용할 수 없습니다.";
+          break;
+        default:
+          errorMessage = `서버 오류 (${response.status}): ${errorText}`;
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    const result = await response.json();
+    
+    console.log("✅ [AI Service] 진행률 조회 성공:", {
+      videoId,
+      progress: result.progress,
+      status: result.status,
+      is_completed: result.is_completed,
+      is_failed: result.is_failed,
+      timestamp: new Date().toISOString()
+    });
+    
+    return result;
+  } catch (error) {
+    const errorDetails = {
+      videoId,
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.error("❌ [AI Service] 진행률 조회 실패:", errorDetails);
+    
+    // 네트워크 에러인지 확인
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error("🌐 [AI Service] 네트워크 연결 문제 - 백엔드 서버에 접근할 수 없습니다");
+    }
+    
+    // 실패 시 기본값 반환
+    return {
+      progress: 0,
+      status: 'failed',
+      is_completed: false,
+      is_failed: true
     };
   }
 }

@@ -61,3 +61,6 @@ back/**/__pycache__/
 *.sublime-workspace
 
 front/public/uploads/*
+
+#dummy data && file
+dummy*

@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # 백엔드 (Django)
+  backend:
+    build: 
+      context: ./back
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"  # 기존 8000과 충돌 방지
+    environment:
+      - DEBUG=False
+      - ALLOWED_HOSTS=localhost,127.0.0.1,your-server-ip
+    volumes:
+      - ./back:/app
+      - ./back/static:/app/static
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  # 프론트엔드 (Next.js)
+  frontend:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://your-server-ip:8001
+    volumes:
+      - ./front:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # 데이터베이스 (PostgreSQL)
+  db:
+    image: postgres:15
+    ports:
+      - "5433:5432"  # 기존 5432와 충돌 방지
+    environment:
+      POSTGRES_DB: capstone_db
+      POSTGRES_USER: capstone_user
+      POSTGRES_PASSWORD: capstone_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  # Nginx 리버스 프록시
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl  # SSL 인증서용
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge

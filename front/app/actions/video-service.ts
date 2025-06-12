@@ -20,26 +20,79 @@ async function createVideoInDjango(videoData: {
   time_in_video?: string;
 }): Promise<{ success: boolean; video?: any; error?: string }> {
   try {
+    console.log('🚀 [Django API] createVideoInDjango 요청 시작:', {
+      name: videoData.name,
+      size: videoData.size,
+      duration: videoData.duration,
+      url: `${DJANGO_API_BASE}/videos/`
+    });
+
+    const requestBody = {
+      name: videoData.name,
+      duration: videoData.duration,
+      size: videoData.size,
+      thumbnail_path: videoData.thumbnail_path,
+      video_file: videoData.video_file_path, // Django의 video_file 필드에 경로 저장
+      chat_count: 0,
+      major_event: null,
+      ...(videoData.time_in_video && { time_in_video: videoData.time_in_video }),
+    };
+
+    console.log('📤 [Django API] 요청 데이터:', requestBody);
+
+    console.log('🔗 [Django API] 연결 시도 시작...');
+    
     const response = await fetch(`${DJANGO_API_BASE}/videos/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        name: videoData.name,
-        duration: videoData.duration,
-        size: videoData.size,
-        thumbnail_path: videoData.thumbnail_path,
-        video_file: videoData.video_file_path, // Django의 video_file 필드에 경로 저장
-        chat_count: 0,
-        major_event: null,
-        ...(videoData.time_in_video && { time_in_video: videoData.time_in_video }),
-      }),
+      body: JSON.stringify(requestBody),
+      // 대용량 업로드를 위한 타임아웃 설정 (10분으로 증가)
+      signal: AbortSignal.timeout(600000), // 10분 타임아웃
+    });
+
+    console.log('📨 [Django API] 응답 수신:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
     });
 
     if (response.ok) {
       const result = await response.json();
-      return { success: true, video: result };
+      console.log('🎯 [Django API Response]:', result);
+      console.log('🔍 [Django API] 응답 구조 분석:', {
+        hasVideoId: 'video_id' in result,
+        videoIdValue: result.video_id,
+        allKeys: Object.keys(result),
+        resultType: typeof result
+      });
+      
+      // Django API는 직접 video_id 필드를 반환
+      const videoId = result.video_id;
+      
+      if (!videoId) {
+        console.error('❌ [Django API] video_id를 찾을 수 없음:', {
+          result,
+          hasVideoId: 'video_id' in result,
+          videoIdValue: result.video_id,
+          allKeys: Object.keys(result)
+        });
+        return { success: false, error: 'Django API에서 video_id를 반환하지 않았습니다.' };
+      }
+      
+      console.log('✅ [Django API] video_id 추출 성공:', {
+        videoId,
+        type: typeof videoId,
+        stringValue: String(videoId)
+      });
+      
+      return { 
+        success: true, 
+        video: {
+          ...result,  // Django 응답 전체를 사용 (video_id 필드 포함)
+        }
+      };
     } else {
       const error = await response.text();
       console.error('Django API error:', error);
@@ -403,9 +456,42 @@ export async function saveVideoFile(
 
     console.log('비디오 메타데이터가 Django에 저장되었습니다:', djangoResult.video);
 
+    // videoId 추출 - Django 응답에서 직접 video_id만 사용 (우선순위 명확화)
+    const videoId = djangoResult.video?.video_id;
+    
+    console.log('🔍 [SaveVideo] videoId 추출 디버깅:', {
+      fullResponse: djangoResult,
+      video: djangoResult.video,
+      extractedVideoId: videoId,
+      videoIdType: typeof videoId,
+      responseKeys: djangoResult.video ? Object.keys(djangoResult.video) : [],
+      videoIdField: djangoResult.video?.video_id,
+      videoIdFieldType: typeof djangoResult.video?.video_id
+    });
+    
+    if (!videoId && videoId !== 0) { // 0도 valid한 ID이므로 확인
+      console.error('❌ [SaveVideo] Django에서 video_id를 찾을 수 없음:', {
+        fullResponse: djangoResult,
+        video: djangoResult.video,
+        responseKeys: djangoResult.video ? Object.keys(djangoResult.video) : [],
+        hasSuccess: 'success' in djangoResult,
+        hasVideo: 'video' in djangoResult,
+      });
+      return { 
+        success: false, 
+        error: 'Django API에서 video_id를 반환하지 않았습니다.' 
+      };
+    }
+    
+    console.log('✅ [SaveVideo] video_id 추출 성공:', {
+      videoId,
+      type: typeof videoId,
+      stringValue: String(videoId)
+    });
+
     return {
       success: true,
-      videoId: djangoResult.video.video_id.toString(),
+      videoId: videoId.toString(),
       filePath: `/uploads/videos/${fileName}`, // 웹 접근 경로 반환
     };
   } catch (error) {
@@ -442,6 +528,8 @@ export async function getUploadedVideos(cleanupThumbnails: boolean = false): Pro
       majorEvent: video.major_event,
       // Django API의 time_in_video 필드를 올바르게 매핑
       timeInVideo: video.time_in_video ? new Date(video.time_in_video) : null,
+      // summary 필드 추가
+      summary: video.summary || null,
     }));
 
     console.log(`✅ Django에서 ${videos.length}개 비디오 로드 완료`);

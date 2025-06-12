@@ -63,6 +63,10 @@ export default function CCTVAnalysis() {
   const [videoReady, setVideoReady] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null); // 비디오 에러 상태 추가
 
+  // 분석 상태와 진행도를 관리하는 state (메인페이지와 동일)
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  
   // 로딩 애니메이션 상태 (분석 진행률과는 별개)
   const [isLoading, setIsLoading] = useState(false);
 
@@ -278,6 +282,74 @@ export default function CCTVAnalysis() {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
 
+  // Summary 출력 함수
+  const handleGenerateSummary = async () => {
+    console.log('[Summary] 함수 호출됨');
+    console.log('[Summary] video 객체:', video);
+    console.log('[Summary] video.summary:', video?.summary);
+    
+    if (!video || !video.summary) {
+      console.log('[Summary] Summary 없음 - video 존재:', !!video, 'summary 존재:', !!video?.summary);
+      addToast({
+        type: 'warning',
+        title: 'Summary 없음',
+        message: '이 영상에는 아직 요약이 생성되지 않았습니다.',
+        duration: 3000,
+      });
+      return;
+    }
+
+    try {
+      console.log('[Summary] Summary 출력 시작');
+      setIsLoading(true);
+
+      // 요약을 채팅으로 출력 (포맷팅 개선)
+      const formattedSummary = video.summary
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => {
+          // 번호가 있는 항목 처리 (1., 2., 등)
+          if (/^\d+\./.test(line)) {
+            return `\n${line}`;
+          }
+          // 대시로 시작하는 항목 처리 (-, •, 등)
+          if (/^[-•*]/.test(line)) {
+            return `  ${line}`;
+          }
+          // 일반 텍스트
+          return line;
+        })
+        .join('\n');
+
+      const summaryMessage = {
+        role: 'assistant' as const,
+        content: `📋 **영상 요약**\n\n${formattedSummary}`,
+      };
+
+      console.log('[Summary] 메시지 생성:', summaryMessage);
+      setMessages((prev) => [...prev, summaryMessage]);
+
+      addToast({
+        type: 'success',
+        title: 'Summary 출력 완료',
+        message: '영상 요약이 채팅에 출력되었습니다.',
+        duration: 2000,
+      });
+      console.log('[Summary] Summary 출력 완료');
+    } catch (error) {
+      console.error('Summary 출력 오류:', error);
+      addToast({
+        type: 'error',
+        title: 'Summary 출력 실패',
+        message: '요약을 출력하는 중 오류가 발생했습니다.',
+        duration: 3000,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const togglePlayPause = async () => {
     if (videoRef.current && videoReady) {
       try {
@@ -370,7 +442,7 @@ export default function CCTVAnalysis() {
           const assistantMessage = {
             role: 'assistant' as const,
             content: response.reply,
-            timestamp: response.timestamp,
+            ...(response.timestamp && { timestamp: response.timestamp }),
           };
 
           setMessages((prev) => [...prev, assistantMessage]);
@@ -648,17 +720,93 @@ export default function CCTVAnalysis() {
           }`}
         >
           <div className="w-full max-w-7xl mx-auto">
-            <div className="flex flex-col lg:grid lg:grid-cols-3 gap-3 md:gap-6">
-              <div className="lg:col-span-2 min-w-0 order-1 lg:order-1">
+            <div className="flex flex-col lg:grid lg:grid-cols-5 gap-3 md:gap-6">
+              <div className="lg:col-span-3 min-w-0 order-1 lg:order-1">
                 <Card className="mb-3 md:mb-6 bg-[#242a38] border-0 shadow-lg">
                   <CardContent className="p-2 md:p-6">
                     {videoSrc ? (
                       <div className="relative">
-                        {isLoading ? (
-                          // 영상 로딩 중일 때 프로그레스 오버레이
+                        {isAnalyzing ? (
+                          // 분석 중일 때 민트색 프로그레스 오버레이 (메인페이지와 동일)
+                          <div 
+                            className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10"
+                            style={{
+                              animation: 'borderGlow 2s ease-in-out infinite'
+                            }}
+                          >
+                            <div className="relative w-24 h-24 md:w-32 md:h-32 mb-4">
+                              {/* 배경 원 */}
+                              <svg
+                                className="w-full h-full transform -rotate-90"
+                                viewBox="0 0 100 100"
+                              >
+                                <circle
+                                  cx="50"
+                                  cy="50"
+                                  r="45"
+                                  stroke="#2a3142"
+                                  strokeWidth="8"
+                                  fill="none"
+                                />
+                                {/* 진행도 원 */}
+                                <circle
+                                  cx="50"
+                                  cy="50"
+                                  r="45"
+                                  stroke="#00e6b4"
+                                  strokeWidth="8"
+                                  fill="none"
+                                  strokeLinecap="round"
+                                  strokeDasharray={`${2 * Math.PI * 45}`}
+                                  strokeDashoffset={`${
+                                    2 *
+                                    Math.PI *
+                                    45 *
+                                    (1 - analysisProgress / 100)
+                                  }`}
+                                  className="transition-all duration-300 ease-out"
+                                  style={{
+                                    filter:
+                                      'drop-shadow(0 0 8px rgba(0, 230, 180, 0.6))',
+                                  }}
+                                />
+                              </svg>
+                              {/* 진행도 텍스트 */}
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-[#00e6b4] font-bold text-lg md:text-xl">
+                                  {Math.round(analysisProgress)}%
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-white text-sm md:text-base font-medium mb-2">
+                              {analysisProgress === 0 
+                                ? '영상 분석 준비 중...' 
+                                : analysisProgress < 10 
+                                  ? '영상 분석 시작 중...'
+                                  : analysisProgress < 50
+                                    ? '영상 분석 중...'
+                                    : analysisProgress < 90
+                                      ? '영상 분석 중...'
+                                      : '영상 분석 완료 중...'
+                              }
+                            </p>
+                            <p className="text-gray-300 text-xs md:text-sm text-center px-4 mb-4">
+                              {analysisProgress === 0 
+                                ? 'AI 서버에 분석을 요청하고 있습니다. 잠시만 기다려주세요.'
+                                : analysisProgress < 10
+                                  ? 'AI가 영상 분석을 시작했습니다.'
+                                  : analysisProgress < 50
+                                    ? 'AI가 영상의 객체와 동작을 분석하고 있습니다.'
+                                    : analysisProgress < 90
+                                      ? 'AI가 이벤트를 감지하고 분류하고 있습니다.'
+                                      : 'AI가 분석 결과를 정리하고 있습니다.'
+                              }
+                            </p>
+                          </div>
+                        ) : isLoading ? (
+                          // 간단한 로딩 애니메이션 (비분석 작업용)
                           <div className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10">
                             <div className="relative w-24 h-24 md:w-32 md:h-32 mb-4">
-                              {/* 회전하는 로딩 애니메이션 */}
                               <div className="w-full h-full border-8 border-gray-600 border-t-[#00e6b4] rounded-full animate-spin"></div>
                             </div>
                             <p className="text-white text-sm md:text-base font-medium mb-2">
@@ -924,31 +1072,13 @@ export default function CCTVAnalysis() {
                         <Button
                           variant="outline"
                           className="border-[#00e6b4] text-[#00e6b4] hover:bg-[#00e6b4] hover:text-[#1a1f2c] transition-all duration-200"
-                          onClick={() => {
-                            // TODO: Summary 출력 로직 구현
-                            console.log('Summary 출력 요청');
-                          }}
+                          onClick={handleGenerateSummary}
+                          disabled={isLoading || !video}
                         >
                           <MessageSquare className="h-4 w-4 mr-2" />
-                          Summary 출력
+                          {isLoading ? '출력 중...' : 'Summary 출력'}
                         </Button>
                       </div>
-                      
-                      {/* Summary 내용이 있을 때 표시될 영역 */}
-                      {video?.summary && (
-                        <div className="mt-4 p-4 bg-[#1a1f2c] rounded-lg border border-[#2a3142] overflow-hidden">
-                          <div 
-                            className="text-sm text-gray-300 whitespace-pre-wrap break-words overflow-wrap-anywhere"
-                            style={{
-                              wordBreak: 'break-word',
-                              overflowWrap: 'anywhere',
-                              hyphens: 'auto'
-                            }}
-                          >
-                            {video.summary}
-                          </div>
-                        </div>
-                      )}
                     </CardContent>
                   </Card>
                 )}
@@ -975,10 +1105,10 @@ export default function CCTVAnalysis() {
                 )}
               </div>
 
-              <div className="order-2 lg:order-2 min-w-0 overflow-hidden">
-                <Card className="h-[60vh] lg:h-full min-h-[400px] max-h-[80vh] bg-[#242a38] border-0 shadow-lg chat-container-flexible overflow-hidden">
+              <div className="order-2 lg:order-2 lg:col-span-2 min-w-0 overflow-hidden flex flex-col">
+                <Card className="flex-1 min-h-[500px] lg:min-h-[600px] max-h-[90vh] lg:max-h-[85vh] bg-[#242a38] border-0 shadow-lg chat-container-flexible overflow-hidden">
                   <CardContent className="p-2 md:p-4 flex flex-col h-full overflow-hidden">
-                    <div className="flex items-center justify-between mb-2 md:mb-4">
+                    <div className="flex items-center justify-between mb-2 md:mb-4 flex-shrink-0">
                       <div className="flex-1 min-w-0 pr-2">
                         <h2 className="text-base md:text-xl font-semibold text-white">
                           새 분석 세션

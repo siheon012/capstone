@@ -229,8 +229,8 @@ export default function DynamicHistorySidebar({
         return '도난';
       case 'collapse':
         return '쓰러짐';
-      case 'violence':
-        return '폭행';
+      case 'sitting':
+        return '점거';
       default:
         return eventType;
     }
@@ -264,8 +264,8 @@ export default function DynamicHistorySidebar({
           return '도난';
         case 'collapse':
           return '쓰러짐';
-        case 'violence':
-          return '폭행';
+        case 'sitting':
+          return '점거';
         default:
           return event.event_type;
       }
@@ -280,7 +280,7 @@ export default function DynamicHistorySidebar({
   const getEventBadgeStyle = (events: string) => {
     if (events.includes('도난')) {
       return 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30';
-    } else if (events.includes('폭행')) {
+    } else if (events.includes('점거')) {
       return 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30';
     } else if (events.includes('쓰러짐')) {
       return 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30';

@@ -15,6 +15,7 @@ import {
   Info,
   MessageSquare,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -27,8 +28,10 @@ import DragDropZone from '@/components/drag-drop-zone';
 import SmartHeader from '@/components/smart-header';
 import { saveHistory, getHistoryList } from '@/app/actions/history-service';
 import JQueryCounterAnimation from '@/components/jquery-counter-animation';
-import { saveVideoFile } from '@/app/actions/video-service';
+import { saveVideoFile, getUploadedVideos } from '@/app/actions/video-service';
 import type { ChatSession } from '@/app/types/session';
+import type { UploadedVideo } from '@/app/types/video';
+import EventTimeline from '@/components/event-timeline';
 
 // HTML5 Video API를 사용하여 비디오 duration 추출 함수
 const getVideoDurationFromFile = (file: File): Promise<number> => {
@@ -75,6 +78,7 @@ export default function CCTVAnalysis() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [videoFileName, setVideoFileName] = useState<string>('');
   const [videoId, setVideoId] = useState<string | null>(null);
+  const [video, setVideo] = useState<UploadedVideo | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -256,6 +260,22 @@ export default function CCTVAnalysis() {
       let userErrorMessage = '알 수 없는 오류가 발생했습니다.';
       
       if (analysisError instanceof Error) {
+        const errorMsg = analysisError.message.toLowerCase();
+        
+        if (errorMsg.includes('timeout') || errorMsg.includes('타임아웃')) {
+          userErrorMessage = '대용량 파일 처리 시간이 초과되었습니다. 파일 크기를 줄이거나 다시 시도해주세요.';
+        } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+          userErrorMessage = '네트워크 연결 문제가 발생했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.';
+        } else if (errorMsg.includes('decode') || errorMsg.includes('format') || errorMsg.includes('codec')) {
+          userErrorMessage = '비디오 형식이 지원되지 않습니다. MP4 (H.264) 형식으로 변환하여 다시 시도해주세요.';
+        } else if (errorMsg.includes('memory') || errorMsg.includes('메모리')) {
+          userErrorMessage = '파일이 너무 커서 처리할 수 없습니다. 파일 크기를 줄여서 다시 시도해주세요.';
+        } else if (errorMsg.includes('server') || errorMsg.includes('서버')) {
+          userErrorMessage = '서버에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+        }
+      }
+      
+      if (analysisError instanceof Error) {
         const errorMessage = analysisError.message.toLowerCase();
         
         if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
@@ -398,6 +418,19 @@ export default function CCTVAnalysis() {
                   message: `영상 분석이 완료되었습니다.`,
                   duration: 3000,
                 });
+
+                // 비디오 정보 로드하여 EventTimeline에서 사용할 수 있도록 설정
+                try {
+                  const videoResponse = await getUploadedVideos();
+                  if (videoResponse.success) {
+                    const currentVideo = videoResponse.data.find((v: UploadedVideo) => v.id === currentVideoId);
+                    if (currentVideo) {
+                      setVideo(currentVideo);
+                    }
+                  }
+                } catch (videoError) {
+                  console.error('❌ 비디오 정보 로드 실패:', videoError);
+                }
               } catch (resultError) {
                 console.error('❌ [Progress Polling] 분석 결과 조회 실패:', resultError);
                 setMessages([
@@ -882,10 +915,10 @@ export default function CCTVAnalysis() {
       console.log('🖼️ [Thumbnail] 썸네일 생성 시작');
       let thumbnailPath: string | null = null;
       try {
-        const { createAndUploadThumbnail } = await import(
+        const { createAndUploadThumbnailWithFallback } = await import(
           '@/utils/thumbnail-utils'
         );
-        thumbnailPath = await createAndUploadThumbnail(file, file.name);
+        thumbnailPath = await createAndUploadThumbnailWithFallback(file, file.name);
         if (thumbnailPath) {
           console.log('✅ [Thumbnail] 생성 및 업로드 성공:', thumbnailPath);
         } else {
@@ -1051,18 +1084,29 @@ export default function CCTVAnalysis() {
           videoId: serverSaveResult?.videoId,
           isDuplicate: serverSaveResult?.isDuplicate,
           duplicateVideoId: serverSaveResult?.duplicateVideoId,
-          error: serverSaveResult?.error
+          error: serverSaveResult?.error,
+          // 추가 디버깅 정보
+          allKeys: serverSaveResult ? Object.keys(serverSaveResult) : [],
+          stringifiedResult: JSON.stringify(serverSaveResult, null, 2)
         });
         
         if (serverSaveResult?.success && serverSaveResult.videoId) {
           currentVideoId = serverSaveResult.videoId;
           setVideoId(currentVideoId);
-          console.log('✅ [New Video] Video ID captured for AI chat:', currentVideoId);
+          console.log('✅ [New Video] Video ID captured for AI chat:', {
+            currentVideoId,
+            type: typeof currentVideoId,
+            stringValue: String(currentVideoId)
+          });
         } else if (serverSaveResult?.isDuplicate && serverSaveResult.duplicateVideoId) {
           // 중복 비디오의 경우 duplicateVideoId 사용
           currentVideoId = serverSaveResult.duplicateVideoId;
           setVideoId(currentVideoId);
-          console.log('✅ [Duplicate Video] Video ID captured for AI chat:', currentVideoId);
+          console.log('✅ [Duplicate Video] Video ID captured for AI chat:', {
+            currentVideoId,
+            type: typeof currentVideoId,
+            stringValue: String(currentVideoId)
+          });
         } else {
           console.error('❌ [Critical] Video ID를 찾을 수 없음:', {
             serverSaveResult,
@@ -1427,10 +1471,14 @@ export default function CCTVAnalysis() {
   };
 
   const seekToTime = (time: number) => {
+    console.log(`[SeekToTime] 함수 호출됨 - time: ${time}`);
+    console.log(`[SeekToTime] videoRef.current:`, videoRef.current);
+    console.log(`[SeekToTime] videoSrc:`, videoSrc);
+    
     try {
       // 입력값 유효성 검사
       if (typeof time !== 'number' || isNaN(time) || time < 0) {
-        console.warn('Invalid time value for seek:', time);
+        console.warn('[SeekToTime] Invalid time value for seek:', time);
         addToast({
           type: 'warning',
           title: '탐색 오류',
@@ -1442,7 +1490,7 @@ export default function CCTVAnalysis() {
 
       // 비디오 참조와 소스 유효성 검사
       if (!videoRef.current) {
-        console.warn('Video reference not available for seek');
+        console.warn('[SeekToTime] Video reference not available for seek');
         addToast({
           type: 'warning',
           title: '비디오 컨트롤',
@@ -1773,7 +1821,7 @@ export default function CCTVAnalysis() {
               assistantMessage = {
                 role: 'assistant' as const,
                 content: result.reply,
-                timestamp: timestamp,
+                ...(timestamp && { timestamp: timestamp }),
               };
 
               // 새 세션이 생성된 경우 현재 세션 업데이트
@@ -2123,8 +2171,8 @@ export default function CCTVAnalysis() {
               : 'blur-0 scale-100 opacity-100'
           }`}
         >
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-            <div className="lg:col-span-2" ref={videoSectionRef}>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6">
+            <div className="lg:col-span-3" ref={videoSectionRef}>
               <Card className="mb-4 md:mb-6 bg-[#242a38] border-0 shadow-lg">
                 <CardContent className="p-4 md:p-6">
                   {videoSrc ? (
@@ -2300,44 +2348,18 @@ export default function CCTVAnalysis() {
                           playsInline={isMobile} // iOS에서 인라인 재생
                           preload="metadata"
                           controls={false}
+                          crossOrigin="anonymous" // CORS 설정
                           style={{
                             minHeight: isMobile ? '200px' : '300px', // 최소 높이 보장
                             maxHeight: isMobile ? '300px' : '500px', // 최대 높이 제한
                           }}
-                          onError={(e) => {
-                            const target = e.target as HTMLVideoElement;
-                            const error = target.error;
-                            console.error('Video error details:', {
-                              code: error?.code,
-                              message: error?.message,
-                              networkState: target.networkState,
-                              readyState: target.readyState,
-                              src: target.src,
-                            });
-
-                            setVideoError(
-                              `비디오 오류: ${
-                                error?.message || '알 수 없는 오류'
-                              }`
-                            );
-                            setIsPlaying(false);
-                            setVideoLoading(false);
-                          }}
+                          // 비디오 로드 이벤트
                           onLoadStart={() => {
-                            console.log('Video loading started');
+                            console.log('🎬 [Video] 로드 시작');
                             setVideoLoading(true);
                           }}
-                          onCanPlay={() => {
-                            console.log('Video can play');
-                            setVideoLoading(false);
-                            setVideoError(null);
-                          }}
-                          onLoadedData={() => {
-                            console.log('Video data loaded');
-                            setVideoLoading(false);
-                          }}
                           onLoadedMetadata={(e) => {
-                            console.log('Video metadata loaded');
+                            console.log('📊 [Video] 메타데이터 로드 완료');
                             setVideoLoading(false);
                             const video = e.target as HTMLVideoElement;
                             if (
@@ -2349,8 +2371,59 @@ export default function CCTVAnalysis() {
                               console.log('Video duration set:', video.duration);
                             }
                           }}
+                          onCanPlay={() => {
+                            console.log('▶️ [Video] 재생 준비 완료');
+                            setVideoLoading(false);
+                            setVideoError(null);
+                          }}
                           onWaiting={() => {
-                            console.log('Video waiting for data');
+                            console.log('⏳ [Video] 데이터 대기 중');
+                            setVideoLoading(true);
+                          }}
+                          onPlaying={() => {
+                            console.log('🎥 [Video] 재생 중');
+                            setVideoLoading(false);
+                          }}
+                          onError={(e) => {
+                            const target = e.target as HTMLVideoElement;
+                            const error = target.error;
+                            
+                            // 에러 코드별 메시지 매핑
+                            const errorMessages = {
+                              1: 'MEDIA_ERR_ABORTED: 미디어 재생이 중단됨',
+                              2: 'MEDIA_ERR_NETWORK: 네트워크 오류',
+                              3: 'MEDIA_ERR_DECODE: 미디어 디코딩 오류 (지원되지 않는 형식)',
+                              4: 'MEDIA_ERR_SRC_NOT_SUPPORTED: 지원되지 않는 미디어 형식'
+                            };
+                            
+                            const errorMessage = error?.code 
+                              ? errorMessages[error.code as keyof typeof errorMessages] || `에러 코드: ${error.code}`
+                              : '알 수 없는 오류';
+                            
+                            console.error('❌ [Video Error] 비디오 재생 오류:', {
+                              code: error?.code,
+                              message: error?.message,
+                              networkState: target.networkState,
+                              readyState: target.readyState,
+                              src: target.src,
+                              currentSrc: target.currentSrc,
+                              canPlayType: {
+                                mp4: target.canPlayType('video/mp4'),
+                                webm: target.canPlayType('video/webm'),
+                                ogg: target.canPlayType('video/ogg')
+                              }
+                            });
+
+                            // 대용량 파일 또는 코덱 문제 감지
+                            if (error?.code === 3 || error?.code === 4) {
+                              console.warn('⚠️ [Video] 코덱/포맷 문제 감지됨. 파일 재처리가 필요할 수 있습니다.');
+                            }
+
+                            setVideoError(
+                              `비디오 오류: ${errorMessage}`
+                            );
+                            setIsPlaying(false);
+                            setVideoLoading(false);
                           }}
                           // 모바일에서 터치로 재생 가능하도록
                           onClick={isMobile ? togglePlayPause : undefined}
@@ -2360,23 +2433,56 @@ export default function CCTVAnalysis() {
                       {/* 비디오 에러 표시 */}
                       {videoError && (
                         <div className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex items-center justify-center">
-                          <div className="text-center text-white p-4">
-                            <p className="text-sm mb-2">비디오 로드 오류</p>
-                            <p className="text-xs text-gray-300">
+                          <div className="text-center text-white p-4 max-w-md">
+                            <div className="mb-3">
+                              <AlertTriangle className="h-8 w-8 text-red-400 mx-auto mb-2" />
+                              <h3 className="text-lg font-medium mb-2">비디오 재생 오류</h3>
+                            </div>
+                            
+                            <p className="text-sm text-gray-300 mb-3">
                               {videoError}
                             </p>
-                            <Button
-                              size="sm"
-                              className="mt-2 bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]"
-                              onClick={() => {
-                                setVideoError(null);
-                                if (videoRef.current) {
-                                  videoRef.current.load();
-                                }
-                              }}
-                            >
-                              다시 시도
-                            </Button>
+                            
+                            {/* 코덱/포맷 문제인 경우 추가 안내 */}
+                            {(videoError.includes('DECODE') || videoError.includes('SUPPORTED')) && (
+                              <div className="bg-yellow-900 bg-opacity-50 border border-yellow-600 rounded-md p-3 mb-3">
+                                <p className="text-xs text-yellow-200">
+                                  <strong>대용량 파일 또는 특수 코덱 문제:</strong><br/>
+                                  • 파일이 손상되었거나 지원되지 않는 형식입니다<br/>
+                                  • Chrome/Edge 브라우저 사용을 권장합니다<br/>
+                                  • MP4 (H.264) 형식으로 변환하여 다시 시도해보세요
+                                </p>
+                              </div>
+                            )}
+                            
+                            <div className="flex gap-2 justify-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="bg-transparent border-gray-500 text-white hover:bg-gray-700"
+                                onClick={() => {
+                                  setVideoError(null);
+                                  // 비디오 컨테이너 초기화
+                                  setVideoSrc('');
+                                  setVideoId(null);
+                                }}
+                              >
+                                닫기
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]"
+                                onClick={() => {
+                                  setVideoError(null);
+                                  if (videoRef.current) {
+                                    console.log('🔄 [Video] 수동 재로드 시도');
+                                    videoRef.current.load();
+                                  }
+                                }}
+                              >
+                                다시 시도
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -2727,12 +2833,33 @@ export default function CCTVAnalysis() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Event Timeline - 비디오 아래에 추가 */}
+              {videoSrc && video && (
+                <Card className="bg-[#242a38] border-0 shadow-lg">
+                  <CardContent className="p-3 md:p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm md:text-base font-semibold text-white">
+                        이벤트 타임라인
+                      </h3>
+                      <span className="text-xs text-gray-400">
+                        실시간 이벤트 감지
+                      </span>
+                    </div>
+                    <EventTimeline 
+                      video={video}
+                      currentTime={currentTime}
+                      onSeekToEvent={seekToTime}
+                    />
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
-            <div>
-              <Card className="h-full min-h-[400px] max-h-[80vh] bg-[#242a38] border-0 shadow-lg chat-container-flexible">
-                <CardContent className="p-3 md:p-4 flex flex-col h-full">
-                  <div className="flex items-center justify-between mb-3 md:mb-4">
+            <div className="lg:col-span-2 flex flex-col">
+              <Card className="flex-1 min-h-[500px] lg:min-h-[600px] max-h-[90vh] lg:max-h-[85vh] bg-[#242a38] border-0 shadow-lg chat-container-flexible overflow-hidden">
+                <CardContent className="p-3 md:p-4 flex flex-col h-full overflow-hidden">
+                  <div className="flex items-center justify-between mb-3 md:mb-4 flex-shrink-0">
                     <h2 className="text-lg md:text-xl font-semibold text-white">
                       영상 분석 채팅
                     </h2>

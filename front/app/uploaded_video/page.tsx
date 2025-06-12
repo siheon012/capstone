@@ -286,8 +286,8 @@ export default function UploadedVideoPage() {
         return '도난';
       case 'collapse':
         return '쓰러짐';
-      case 'violence':
-        return '폭행';
+      case 'sitting':
+        return '점거';
       default:
         return eventType;
     }
@@ -523,7 +523,7 @@ export default function UploadedVideoPage() {
                     <SelectItem value="none">사건 없음</SelectItem>
                     <SelectItem value="도난">도난</SelectItem>
                     <SelectItem value="쓰러짐">쓰러짐</SelectItem>
-                    <SelectItem value="폭행">폭행</SelectItem>
+                    <SelectItem value="점거">점거</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -644,7 +644,7 @@ export default function UploadedVideoPage() {
                                     ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
                                     : eventText === '쓰러짐'
                                     ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                    : eventText === '폭행'
+                                    : eventText === '점거'
                                     ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
                                     : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
                                 }`}
@@ -663,7 +663,7 @@ export default function UploadedVideoPage() {
                                     ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
                                     : video.majorEvent === '쓰러짐'
                                     ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                    : video.majorEvent === '폭행'
+                                    : video.majorEvent === '점거'
                                     ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
                                     : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
                                 }`}

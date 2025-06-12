@@ -777,3 +777,74 @@ export async function getAnalysisProgress(videoId: string): Promise<{
     };
   }
 }
+
+// 비디오 요약 생성 함수
+export async function generateVideoSummary(videoId: string): Promise<{
+  success: boolean;
+  summary?: string;
+  error?: string;
+}> {
+  try {
+    console.log("🔄 비디오 요약 생성 API 호출:", {
+      videoId,
+      url: "http://localhost:8087/generate_summary",
+      timestamp: new Date().toISOString()
+    });
+
+    // Video Summary Service (Port 8087)에 요약 생성 요청
+    const response = await fetch("http://localhost:8087/generate_summary", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ 
+        video_id: parseInt(videoId)
+      }),
+    });
+
+    console.log("📡 비디오 요약 API 응답 상태:", {
+      videoId,
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ 비디오 요약 API 에러:", {
+        videoId,
+        status: response.status,
+        statusText: response.statusText,
+        errorBody: errorText
+      });
+
+      return {
+        success: false,
+        error: `요약 생성 실패: ${response.status} - ${errorText}`
+      };
+    }
+
+    const result = await response.json();
+    console.log("✅ 비디오 요약 API 성공 응답:", {
+      videoId,
+      summary: result.summary?.substring(0, 100) + "...",
+      timestamp: new Date().toISOString()
+    });
+
+    return {
+      success: true,
+      summary: result.summary
+    };
+  } catch (error) {
+    console.error("❌ 비디오 요약 생성 오류:", {
+      videoId,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    });
+
+    return {
+      success: false,
+      error: "요약 생성 중 오류가 발생했습니다."
+    };
+  }
+}

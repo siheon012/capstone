@@ -71,7 +71,7 @@ export default function EventTimeline({
         return 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30';
       case 'collapse':
         return 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30';
-      case 'violence':
+      case 'sitting':
         return 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30';
       default:
         return 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30';
@@ -84,8 +84,8 @@ export default function EventTimeline({
         return '도난';
       case 'collapse':
         return '쓰러짐';
-      case 'violence':
-        return '폭행';
+      case 'sitting':
+        return '점거';
       default:
         return eventType;
     }
@@ -188,7 +188,11 @@ export default function EventTimeline({
                     </Badge>
                     {onSeekToEvent && (
                       <Button
-                        onClick={() => onSeekToEvent(event.timestamp)}
+                        onClick={() => {
+                          console.log(`[EventTimeline] 이동 버튼 클릭 - timestamp: ${event.timestamp}`);
+                          console.log(`[EventTimeline] onSeekToEvent function:`, onSeekToEvent);
+                          onSeekToEvent(event.timestamp);
+                        }}
                         variant="ghost"
                         size="sm"
                         className="text-[#00e6b4] hover:bg-[#00e6b4] hover:text-[#1a1f2c] h-6 px-2"

@@ -584,7 +584,7 @@ body:not(.no-custom-scrollbar),
   }
 }
 
-/* 채팅창 유연한 높이 스타일 */
+/* 채팅창 유연한 높이 스타일 - EventTimeline 추가로 인한 웹 버전 개선 */
 .chat-container-flexible {
   height: clamp(350px, 70vh, 600px);
   display: flex;
@@ -601,7 +601,7 @@ body:not(.no-custom-scrollbar),
   flex-direction: column;
 }
 
-/* 작은 화면에서 더 큰 채팅창 */
+/* 작은 화면에서 더 큰 채팅창 (모바일은 기존 유지) */
 @media (max-width: 768px) {
   .chat-container-flexible {
     height: clamp(400px, 65vh, 600px);
@@ -610,34 +610,43 @@ body:not(.no-custom-scrollbar),
   }
 }
 
-/* 중간 화면 최적화 */
+/* 중간 화면 최적화 - EventTimeline 고려하여 높이 증가 */
 @media (min-width: 769px) and (max-width: 1024px) {
   .chat-container-flexible {
-    height: clamp(400px, 65vh, 550px);
-    min-height: 400px;
-    max-height: 70vh;
-  }
-}
-
-/* 큰 화면에서 더 여유롭게 */
-@media (min-width: 1200px) {
-  .chat-container-flexible {
-    height: clamp(450px, 75vh, 700px);
-    min-height: 450px;
-    max-height: 85vh;
-  }
-}
-
-/* 매우 큰 화면 (4K 등) */
-@media (min-width: 1920px) {
-  .chat-container-flexible {
-    height: clamp(500px, 80vh, 800px);
+    height: clamp(500px, 75vh, 700px);
     min-height: 500px;
+    max-height: 80vh;
+  }
+}
+
+/* 큰 화면에서 더 여유롭게 - EventTimeline과 균형 맞춤 */
+@media (min-width: 1025px) and (max-width: 1399px) {
+  .chat-container-flexible {
+    height: clamp(600px, 80vh, 800px);
+    min-height: 600px;
+    max-height: 88vh;
+  }
+}
+
+/* 매우 큰 화면 (1400px+) - EventTimeline과 최적 비율 */
+@media (min-width: 1400px) {
+  .chat-container-flexible {
+    height: clamp(700px, 85vh, 900px);
+    min-height: 700px;
     max-height: 90vh;
   }
 }
 
-/* 가로 모드 모바일 최적화 - 더 큰 채팅창 */
+/* 4K 화면 등 초대형 화면 */
+@media (min-width: 1920px) {
+  .chat-container-flexible {
+    height: clamp(800px, 85vh, 1000px);
+    min-height: 800px;
+    max-height: 92vh;
+  }
+}
+
+/* 가로 모드 모바일 최적화 - 더 큰 채팅창 (모바일은 기존 유지) */
 @media (max-width: 768px) and (orientation: landscape) {
   .chat-container-flexible {
     height: clamp(300px, 70vh, 450px);

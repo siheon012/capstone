@@ -13,6 +13,26 @@ class VideoSerializer(serializers.ModelSerializer):
     def get_chat_count(self, obj):
         """실제 PromptSession 수를 계산하여 반환"""
         return obj.prompt_sessions.count()
+    
+    def create(self, validated_data):
+        """비디오 생성 시 로깅 추가"""
+        print(f"🏗️ [VideoSerializer CREATE] 시작")
+        print(f"📋 [VideoSerializer CREATE] Validated data: {validated_data}")
+        
+        try:
+            # 기본 create 호출
+            instance = super().create(validated_data)
+            
+            print(f"✅ [VideoSerializer CREATE] 생성 성공: video_id={instance.video_id}")
+            print(f"📊 [VideoSerializer CREATE] Instance data: {instance.__dict__}")
+            
+            return instance
+            
+        except Exception as e:
+            print(f"❌ [VideoSerializer CREATE] 오류 발생: {str(e)}")
+            import traceback
+            print(f"📚 [VideoSerializer CREATE] Traceback: {traceback.format_exc()}")
+            raise
 
 class EventSerializer(serializers.ModelSerializer):
     timestamp_display = serializers.ReadOnlyField()

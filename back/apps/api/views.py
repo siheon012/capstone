@@ -172,17 +172,42 @@ def get_session_detail(request, session_id):
 @api_view(['GET', 'POST'])
 def video_list_create(request):
     """비디오 목록 조회 및 생성"""
+    print(f"🎬 [API video_list_create] ===== 요청 수신 =====")
+    print(f"🎬 [API video_list_create] 요청: {request.method}")
+    print(f"📦 [API video_list_create] Headers: {dict(request.headers)}")
+    print(f"📝 [API video_list_create] Data: {request.data}")
+    print(f"🔍 [API video_list_create] Content type: {request.content_type}")
+    print(f"📏 [API video_list_create] Content length: {request.META.get('CONTENT_LENGTH', 'Unknown')}")
+    print(f"🌐 [API video_list_create] Remote addr: {request.META.get('REMOTE_ADDR', 'Unknown')}")
+    print(f"🎬 [API video_list_create] =============================")
+    
     if request.method == 'GET':
         videos = Video.objects.all().order_by('-upload_date')
         serializer = VideoSerializer(videos, many=True)
+        print(f"✅ [API video_list_create] GET 성공: {len(videos)}개 비디오 반환")
         return Response(serializer.data)
     
     elif request.method == 'POST':
-        serializer = VideoSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        print(f"🏗️ [API video_list_create] POST 시작")
+        try:
+            serializer = VideoSerializer(data=request.data)
+            print(f"📋 [API video_list_create] Serializer created")
+            
+            if serializer.is_valid():
+                print(f"✅ [API video_list_create] Serializer valid")
+                instance = serializer.save()
+                print(f"🎯 [API video_list_create] 저장 성공: video_id={instance.video_id}")
+                print(f"📄 [API video_list_create] Response data: {serializer.data}")
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            else:
+                print(f"❌ [API video_list_create] Serializer invalid: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            print(f"❌ [API video_list_create] 예외 발생: {str(e)}")
+            import traceback
+            print(f"📚 [API video_list_create] Traceback: {traceback.format_exc()}")
+            return Response({"error": f"서버 오류: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def video_detail(request, video_id):
@@ -314,7 +339,11 @@ def process_prompt_logic(prompt_text, video=None):
         
         print(f"Django 테이블명으로 변환된 SQL: {sql_query}")
         
-        # 3. DB에서 쿼리 실행
+        # 3. 질문 분류 (SQL 및 프롬프트 기반)
+        question_type = classify_question_type(prompt_text, sql_query)
+        print(f"🔍 질문 분류: {question_type}")
+        
+        # 4. DB에서 쿼리 실행
         with connection.cursor() as cursor:
             cursor.execute(sql_query)
             query_results = cursor.fetchall()
@@ -324,61 +353,43 @@ def process_prompt_logic(prompt_text, video=None):
             
         print(f"쿼리 결과: {query_results}")
         
-        # 4. 실제 이벤트 데이터 조회하여 상세 응답 생성
+        # 5. 실제 이벤트 데이터 조회하여 상세 응답 생성
         found_events = []
         relevant_event = None
         
         for result in query_results:
             try:
-                event_id = result[0]
-                # 해당 비디오의 이벤트만 검색
+                # SQL 쿼리 결과는 timestamp 값이므로 timestamp로 검색
+                timestamp_value = result[0]
+                print(f"🔍 SQL 결과에서 timestamp 값: {timestamp_value}")
+                
+                # 해당 비디오의 해당 timestamp 이벤트 검색
                 if video:
-                    events = Event.objects.filter(id=event_id, video=video)
+                    events = Event.objects.filter(timestamp=timestamp_value, video=video)
                 else:
-                    events = Event.objects.filter(id=event_id)
+                    events = Event.objects.filter(timestamp=timestamp_value)
                     
                 if events.exists():
                     event = events.first()
                     found_events.append(event)
+                    print(f"✅ timestamp {timestamp_value}로 이벤트 발견: ID={event.id}, 타입={event.event_type}")
                     
                     # 첫 번째 이벤트를 relevant_event로 설정
                     if relevant_event is None:
                         relevant_event = event
-                        print(f"✅ 주요 이벤트 매핑: ID={relevant_event.id}, 비디오={relevant_event.video.name}, 타입={relevant_event.event_type}")
+                        print(f"✅ 주요 이벤트 매핑: ID={relevant_event.id}, timestamp={relevant_event.timestamp}, 비디오={relevant_event.video.name}, 타입={relevant_event.event_type}")
                 else:
-                    print(f"⚠️ 해당 비디오에서 이벤트 ID {event_id}를 찾을 수 없음")
+                    print(f"⚠️ 해당 비디오에서 timestamp {timestamp_value}에 해당하는 이벤트를 찾을 수 없음")
             except Exception as e:
                 print(f"이벤트 매핑 오류: {e}")
         
-        # 5. 상세한 응답 텍스트 생성
-        if not found_events:
-            response_text = "데이터베이스에서 해당 이벤트 정보를 찾을 수 없습니다."
+        # 5. 질문 타입별 처리 및 응답 생성
+        if question_type == 'ABNORMAL_BEHAVIOR':
+            # 이상행동 질문: 같은 시나리오 그룹화 후 첫 번째 timestamp 반환
+            response_text, relevant_event = process_abnormal_behavior_query(found_events)
         else:
-            response_parts = [f"총 {len(found_events)}개의 이벤트를 찾았습니다:\n"]
-            
-            for i, event in enumerate(found_events, 1):
-                # 타임스탬프를 시:분:초 형식으로 변환
-                hours = event.timestamp // 3600
-                minutes = (event.timestamp % 3600) // 60
-                seconds = event.timestamp % 60
-                time_str = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
-                
-                # 이벤트 타입 한국어 변환
-                event_type_kr = {
-                    'theft': '도난',
-                    'collapse': '쓰러짐', 
-                    'violence': '폭행'
-                }.get(event.event_type, event.event_type)
-                
-                event_info = f"{i}. [{time_str}] {event_type_kr}"
-                if event.location:
-                    event_info += f" - 위치: {event.location}"
-                if event.action_detected:
-                    event_info += f" - 상세: {event.action_detected}"
-                
-                response_parts.append(event_info)
-            
-            response_text = "\n".join(response_parts)
+            # 마케팅 질문: 개별 이벤트 나열
+            response_text, relevant_event = process_marketing_query(found_events)
         
         return response_text, relevant_event
         
@@ -403,3 +414,373 @@ class PromptSessionViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(video_id=video_id)
             
         return queryset
+
+def classify_question_type(prompt_text, sql_query):
+    """
+    프롬프트와 SQL을 분석하여 질문 유형을 분류
+    
+    Args:
+        prompt_text: 사용자 프롬프트
+        sql_query: 생성된 SQL 쿼리
+    
+    Returns:
+        str: 'ABNORMAL_BEHAVIOR' 또는 'MARKETING'
+    """
+    # 이상행동 관련 키워드
+    abnormal_keywords = ['사건', '이상행동', '쓰러짐', '점거', '도난', 'theft', 'collapse', 'sitting']
+    
+    prompt_lower = prompt_text.lower()
+    sql_lower = sql_query.lower()
+    
+    # 프롬프트에서 이상행동 키워드 검색
+    for keyword in abnormal_keywords:
+        if keyword in prompt_lower or keyword in sql_lower:
+            return 'ABNORMAL_BEHAVIOR'
+    
+    # SQL에서 event_type 조건 검색
+    if any(event_type in sql_lower for event_type in ['theft', 'collapse', 'sitting']):
+        return 'ABNORMAL_BEHAVIOR'
+    
+    # 기본적으로는 마케팅 질문으로 분류
+    return 'MARKETING'
+
+def process_abnormal_behavior_query(found_events):
+    """
+    이상행동 질문 처리: 개인별 그룹화 후 시나리오별 그룹화 → 첫 번째 timestamp 반환
+    
+    Args:
+        found_events: Event 객체 리스트
+    
+    Returns:
+        tuple: (response_text, relevant_event)
+    """
+    if not found_events:
+        return "해당하는 이상행동을 찾을 수 없습니다.", None
+    
+    print(f"🚨 이상행동 질문 처리: {len(found_events)}개 이벤트")
+    
+    # 1단계: 시간순 정렬
+    found_events.sort(key=lambda x: x.timestamp)
+    
+    # 2단계: 개인별 그룹화 (성별, 나이, 위치 기준)
+    person_groups = group_events_by_person_abnormal(found_events)
+    print(f"👥 개인별 그룹화: {len(person_groups)}명")
+    
+    # 3단계: 각 개인별로 시나리오 그룹화 (event_type + 시간 연속성)
+    scenario_groups = []
+    for person_group in person_groups:
+        person_scenarios = group_events_by_scenario(person_group['events'])
+        for scenario in person_scenarios:
+            # 개인 정보를 시나리오에 추가
+            scenario['person_info'] = {
+                'gender': person_group['gender'],
+                'age': person_group['age'],
+                'location': person_group['location']
+            }
+            scenario_groups.append(scenario)
+    
+    print(f"🎬 그룹화된 시나리오: {len(scenario_groups)}개")
+    
+    response_parts = []
+    relevant_event = None
+    
+    if len(scenario_groups) == 1:
+        # 단일 시나리오인 경우
+        group = scenario_groups[0]
+        start_event = group['events'][0]  # 첫 번째 이벤트
+        relevant_event = start_event
+        
+        # 타임스탬프를 분:초 형식으로 변환
+        minutes = start_event.timestamp // 60
+        seconds = start_event.timestamp % 60
+        time_str = f"{int(minutes):02d}:{int(seconds):02d}"
+        
+        # 이벤트 타입 한국어 변환
+        event_type_kr = {
+            'theft': '도난',
+            'collapse': '쓰러짐', 
+            'sitting': '점거'
+        }.get(start_event.event_type, start_event.event_type)
+        
+        duration = group['end_time'] - group['start_time']
+        duration_str = f"{duration}초" if duration > 0 else ""
+        
+        response_text = f"{event_type_kr} 시나리오가 {time_str}에 시작되었습니다"
+        if duration_str:
+            response_text += f" (지속시간: {duration_str})"
+        if start_event.location:
+            response_text += f" - 위치: {start_event.location}"
+        
+    else:
+        # 여러 시나리오인 경우
+        response_parts.append(f"총 {len(scenario_groups)}개의 시나리오를 찾았습니다:\n")
+        
+        for i, group in enumerate(scenario_groups, 1):
+            start_event = group['events'][0]
+            if relevant_event is None:
+                relevant_event = start_event
+            
+            minutes = start_event.timestamp // 60
+            seconds = start_event.timestamp % 60
+            time_str = f"{int(minutes):02d}:{int(seconds):02d}"
+            
+            event_type_kr = {
+                'theft': '도난',
+                'collapse': '쓰러짐', 
+                'sitting': '점거'
+            }.get(start_event.event_type, start_event.event_type)
+            
+            duration = group['end_time'] - group['start_time']
+            duration_str = f" ({duration}초 지속)" if duration > 0 else ""
+            
+            scenario_info = f"{i}. [{time_str}] {event_type_kr} 시나리오 시작{duration_str}"
+            if start_event.location:
+                scenario_info += f" - 위치: {start_event.location}"
+            
+            response_parts.append(scenario_info)
+        
+        response_text = "\n".join(response_parts)
+    
+    return response_text, relevant_event
+
+def process_marketing_query(found_events):
+    """
+    마케팅 질문 처리: 개인별 그룹화 (성별, 위치, 비슷한 나이 기준)
+    
+    Args:
+        found_events: Event 객체 리스트
+    
+    Returns:
+        tuple: (response_text, relevant_event)
+    """
+    if not found_events:
+        return "해당하는 정보를 찾을 수 없습니다.", None
+    
+    print(f"📊 마케팅 질문 처리: {len(found_events)}개 이벤트")
+    
+    # 시간순 정렬 (오름차순 - 빠른 시간 순)
+    found_events.sort(key=lambda x: x.timestamp)
+    
+    # 개인별 그룹화 (성별, 위치, 비슷한 나이)
+    person_groups = group_events_by_person(found_events)
+    
+    print(f"👥 그룹화된 개인: {len(person_groups)}명")
+    
+    relevant_event = found_events[0]
+    
+    # 개인별 방문 시간대 응답 생성
+    if len(person_groups) == 1:
+        # 단일 개인인 경우
+        group = person_groups[0]
+        person_events = group['events']
+        first_event = person_events[0]
+        last_event = person_events[-1]
+        
+        # 시간 범위 계산
+        start_minutes = first_event.timestamp // 60
+        start_seconds = first_event.timestamp % 60
+        start_time_str = f"{int(start_minutes):02d}:{int(start_seconds):02d}"
+        
+        if len(person_events) > 1:
+            end_minutes = last_event.timestamp // 60
+            end_seconds = last_event.timestamp % 60
+            end_time_str = f"{int(end_minutes):02d}:{int(end_seconds):02d}"
+            time_range = f"{start_time_str} ~ {end_time_str}"
+        else:
+            time_range = start_time_str
+        
+        gender_kr = "남성" if first_event.gender == "male" else "여성"
+        response_text = f"{int(first_event.age)}세 {gender_kr}이 {time_range}에 방문했습니다"
+        if first_event.location:
+            response_text += f" (위치: {first_event.location})"
+        
+    else:
+        # 여러 개인인 경우
+        response_parts = [f"총 {len(person_groups)}명의 방문자를 찾았습니다:\n"]
+        
+        for i, group in enumerate(person_groups, 1):
+            person_events = group['events']
+            first_event = person_events[0]
+            last_event = person_events[-1]
+            
+            # 시간 범위 계산
+            start_minutes = first_event.timestamp // 60
+            start_seconds = first_event.timestamp % 60
+            start_time_str = f"{int(start_minutes):02d}:{int(start_seconds):02d}"
+            
+            if len(person_events) > 1:
+                end_minutes = last_event.timestamp // 60
+                end_seconds = last_event.timestamp % 60
+                end_time_str = f"{int(end_minutes):02d}:{int(end_seconds):02d}"
+                time_range = f"{start_time_str} ~ {end_time_str}"
+            else:
+                time_range = start_time_str
+            
+            gender_kr = "남성" if first_event.gender == "male" else "여성"
+            person_info = f"{i}. [{time_range}] {int(first_event.age)}세 {gender_kr}"
+            if first_event.location:
+                person_info += f" - 위치: {first_event.location}"
+            
+            response_parts.append(person_info)
+        
+        response_text = "\n".join(response_parts)
+    
+    return response_text, relevant_event
+
+def group_events_by_scenario(events):
+    """
+    이벤트들을 시나리오별로 그룹화
+    같은 event_type이고 시간적으로 연속된 이벤트들을 하나의 시나리오로 묶음
+    
+    Args:
+        events: Event 객체 리스트 (시간순 정렬됨)
+    
+    Returns:
+        list: 시나리오 그룹 리스트
+    """
+    if not events:
+        return []
+    
+    groups = []
+    current_group = None
+    
+    for event in events:
+        if current_group is None:
+            # 첫 번째 그룹 생성
+            current_group = {
+                'event_type': event.event_type,
+                'start_time': event.timestamp,
+                'end_time': event.timestamp,
+                'events': [event],
+                'location': event.location
+            }
+        elif (event.event_type == current_group['event_type'] and 
+              event.timestamp - current_group['end_time'] <= 10):  # 10초 이내면 같은 시나리오
+            # 기존 그룹에 추가
+            current_group['end_time'] = event.timestamp
+            current_group['events'].append(event)
+        else:
+            # 새로운 그룹 시작
+            groups.append(current_group)
+            current_group = {
+                'event_type': event.event_type,
+                'start_time': event.timestamp,
+                'end_time': event.timestamp,
+                'events': [event],
+                'location': event.location
+            }
+    
+    # 마지막 그룹 추가
+    if current_group:
+        groups.append(current_group)
+    
+    return groups
+
+def group_events_by_person(events):
+    """
+    이벤트들을 개인별로 그룹화
+    성별, 위치, 비슷한 나이(±3세)를 기준으로 같은 사람으로 판단
+    
+    Args:
+        events: Event 객체 리스트 (시간순 정렬됨)
+    
+    Returns:
+        list: 개인별 그룹 리스트
+    """
+    if not events:
+        return []
+    
+    groups = []
+    
+    for event in events:
+        matched_group = None
+        
+        # 기존 그룹 중에서 같은 사람인지 확인
+        for group in groups:
+            representative_event = group['events'][0]
+            
+            # 같은 사람 판단 기준:
+            # 1. 성별이 같고
+            # 2. 나이가 비슷하고 (±3세)
+            # 3. 위치가 같거나 인접하고
+            # 4. 시간이 연속적이거나 가까움 (30초 이내)
+            if (event.gender == representative_event.gender and
+                abs(event.age - representative_event.age) <= 3 and
+                str(event.location) == str(representative_event.location) and
+                abs(event.timestamp - group['end_time']) <= 30):  # 30초 이내
+                
+                matched_group = group
+                break
+        
+        if matched_group:
+            # 기존 그룹에 추가
+            matched_group['events'].append(event)
+            matched_group['end_time'] = event.timestamp
+        else:
+            # 새로운 그룹 생성
+            new_group = {
+                'gender': event.gender,
+                'age': event.age,
+                'location': event.location,
+                'start_time': event.timestamp,
+                'end_time': event.timestamp,
+                'events': [event]
+            }
+            groups.append(new_group)
+    
+    return groups
+
+def group_events_by_person_abnormal(events):
+    """
+    이상행동 이벤트들을 개인별로 그룹화
+    성별, 위치, 비슷한 나이(±3세)를 기준으로 같은 사람으로 판단
+    이상행동의 경우 시간 간격을 더 짧게 설정 (15초 이내)
+    
+    Args:
+        events: Event 객체 리스트 (시간순 정렬됨)
+    
+    Returns:
+        list: 개인별 그룹 리스트
+    """
+    if not events:
+        return []
+    
+    groups = []
+    
+    for event in events:
+        matched_group = None
+        
+        # 기존 그룹 중에서 같은 사람인지 확인
+        for group in groups:
+            representative_event = group['events'][0]
+            
+            # 같은 사람 판단 기준:
+            # 1. 성별이 같고
+            # 2. 나이가 비슷하고 (±3세)
+            # 3. 위치가 같고
+            # 4. 시간이 연속적이거나 가까움 (15초 이내) - 이상행동은 더 짧은 간격
+            if (event.gender == representative_event.gender and
+                abs(event.age - representative_event.age) <= 3 and
+                str(event.location) == str(representative_event.location) and
+                abs(event.timestamp - group['end_time']) <= 15):  # 15초 이내
+                
+                matched_group = group
+                break
+        
+        if matched_group:
+            # 기존 그룹에 추가
+            matched_group['events'].append(event)
+            matched_group['end_time'] = event.timestamp
+        else:
+            # 새로운 그룹 생성
+            new_group = {
+                'gender': event.gender,
+                'age': event.age,
+                'location': event.location,
+                'start_time': event.timestamp,
+                'end_time': event.timestamp,
+                'events': [event]
+            }
+            groups.append(new_group)
+    
+    return groups

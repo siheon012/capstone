@@ -121,8 +121,8 @@ class Event(models.Model):
     age = models.FloatField()  # null=True, blank=True 제거 (DB에서 not null)
     gender = models.CharField(max_length=10)  # null=True, blank=True 제거
     gender_score = models.FloatField()  # null=True, blank=True 제거
-    location = models.IntegerField()
-    area_of_interest = models.IntegerField()
+    location = models.CharField(max_length=50, null=True, blank=True)  # 객체 위치 (예: left, right, center)
+    area_of_interest = models.CharField(max_length=50, null=True, blank=True)  # 객체 위치 (예: left, right, center)
     action_detected = models.CharField(max_length=255, null=True)
     event_type = models.CharField(max_length=255)
     scene_analysis = models.CharField(max_length=255, null=True, blank=True)  # 분석 결과 (예: VLM 요약)

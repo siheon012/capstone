@@ -22,6 +22,44 @@ class VideoViewSet(viewsets.ModelViewSet):
     serializer_class = VideoSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
+    def create(self, request, *args, **kwargs):
+        """비디오 생성 - 로깅 추가"""
+        print(f"🎬 [VideoViewSet CREATE] 요청 시작")
+        print(f"📦 [VideoViewSet CREATE] Request method: {request.method}")
+        print(f"📂 [VideoViewSet CREATE] Request headers: {dict(request.headers)}")
+        print(f"📝 [VideoViewSet CREATE] Request data: {request.data}")
+        print(f"📁 [VideoViewSet CREATE] Request FILES: {request.FILES}")
+        print(f"🔍 [VideoViewSet CREATE] Content type: {request.content_type}")
+        
+        try:
+            # 요청 데이터 유효성 검사
+            if not request.data:
+                print("❌ [VideoViewSet CREATE] 요청 데이터가 비어있음")
+                return Response(
+                    {'error': '요청 데이터가 비어있습니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 기본 create 메서드 호출
+            response = super().create(request, *args, **kwargs)
+            
+            print(f"✅ [VideoViewSet CREATE] 생성 성공")
+            print(f"📋 [VideoViewSet CREATE] Response status: {response.status_code}")
+            print(f"📄 [VideoViewSet CREATE] Response data: {response.data}")
+            
+            return response
+            
+        except Exception as e:
+            print(f"❌ [VideoViewSet CREATE] 오류 발생: {str(e)}")
+            print(f"🔥 [VideoViewSet CREATE] Exception type: {type(e).__name__}")
+            import traceback
+            print(f"📚 [VideoViewSet CREATE] Traceback: {traceback.format_exc()}")
+            
+            return Response(
+                {'error': f'비디오 생성 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     @action(detail=False, methods=['post'], url_path='upload')
     def upload_video(self, request):
         """비디오 파일 업로드"""
@@ -60,8 +98,12 @@ class VideoViewSet(viewsets.ModelViewSet):
             # 시리얼라이저로 응답 데이터 생성
             serializer = self.get_serializer(video)
             
+            print(f"🎯 [Django Video Upload] 비디오 생성 완료: video_id={video.video_id}, name={video.name}")
+            print(f"🔍 [Django Video Upload] 시리얼라이저 데이터: {serializer.data}")
+            
             return Response({
                 'success': True,
+                'videoId': video.video_id,  # 명시적으로 videoId 추가
                 'message': '비디오가 성공적으로 업로드되었습니다.',
                 'video': serializer.data
             }, status=status.HTTP_201_CREATED)

@@ -7,10 +7,7 @@ services:
       context: ./back
       dockerfile: Dockerfile
     ports:
-      - "8001:8000"  # 기존 8000과 충돌 방지
-    environment:
-      - DEBUG=False
-      - ALLOWED_HOSTS=localhost,127.0.0.1,your-server-ip
+      - "${BACKEND_PORT:-8001}:8000"
     volumes:
       - ./back:/app
       - ./back/static:/app/static
@@ -25,12 +22,14 @@ services:
       context: ./front
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://your-server-ip:8001
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8001}
+      - NODE_ENV=${NODE_ENV:-development}
     volumes:
       - ./front:/app
       - /app/node_modules
+      - /app/.next
     depends_on:
       - backend
     networks:
@@ -40,11 +39,11 @@ services:
   db:
     image: postgres:15
     ports:
-      - "5433:5432"  # 기존 5432와 충돌 방지
+      - "${DB_PORT:-5433}:5432"
     environment:
-      POSTGRES_DB: capstone_db
-      POSTGRES_USER: capstone_user
-      POSTGRES_PASSWORD: capstone_password
+      POSTGRES_DB: ${POSTGRES_DB:-capstone_db}
+      POSTGRES_USER: ${POSTGRES_USER:-capstone_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone_password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:

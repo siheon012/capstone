@@ -66,5 +66,8 @@ dummy*
 
 # env 템플릿 파일들은 추적됨 (.env.*.template)
 
+# localstack data
+localstack/
+
 # ISSUE 정리 파일
 ISSUE.md

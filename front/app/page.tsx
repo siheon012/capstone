@@ -2,7 +2,7 @@
 
 console.log("🔥 page.tsx 파일이 로드됨 - 최상단");
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -3023,13 +3023,15 @@ export default function CCTVAnalysis() {
 
             {/* 히스토리 콘텐츠 - 나머지 화면 전체 사용 */}
             <div className="flex-1 h-[calc(100vh-80px)] overflow-hidden">
-              <DynamicHistorySidebar
-                onSelectHistory={handleSelectHistory}
-                currentHistoryId={currentHistoryId}
-                onClose={handleCloseHistory}
-                refreshTrigger={historyRefreshTrigger}
-                onHistoryRefresh={handleHistoryRefresh}
-              />
+              <Suspense fallback={<div className="p-4 text-white">히스토리 로딩 중...</div>}>
+                <DynamicHistorySidebar
+                  onSelectHistory={handleSelectHistory}
+                  currentHistoryId={currentHistoryId}
+                  onClose={handleCloseHistory}
+                  refreshTrigger={historyRefreshTrigger}
+                  onHistoryRefresh={handleHistoryRefresh}
+                />
+              </Suspense>
             </div>
           </div>
         ) : (
@@ -3046,13 +3048,15 @@ export default function CCTVAnalysis() {
               minWidth: '400px',
             }}
           >
-            <DynamicHistorySidebar
-              onSelectHistory={handleSelectHistory}
-              currentHistoryId={currentHistoryId}
-              onClose={handleCloseHistory}
-              refreshTrigger={historyRefreshTrigger}
-              onHistoryRefresh={handleHistoryRefresh}
-            />
+            <Suspense fallback={<div className="p-4 text-white">히스토리 로딩 중...</div>}>
+              <DynamicHistorySidebar
+                onSelectHistory={handleSelectHistory}
+                currentHistoryId={currentHistoryId}
+                onClose={handleCloseHistory}
+                refreshTrigger={historyRefreshTrigger}
+                onHistoryRefresh={handleHistoryRefresh}
+              />
+            </Suspense>
           </div>
         )}
 

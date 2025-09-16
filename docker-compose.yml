@@ -15,6 +15,9 @@ services:
       - db
     networks:
       - app-network
+    environment:
+      - USE_LOCALSTACK=${USE_LOCALSTACK:-false}
+      - AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-}
 
   # 프론트엔드 (Next.js)
   frontend:
@@ -61,6 +64,23 @@ services:
     depends_on:
       - frontend
       - backend
+    networks:
+      - app-network
+
+  # LocalStack (AWS 서비스 로컬 시뮬레이션)
+  localstack:
+    image: localstack/localstack:3.0
+    ports:
+      - "${LOCALSTACK_PORT:-4566}:4566"
+    environment:
+      - SERVICES=s3,sqs
+      - DEBUG=1
+      - PERSISTENCE=1
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - ./localstack:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - app-network
 

@@ -23,19 +23,19 @@ env = environ.Env(
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Take environment variables from .env file
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+# 환경변수는 Docker Compose에서 주입됨 (--env-file 옵션 사용)
+# environ.Env.read_env() 주석 처리 - Docker 환경변수 우선 사용
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY')
+SECRET_KEY = env('SECRET_KEY', default='django-insecure-fallback-key-only-for-development')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env('DEBUG')
+DEBUG = env('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = env('ALLOWED_HOSTS').split(',')
+ALLOWED_HOSTS = env('ALLOWED_HOSTS', default='localhost').split(',')
 
 # Application definition
 
@@ -97,12 +97,12 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': env('DB_ENGINE'),
-        'NAME': env('DB_NAME'),        
-        'USER': env('DB_USER'),      
-        'PASSWORD': env('DB_PASSWORD'),  
-        'HOST': env('DB_HOST'),
-        'PORT': env('DB_PORT'),
+        'ENGINE': env('DB_ENGINE', default='django.db.backends.postgresql'),
+        'NAME': env('DB_NAME', default='capstone_local'),        
+        'USER': env('DB_USER', default='capstone_user'),      
+        'PASSWORD': env('DB_PASSWORD', default='local_password'),  
+        'HOST': env('DB_HOST', default='db'),
+        'PORT': env('DB_PORT', default='5432'),
     }
 }
 

@@ -17,11 +17,6 @@ front/yarn-debug.log*
 front/yarn-error.log*
 front/.pnpm-debug.log*
 
-# env files
-front/.env*
-.env
-.env.*
-
 # vercel
 front/.vercel
 
@@ -30,7 +25,6 @@ front/*.tsbuildinfo
 front/next-env.d.ts
 
 # Python/Django
-back/.env
 back/env/
 venv/
 ENV/
@@ -64,3 +58,10 @@ front/public/uploads/*
 
 #dummy data && file
 dummy*
+
+# env files (실제 환경변수 파일들 - 보안상 추적하지 않음)
+.env.local
+.env.dev
+.env.prod
+
+# env 템플릿 파일들은 추적됨 (.env.*.template)

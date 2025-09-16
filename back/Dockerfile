@@ -15,9 +15,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 코드 복사
 COPY . .
 
-# 정적 파일 수집
-RUN python manage.py collectstatic --noinput
-
 # 포트 노출
 EXPOSE 8000
 

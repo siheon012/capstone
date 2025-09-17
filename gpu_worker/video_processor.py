@@ -1,6 +1,7 @@
 """
 EC2 GPU Video Processing Worker
 SQS Long Polling을 통한 비디오 처리 워커
+가시성 타임아웃 자동 관리 포함
 """
 
 import os
@@ -10,10 +11,12 @@ import time
 import logging
 import signal
 import boto3
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional
-import traceback
+from visibility_manager import VisibilityTimeoutManager
+
 
 # Django 설정을 위한 경로 추가
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -51,12 +54,16 @@ logger = logging.getLogger('GPUWorker')
 class GPUVideoWorker:
     """
     EC2 GPU 비디오 처리 워커
+    가시성 타임아웃 자동 관리 포함
     """
     
     def __init__(self):
         self.running = False
         self.processed_count = 0
         self.error_count = 0
+        
+        # 가시성 타임아웃 매니저 초기화
+        self.visibility_manager = VisibilityTimeoutManager(sqs_service)
         
         # 시그널 핸들러 등록 (Graceful Shutdown)
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -77,50 +84,135 @@ class GPUVideoWorker:
         logger.info("GPU Video Worker 시작...")
         logger.info(f"현재 상태: 처리완료={self.processed_count}, 오류={self.error_count}")
         
+        # 가시성 타임아웃 모니터링 시작
+        self.visibility_manager.start_monitoring()
+        
         self.running = True
         consecutive_empty_polls = 0
         max_empty_polls = 3  # 연속으로 빈 폴링 3회시 잠시 대기
         
-        while self.running:
-            try:
-                # SQS Long Polling으로 메시지 수신 (20초 대기)
-                logger.debug("SQS 메시지 수신 중... (Long Polling 20초)")
-                messages = sqs_service.receive_messages(
-                    max_messages=1,
-                    wait_time_seconds=20,
-                    visibility_timeout=600  # 10분 - GPU 처리 시간 고려
-                )
-                
-                if messages:
-                    consecutive_empty_polls = 0
-                    for message in messages:
-                        if not self.running:
-                            break
-                        self._process_message(message)
-                else:
-                    consecutive_empty_polls += 1
-                    logger.debug(f"수신된 메시지 없음 ({consecutive_empty_polls}/3)")
+        try:
+            while self.running:
+                try:
+                    # SQS Long Polling으로 메시지 수신 (20초 대기)
+                    logger.debug("SQS 메시지 수신 중... (Long Polling 20초)")
+                    messages = sqs_service.receive_messages(
+                        max_messages=1,
+                        wait_time_seconds=20,
+                        visibility_timeout=300  # 5분 기본 가시성 타임아웃
+                    )
                     
-                    # 연속으로 빈 메시지가 여러 번 나오면 잠시 대기
-                    if consecutive_empty_polls >= max_empty_polls:
-                        logger.info("잠시 대기 중... (30초)")
-                        time.sleep(30)
+                    if messages:
                         consecutive_empty_polls = 0
-            
-            except KeyboardInterrupt:
-                logger.info("사용자에 의한 종료")
-                break
-            except Exception as e:
-                logger.error(f"워커 루프 오류: {e}")
-                self.error_count += 1
-                time.sleep(10)  # 오류 시 10초 대기
+                        for message in messages:
+                            if not self.running:
+                                break
+                            self._process_message_with_visibility_management(message)
+                    else:
+                        consecutive_empty_polls += 1
+                        logger.debug(f"수신된 메시지 없음 ({consecutive_empty_polls}/3)")
+                        
+                        # 연속으로 빈 메시지가 여러 번 나오면 잠시 대기
+                        if consecutive_empty_polls >= max_empty_polls:
+                            logger.info("잠시 대기 중... (30초)")
+                            time.sleep(30)
+                            consecutive_empty_polls = 0
+                
+                except KeyboardInterrupt:
+                    logger.info("사용자에 의한 종료")
+                    break
+                except Exception as e:
+                    logger.error(f"워커 루프 오류: {e}")
+                    self.error_count += 1
+                    time.sleep(10)  # 오류 시 10초 대기
         
+        finally:
+            # 가시성 타임아웃 모니터링 중지
+            self.visibility_manager.stop_monitoring()
+            
         logger.info("GPU Video Worker 종료")
         logger.info(f"최종 통계: 처리완료={self.processed_count}, 오류={self.error_count}")
+
+    def _process_message_with_visibility_management(self, message: Dict[str, Any]):
+        """
+        SQS 메시지 처리 (가시성 타임아웃 자동 관리)
+        """
+        receipt_handle = message.get('ReceiptHandle')
+        message_body = message.get('Body', '{}')
+        
+        try:
+            # 메시지 파싱
+            payload = json.loads(message_body)
+            video_id = payload.get('video', {}).get('id')
+            s3_bucket = payload.get('s3', {}).get('bucket')
+            s3_key = payload.get('s3', {}).get('key')
+            
+            logger.info(f"메시지 처리 시작: video_id={video_id}, s3_key={s3_key}")
+            
+            # 필수 정보 검증
+            if not all([video_id, s3_bucket, s3_key]):
+                raise ValueError(f"필수 정보 누락: video_id={video_id}, s3_bucket={s3_bucket}, s3_key={s3_key}")
+            
+            # 파일 크기 기반으로 예상 처리 시간 계산
+            estimated_time = self._estimate_processing_time(s3_key)
+            
+            # 가시성 타임아웃 관리 시작
+            self.visibility_manager.register_message(
+                receipt_handle, 
+                video_id, 
+                estimated_time
+            )
+            
+            # 비디오 처리 실행
+            processing_result = self._process_video(video_id, s3_bucket, s3_key)
+            
+            if processing_result['success']:
+                # 처리 완료 - 메시지 삭제
+                sqs_service.delete_message(receipt_handle)
+                self.visibility_manager.unregister_message(receipt_handle, 'completed')
+                self.processed_count += 1
+                logger.info(f"✅ 비디오 처리 완료: video_id={video_id}")
+            else:
+                # 처리 실패 - 메시지 가시성 복구 (다른 워커가 재처리 가능)
+                sqs_service.change_message_visibility(receipt_handle, 0)
+                self.visibility_manager.unregister_message(receipt_handle, 'failed')
+                self.error_count += 1
+                logger.error(f"❌ 비디오 처리 실패: video_id={video_id}, error={processing_result['error']}")
+        
+        except Exception as e:
+            logger.error(f"❌ 메시지 처리 오류: {e}")
+            logger.error(traceback.format_exc())
+            
+            # 예외 발생 시 메시지 가시성 복구
+            try:
+                sqs_service.change_message_visibility(receipt_handle, 0)
+                self.visibility_manager.unregister_message(receipt_handle, 'failed')
+            except:
+                pass
+            
+            self.error_count += 1
+    
+    def _estimate_processing_time(self, s3_key: str) -> int:
+        """
+        S3 키를 기반으로 예상 처리 시간 계산
+        
+        Args:
+            s3_key: S3 객체 키
+            
+        Returns:
+            예상 처리 시간 (초)
+        """
+        # 파일 확장자 기반 기본 예상 시간
+        if s3_key.lower().endswith(('.mp4', '.avi', '.mov')):
+            return 600  # 비디오 파일: 10분
+        elif s3_key.lower().endswith(('.jpg', '.png', '.jpeg')):
+            return 120  # 이미지 파일: 2분
+        else:
+            return 300  # 기본: 5분
     
     def _process_message(self, message: Dict[str, Any]):
         """
-        SQS 메시지 처리
+        SQS 메시지 처리 (기존 방식 - 호환성 유지)
         """
         receipt_handle = message.get('ReceiptHandle')
         message_body = message.get('Body', '{}')
@@ -329,9 +421,9 @@ class GPUVideoWorker:
             try:
                 if file_path and os.path.exists(file_path):
                     os.remove(file_path)
-                    logger.debug(f"🗑️ 임시 파일 삭제: {file_path}")
+                    logger.debug(f"임시 파일 삭제: {file_path}")
             except Exception as e:
-                logger.warning(f"⚠️ 파일 삭제 실패: {file_path}, {e}")
+                logger.warning(f"파일 삭제 실패: {file_path}, {e}")
 
 
 def main():

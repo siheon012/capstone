@@ -31,9 +31,9 @@ try:
     from apps.api.services.s3_service import s3_service
     from apps.db.models import Video
     
-    print("✅ Django 모듈 로드 완료")
+    print("Django 모듈 로드 완료")
 except Exception as e:
-    print(f"❌ Django 모듈 로드 실패: {e}")
+    print(f"Django 모듈 로드 실패: {e}")
     sys.exit(1)
 
 # 로깅 설정
@@ -62,11 +62,11 @@ class GPUVideoWorker:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         
-        logger.info("🤖 GPU Video Worker 초기화 완료")
+        logger.info("GPU Video Worker 초기화 완료")
     
     def _signal_handler(self, signum, frame):
         """시그널 핸들러 - Graceful Shutdown"""
-        logger.info(f"📤 시그널 {signum} 수신 - 워커 종료 중...")
+        logger.info(f"시그널 {signum} 수신 - 워커 종료 중...")
         self.running = False
     
     def start_worker_loop(self):
@@ -74,8 +74,8 @@ class GPUVideoWorker:
         메인 워커 루프 시작
         Long Polling으로 SQS 메시지를 지속적으로 수신하고 처리
         """
-        logger.info("🚀 GPU Video Worker 시작...")
-        logger.info(f"📊 현재 상태: 처리완료={self.processed_count}, 오류={self.error_count}")
+        logger.info("GPU Video Worker 시작...")
+        logger.info(f"현재 상태: 처리완료={self.processed_count}, 오류={self.error_count}")
         
         self.running = True
         consecutive_empty_polls = 0
@@ -84,7 +84,7 @@ class GPUVideoWorker:
         while self.running:
             try:
                 # SQS Long Polling으로 메시지 수신 (20초 대기)
-                logger.debug("🔍 SQS 메시지 수신 중... (Long Polling 20초)")
+                logger.debug("SQS 메시지 수신 중... (Long Polling 20초)")
                 messages = sqs_service.receive_messages(
                     max_messages=1,
                     wait_time_seconds=20,
@@ -99,24 +99,24 @@ class GPUVideoWorker:
                         self._process_message(message)
                 else:
                     consecutive_empty_polls += 1
-                    logger.debug(f"📭 수신된 메시지 없음 ({consecutive_empty_polls}/3)")
+                    logger.debug(f"수신된 메시지 없음 ({consecutive_empty_polls}/3)")
                     
                     # 연속으로 빈 메시지가 여러 번 나오면 잠시 대기
                     if consecutive_empty_polls >= max_empty_polls:
-                        logger.info("😴 잠시 대기 중... (30초)")
+                        logger.info("잠시 대기 중... (30초)")
                         time.sleep(30)
                         consecutive_empty_polls = 0
             
             except KeyboardInterrupt:
-                logger.info("⛔ 사용자에 의한 종료")
+                logger.info("사용자에 의한 종료")
                 break
             except Exception as e:
-                logger.error(f"❌ 워커 루프 오류: {e}")
+                logger.error(f"워커 루프 오류: {e}")
                 self.error_count += 1
                 time.sleep(10)  # 오류 시 10초 대기
         
-        logger.info("🛑 GPU Video Worker 종료")
-        logger.info(f"📊 최종 통계: 처리완료={self.processed_count}, 오류={self.error_count}")
+        logger.info("GPU Video Worker 종료")
+        logger.info(f"최종 통계: 처리완료={self.processed_count}, 오류={self.error_count}")
     
     def _process_message(self, message: Dict[str, Any]):
         """
@@ -132,7 +132,7 @@ class GPUVideoWorker:
             s3_bucket = payload.get('s3', {}).get('bucket')
             s3_key = payload.get('s3', {}).get('key')
             
-            logger.info(f"📥 메시지 처리 시작: video_id={video_id}, s3_key={s3_key}")
+            logger.info(f"메시지 처리 시작: video_id={video_id}, s3_key={s3_key}")
             
             # 필수 정보 검증
             if not all([video_id, s3_bucket, s3_key]):
@@ -148,21 +148,21 @@ class GPUVideoWorker:
                 # 처리 완료 - 메시지 삭제
                 sqs_service.delete_message(receipt_handle)
                 self.processed_count += 1
-                logger.info(f"✅ 비디오 처리 완료: video_id={video_id}")
+                logger.info(f"비디오 처리 완료: video_id={video_id}")
             else:
                 # 처리 실패 - 메시지 가시성 복구 (다른 워커가 재처리 가능)
                 sqs_service.change_message_visibility(receipt_handle, 0)
                 self.error_count += 1
-                logger.error(f"❌ 비디오 처리 실패: video_id={video_id}, error={processing_result['error']}")
+                logger.error(f"비디오 처리 실패: video_id={video_id}, error={processing_result['error']}")
         
         except json.JSONDecodeError as e:
-            logger.error(f"❌ 메시지 파싱 실패: {e}")
+            logger.error(f"메시지 파싱 실패: {e}")
             # 잘못된 형식의 메시지는 삭제
             sqs_service.delete_message(receipt_handle)
             self.error_count += 1
         
         except Exception as e:
-            logger.error(f"❌ 메시지 처리 오류: {e}")
+            logger.error(f"메시지 처리 오류: {e}")
             traceback.print_exc()
             self.error_count += 1
             
@@ -183,19 +183,19 @@ class GPUVideoWorker:
         """
         try:
             # Step 1: S3에서 비디오 다운로드
-            logger.info(f"📥 S3 비디오 다운로드 시작: {s3_key}")
+            logger.info(f"S3 비디오 다운로드 시작: {s3_key}")
             local_video_path = self._download_video_from_s3(s3_bucket, s3_key)
             
             # Step 2: GPU 추론 실행
-            logger.info(f"🧠 GPU 추론 시작: {local_video_path}")
+            logger.info(f"GPU 추론 시작: {local_video_path}")
             inference_result = self._run_gpu_inference(local_video_path)
             
             # Step 3: 결과 저장
-            logger.info(f"💾 처리 결과 저장 중...")
+            logger.info(f"처리 결과 저장 중...")
             storage_result = self._save_processing_result(video_id, inference_result)
             
             # Step 4: Django DB 상태 업데이트
-            logger.info(f"📊 DB 상태 업데이트 중...")
+            logger.info(f"DB 상태 업데이트 중...")
             self._update_video_status(video_id, 'completed', inference_result)
             
             # 임시 파일 정리
@@ -208,7 +208,7 @@ class GPUVideoWorker:
             }
         
         except Exception as e:
-            logger.error(f"❌ 비디오 처리 오류: {e}")
+            logger.error(f"비디오 처리 오류: {e}")
             
             # 실패 상태로 DB 업데이트
             try:
@@ -244,11 +244,11 @@ class GPUVideoWorker:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             
-            logger.info(f"✅ 비디오 다운로드 완료: {local_path}")
+            logger.info(f"비디오 다운로드 완료: {local_path}")
             return str(local_path)
             
         except Exception as e:
-            logger.error(f"❌ S3 다운로드 실패: {e}")
+            logger.error(f"S3 다운로드 실패: {e}")
             raise
     
     def _run_gpu_inference(self, video_path: str) -> Dict[str, Any]:
@@ -256,7 +256,7 @@ class GPUVideoWorker:
         GPU 추론 실행 (Mock Implementation)
         실제로는 여기에 GPU 모델 추론 코드를 구현
         """
-        logger.info(f"🔬 GPU 추론 실행 중: {video_path}")
+        logger.info(f"GPU 추론 실행 중: {video_path}")
         
         # TODO: 실제 GPU 추론 로직 구현
         # 예: YOLOv8, MediaPipe, Custom Model 등
@@ -275,7 +275,7 @@ class GPUVideoWorker:
         processing_time = random.uniform(5, 10)
         time.sleep(processing_time)
         
-        logger.info(f"✅ GPU 추론 완료: {processing_time:.2f}초")
+        logger.info(f"GPU 추론 완료: {processing_time:.2f}초")
         return mock_result
     
     def _save_processing_result(self, video_id: str, result: Dict[str, Any]) -> bool:
@@ -296,11 +296,11 @@ class GPUVideoWorker:
             with open(result_file, 'w', encoding='utf-8') as f:
                 json.dump(result_data, f, indent=2, ensure_ascii=False)
             
-            logger.info(f"💾 처리 결과 저장 완료: {result_file}")
+            logger.info(f"처리 결과 저장 완료: {result_file}")
             return True
             
         except Exception as e:
-            logger.error(f"❌ 결과 저장 실패: {e}")
+            logger.error(f"결과 저장 실패: {e}")
             return False
     
     def _update_video_status(self, video_id: str, status: str, result: Dict[str, Any]):
@@ -316,12 +316,12 @@ class GPUVideoWorker:
             video.major_event = json.dumps(result) if result else None
             video.save()
             
-            logger.info(f"📊 DB 업데이트 완료: video_id={video_id}, status={status}")
+            logger.info(f"DB 업데이트 완료: video_id={video_id}, status={status}")
             
         except Video.DoesNotExist:
-            logger.error(f"❌ 비디오를 찾을 수 없음: video_id={video_id}")
+            logger.error(f"비디오를 찾을 수 없음: video_id={video_id}")
         except Exception as e:
-            logger.error(f"❌ DB 업데이트 실패: {e}")
+            logger.error(f"DB 업데이트 실패: {e}")
     
     def _cleanup_temp_files(self, *file_paths):
         """임시 파일 정리"""
@@ -340,7 +340,7 @@ def main():
         worker = GPUVideoWorker()
         worker.start_worker_loop()
     except Exception as e:
-        logger.error(f"❌ 워커 실행 실패: {e}")
+        logger.error(f"워커 실행 실패: {e}")
         traceback.print_exc()
         sys.exit(1)
 

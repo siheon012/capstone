@@ -81,13 +81,13 @@ class GPUVideoWorker:
     def _print_final_statistics(self):
         """최종 통계 및 오류 요약 출력"""
         logger.info("=" * 60)
-        logger.info("🏁 GPU Video Worker 최종 통계")
+        logger.info(" GPU Video Worker 최종 통계")
         logger.info("=" * 60)
         
         # 기본 통계
-        logger.info(f"📊 처리 통계:")
-        logger.info(f"   ✅ 성공: {self.processed_count}건")
-        logger.info(f"   ❌ 실패: {self.error_count}건")
+        logger.info(f" 처리 통계:")
+        logger.info(f"    성공: {self.processed_count}건")
+        logger.info(f"    실패: {self.error_count}건")
         
         total_messages = self.processed_count + self.error_count
         if total_messages > 0:
@@ -97,7 +97,7 @@ class GPUVideoWorker:
         # 오류 통계
         error_summary = error_tracker.get_error_summary()
         if error_summary['total_errors'] > 0:
-            logger.info(f"🚨 오류 요약:")
+            logger.info(f"   오류 요약:")
             logger.info(f"   전체 오류: {error_summary['total_errors']}건")
             logger.info(f"   오류 타입 수: {error_summary['error_types']}개")
             logger.info(f"   가장 빈번한 오류: {error_summary['most_common_error']}")
@@ -106,7 +106,7 @@ class GPUVideoWorker:
         # 가시성 타임아웃 통계
         if hasattr(self.visibility_manager, 'get_statistics'):
             visibility_stats = self.visibility_manager.get_statistics()
-            logger.info(f"⏱️ 가시성 타임아웃 통계:")
+            logger.info(f"   가시성 타임아웃 통계:")
             logger.info(f"   관리 메시지: {visibility_stats.get('managed_messages', 0)}건")
             logger.info(f"   연장 횟수: {visibility_stats.get('extensions', 0)}회")
         
@@ -186,7 +186,7 @@ class GPUVideoWorker:
             )
             
             if not success:
-                logger.error(f"❌ 메시지 파싱 실패: {payload}")
+                logger.error(f"메시지 파싱 실패: {payload}")
                 # 파싱 실패 시 메시지 삭제 (잘못된 형식)
                 sqs_service.delete_message(receipt_handle)
                 self.error_count += 1
@@ -201,7 +201,7 @@ class GPUVideoWorker:
             # 필수 정보 검증
             if not all([video_id, s3_bucket, s3_key]):
                 error_msg = f"필수 정보 누락: video_id={video_id}, bucket={s3_bucket}, key={s3_key}"
-                logger.error(f"❌ {error_msg}")
+                logger.error(f"{error_msg}")
                 error_tracker.record_error(
                     ValueError(error_msg), 
                     context=f"메시지 검증 video_id={video_id}",
@@ -236,7 +236,7 @@ class GPUVideoWorker:
                 self.visibility_manager.unregister_message(receipt_handle, 'completed')
                 if success:
                     self.processed_count += 1
-                    logger.info(f"✅ 비디오 처리 완료: video_id={video_id}")
+                    logger.info(f"비디오 처리 완료: video_id={video_id}")
                 else:
                     logger.warning(f"⚠️ 처리는 성공했지만 메시지 삭제 실패: video_id={video_id}")
                     
@@ -246,11 +246,11 @@ class GPUVideoWorker:
                 
                 if error_type == 'permanent':
                     # 영구적 오류 - 메시지 삭제
-                    logger.error(f"❌ 영구적 오류로 메시지 삭제: video_id={video_id}")
+                    logger.error(f"영구적 오류로 메시지 삭제: video_id={video_id}")
                     sqs_service.delete_message(receipt_handle)
                 else:
                     # 일시적 오류 - 가시성 복구하여 재처리 가능하게 함
-                    logger.warning(f"⚠️ 일시적 오류로 재처리 대기: video_id={video_id}")
+                    logger.warning(f"일시적 오류로 재처리 대기: video_id={video_id}")
                     safe_execute(
                         sqs_service.change_message_visibility,
                         receipt_handle, 
@@ -263,7 +263,7 @@ class GPUVideoWorker:
                 
         except Exception as e:
             # 예상치 못한 오류
-            logger.error(f"❌ 메시지 처리 중 예상치 못한 오류: {e}")
+            logger.error(f"메시지 처리 중 예상치 못한 오류: {e}")
             error_tracker.record_error(
                 e, 
                 context=f"메시지 처리 handle={receipt_handle[:10]}...",
@@ -342,7 +342,7 @@ class GPUVideoWorker:
             
         except Exception as e:
             error_type = retry_manager.classify_error(e)
-            logger.error(f"❌ {context} 최종 실패: {type(e).__name__}: {str(e)}")
+            logger.error(f"{context} 최종 실패: {type(e).__name__}: {str(e)}")
             
             return {
                 'success': False,
@@ -363,7 +363,7 @@ class GPUVideoWorker:
         Returns:
             다운로드 성공 여부
         """
-        logger.info(f"📥 S3 다운로드: s3://{s3_bucket}/{s3_key} → {local_path}")
+        logger.info(f"S3 다운로드: s3://{s3_bucket}/{s3_key} → {local_path}")
         
         # S3 다운로드 실행
         s3_service.download_file(s3_bucket, s3_key, local_path)
@@ -373,7 +373,7 @@ class GPUVideoWorker:
             raise FileNotFoundError(f"다운로드된 파일을 찾을 수 없습니다: {local_path}")
         
         file_size = os.path.getsize(local_path)
-        logger.info(f"✅ 다운로드 완료: {file_size:,} bytes")
+        logger.info(f"다운로드 완료: {file_size:,} bytes")
         return True
     
     @retry_on_error(max_retries=2, context="분석 결과 업로드")  
@@ -389,7 +389,7 @@ class GPUVideoWorker:
         Returns:
             업로드 성공 여부
         """
-        logger.info(f"📤 분석 결과 업로드: {s3_key}")
+        logger.info(f"분석 결과 업로드: {s3_key}")
         
         # JSON 직렬화
         results_json = json.dumps(results, ensure_ascii=False, indent=2)
@@ -397,17 +397,8 @@ class GPUVideoWorker:
         # S3 업로드
         s3_service.upload_string_as_file(results_json, s3_bucket, s3_key)
         
-        logger.info(f"✅ 업로드 완료: s3://{s3_bucket}/{s3_key}")
+        logger.info(f"업로드 완료: s3://{s3_bucket}/{s3_key}")
         return True
-            
-            # 예외 발생 시 메시지 가시성 복구
-            try:
-                sqs_service.change_message_visibility(receipt_handle, 0)
-                self.visibility_manager.unregister_message(receipt_handle, 'failed')
-            except:
-                pass
-            
-            self.error_count += 1
     
     def _estimate_processing_time(self, s3_key: str) -> int:
         """
@@ -494,22 +485,22 @@ class GPUVideoWorker:
         
         try:
             # Step 1: S3에서 비디오 다운로드 (재시도 포함)
-            logger.info(f"📥 S3 비디오 다운로드 시작: {s3_key}")
+            logger.info(f" S3 비디오 다운로드 시작: {s3_key}")
             local_video_path = self._download_video_safe(video_id, s3_bucket, s3_key)
             
             # Step 2: GPU 추론 실행 (재시도 포함)
-            logger.info(f"🔥 GPU 추론 시작: {local_video_path}")
+            logger.info(f" GPU 추론 시작: {local_video_path}")
             inference_result = self._run_gpu_inference_safe(video_id, local_video_path)
             
             # Step 3: 결과 저장 (재시도 포함)
-            logger.info(f"💾 처리 결과 저장 중...")
+            logger.info(f" 처리 결과 저장 중...")
             storage_result = self._save_processing_result_safe(video_id, inference_result)
             
             # Step 4: Django DB 상태 업데이트 (재시도 포함)
-            logger.info(f"📝 DB 상태 업데이트 중...")
+            logger.info(f" DB 상태 업데이트 중...")
             self._update_video_status_safe(video_id, 'completed', inference_result)
             
-            logger.info(f"✅ 비디오 처리 완료: video_id={video_id}")
+            logger.info(f" 비디오 처리 완료: video_id={video_id}")
             
             return {
                 'success': True,
@@ -518,7 +509,7 @@ class GPUVideoWorker:
             }
         
         except Exception as e:
-            logger.error(f"❌ 비디오 처리 오류: video_id={video_id}, error={type(e).__name__}: {str(e)}")
+            logger.error(f" 비디오 처리 오류: video_id={video_id}, error={type(e).__name__}: {str(e)}")
             
             # 실패 상태로 DB 업데이트 시도
             success, _ = safe_execute(
@@ -577,7 +568,7 @@ class GPUVideoWorker:
             return result
             
         except Exception as e:
-            logger.error(f"❌ {context} 실패: {type(e).__name__}: {str(e)}")
+            logger.error(f" {context} 실패: {type(e).__name__}: {str(e)}")
             raise
     
     def _save_processing_result_safe(self, video_id: str, inference_result: Dict) -> bool:
@@ -594,7 +585,7 @@ class GPUVideoWorker:
             )
             
         except Exception as e:
-            logger.error(f"❌ {context} 실패: {type(e).__name__}: {str(e)}")
+            logger.error(f" {context} 실패: {type(e).__name__}: {str(e)}")
             raise
     
     def _update_video_status_safe(self, video_id: str, status: str, data: Dict = None) -> bool:
@@ -612,7 +603,7 @@ class GPUVideoWorker:
             )
             
         except Exception as e:
-            logger.error(f"❌ {context} 실패: {type(e).__name__}: {str(e)}")
+            logger.error(f" {context} 실패: {type(e).__name__}: {str(e)}")
             raise
     
     def _download_video_from_s3(self, s3_bucket: str, s3_key: str) -> str:

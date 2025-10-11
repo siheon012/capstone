@@ -1,0 +1,89 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # 수동 실행도 가능
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REGISTRY: 287709190208.dkr.ecr.ap-northeast-2.amazonaws.com
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. AWS 인증
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3. ECR 로그인
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 4. Frontend 이미지 빌드 & 푸시
+      - name: Build and push frontend image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "Building frontend with commit SHA: $IMAGE_TAG"
+
+          # 프로덕션 이미지 빌드
+          docker build --target production \
+            -t $ECR_REGISTRY/capstone-frontend:$IMAGE_TAG \
+            -t $ECR_REGISTRY/capstone-frontend:latest \
+            ./front
+
+          # ECR에 푸시
+          docker push $ECR_REGISTRY/capstone-frontend:$IMAGE_TAG
+          docker push $ECR_REGISTRY/capstone-frontend:latest
+
+          echo "Frontend image pushed successfully!"
+
+      # 5. Backend 이미지 빌드 & 푸시
+      - name: Build and push backend image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "Building backend with commit SHA: $IMAGE_TAG"
+
+          # Backend 이미지 빌드 (Dockerfile이 있다면)
+          docker build \
+            -t $ECR_REGISTRY/capstone-backend:$IMAGE_TAG \
+            -t $ECR_REGISTRY/capstone-backend:latest \
+            ./back
+
+          # ECR에 푸시
+          docker push $ECR_REGISTRY/capstone-backend:$IMAGE_TAG
+          docker push $ECR_REGISTRY/capstone-backend:latest
+
+          echo "Backend image pushed successfully!"
+
+      # 6. 배포 (EC2 또는 ECS로)
+      - name: Deploy to production
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "Deploying with image tag: $IMAGE_TAG"
+
+          # 배포 스크립트 실행 (예시)
+          # aws ecs update-service --cluster capstone --service frontend --force-new-deployment
+          # 또는 EC2에 SSH로 docker-compose 업데이트
+
+      # 7. 슬랙 알림 (선택사항)
+      - name: Notify deployment
+        if: success()
+        run: |
+          echo "✅ Deployment successful! Image tag: ${{ github.sha }}"

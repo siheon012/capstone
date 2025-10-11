@@ -60,8 +60,31 @@ front/public/uploads/*
 dummy*
 
 # env files (실제 환경변수 파일들 - 보안상 추적하지 않음)
+.env
 .env.local
 .env.dev
 .env.prod
+.env.production
+.env.development
+
+# AWS 관련 파일들 (보안)
+.aws/
+aws-credentials*
+*.pem
+*.key
+
+# Docker 관련 임시 파일들
+docker-compose.override.yml
+.docker/
+
+# 로그 파일들
+*.log
+logs/
+log/
+
+# 임시 파일들
+.tmp/
+temp/
+tmp/
 
 # env 템플릿 파일들은 추적됨 (.env.*.template)

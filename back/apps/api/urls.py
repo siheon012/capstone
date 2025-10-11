@@ -7,6 +7,9 @@ router = DefaultRouter()
 router.register(r'prompt-sessions', views.PromptSessionViewSet)
 
 urlpatterns = [
+    # 헬스체크 엔드포인트 (최상단에 위치)
+    path('health/', views.health_check, name='health_check'),
+    
     # DRF ViewSet URLs
     path('', include(router.urls)),
     

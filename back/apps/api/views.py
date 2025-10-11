@@ -1,12 +1,37 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
+from django.http import JsonResponse
+from django.db import connection
 from apps.db.models import Video, Event, PromptSession, PromptInteraction
 from apps.db.serializers import VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer
 import json
 import requests
 import re
-from django.db import connection
+
+# 헬스체크 엔드포인트
+@api_view(['GET'])
+def health_check(request):
+    """
+    헬스체크 엔드포인트 - 서버 상태 확인
+    """
+    try:
+        # 데이터베이스 연결 확인
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        
+        return JsonResponse({
+            'status': 'healthy',
+            'database': 'connected',
+            'message': 'Backend server is running properly'
+        }, status=200)
+    
+    except Exception as e:
+        return JsonResponse({
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e)
+        }, status=503)
 
 @api_view(['POST'])
 def process_prompt(request):

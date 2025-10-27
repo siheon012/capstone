@@ -8,16 +8,19 @@ typing_extensions==4.13.2
 gunicorn==22.0.0
 psycopg2-binary==2.9.7
 
+# AWS 및 S3 업로드 관련
+boto3==1.35.50
+botocore==1.35.50
+
+# JWT 인증
+PyJWT==2.9.0
+
 # Database URL parsing
 dj-database-url==2.2.0
 
 # Cloud & Vector Database Support
 pgvector==0.3.6
 psycopg[binary]==3.2.3
-
-# AWS Services (최신 버전 사용)
-boto3==1.35.72
-botocore==1.35.72
 
 # Django S3 Storage
 django-storages[boto3]==1.14.4
@@ -38,6 +41,3 @@ python-dateutil==2.9.0
 requests==2.32.3
 urllib3==2.2.3
 certifi==2024.8.30
-
-# JWT 인증
-PyJWT==2.9.0

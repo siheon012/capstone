@@ -27,7 +27,7 @@ class S3VideoUploadService:
     def __init__(self):
         """S3 클라이언트 및 설정 초기화"""
         self.bucket_name = self._get_env_var('AWS_S3_BUCKET_NAME')
-        self.region = self._get_env_var('AWS_S3_REGION', 'us-east-1')
+        self.region = self._get_env_var('AWS_S3_REGION', 'ap-northeast-2')
         self.use_localstack = self._get_env_var('USE_LOCALSTACK', 'false').lower() == 'true'
         
         # LocalStack 또는 실제 AWS 설정

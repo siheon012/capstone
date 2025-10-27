@@ -15,7 +15,7 @@ dj-database-url==2.2.0
 pgvector==0.3.6
 psycopg[binary]==3.2.3
 
-# AWS Services
+# AWS Services (최신 버전 사용)
 boto3==1.35.72
 botocore==1.35.72
 
@@ -38,3 +38,6 @@ python-dateutil==2.9.0
 requests==2.32.3
 urllib3==2.2.3
 certifi==2024.8.30
+
+# JWT 인증
+PyJWT==2.9.0

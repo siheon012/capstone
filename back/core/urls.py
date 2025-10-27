@@ -22,5 +22,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('db/', include('apps.db.urls')),
     path('api/', include('apps.api.urls')),
-    path('healthz/', healthz, name='health_check'),  # App Runner 헬스체크
+    path('api/s3/', include('apps.api.urls_s3')),  # S3 업로드 전용 엔드포인트
+    path('healthz/', healthz, name='health_check'),  # App Runner/ECS 헬스체크
 ]

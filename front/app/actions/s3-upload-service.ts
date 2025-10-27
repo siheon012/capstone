@@ -111,6 +111,7 @@ export async function confirmUpload(
   metadata: {
     duration?: number;
     thumbnail_url?: string;
+    video_datetime?: string;
   }
 ): Promise<{ video_id: number; video: any }> {
   try {
@@ -147,41 +148,51 @@ export async function confirmUpload(
  */
 export async function uploadVideoToS3(
   file: File,
-  onProgress?: (stage: string, progress: number) => void
+  options?: {
+    duration?: number;
+    thumbnailUrl?: string;
+    videoDateTime?: string;
+    onProgress?: (stage: string, progress: number) => void;
+  }
 ): Promise<{ video_id: number; video: any }> {
+  const { duration, thumbnailUrl, videoDateTime, onProgress } = options || {};
+
   try {
     // Step 1: 업로드 URL 요청
     onProgress?.('Requesting upload URL...', 10);
-    
+
     const metadata: VideoUploadMetadata = {
       file_name: file.name,
       file_size: file.size,
-      content_type: file.type
+      content_type: file.type,
+      duration: duration,
+      thumbnail_url: thumbnailUrl
     };
-    
+
     const config = await requestUploadUrl(metadata);
-    
+
     // Step 2: S3 업로드
     onProgress?.('Uploading to S3...', 20);
-    
+
     await uploadToS3(file, config, (uploadProgress) => {
       // 20% ~ 80% 구간을 S3 업로드 진행률로 할당
       const adjustedProgress = 20 + (uploadProgress * 0.6);
       onProgress?.(`Uploading... ${uploadProgress.toFixed(1)}%`, adjustedProgress);
     });
-    
+
     // Step 3: 업로드 확인
     onProgress?.('Confirming upload...', 90);
-    
-    // TODO: 실제로는 여기서 비디오 메타데이터(duration 등)를 추출해야 함
+
     const result = await confirmUpload(config, {
-      duration: 0 // 클라이언트에서 video 요소로 duration 추출 가능
+      duration: duration || 0,
+      thumbnail_url: thumbnailUrl,
+      video_datetime: videoDateTime
     });
-    
+
     onProgress?.('Upload completed!', 100);
-    
+
     return result;
-    
+
   } catch (error) {
     console.error('❌ 전체 업로드 프로세스 실패:', error);
     throw error;

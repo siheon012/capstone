@@ -29,6 +29,7 @@ import SmartHeader from '@/components/smart-header';
 import { saveHistory, getHistoryList } from '@/app/actions/history-service';
 import JQueryCounterAnimation from '@/components/jquery-counter-animation';
 import { saveVideoFile, getUploadedVideos } from '@/app/actions/video-service';
+import { uploadVideoToS3 } from '@/app/actions/s3-upload-service';
 import type { ChatSession } from '@/app/types/session';
 import type { UploadedVideo } from '@/app/types/video';
 import EventTimeline from '@/components/event-timeline';
@@ -937,24 +938,51 @@ export default function CCTVAnalysis() {
       console.log('💾 [Server Save] 서버 저장 프로세스 시작');
       let serverSaveResult = null;
       try {
-        const formData = new FormData();
-        formData.append('video', file);
-        if (videoDuration !== undefined) {
-          formData.append('duration', videoDuration.toString());
+        // 1단계: 중복 체크 (기존 video-service 활용)
+        console.log('🔍 [Duplicate Check] 중복 비디오 확인 중...');
+        setUploadStage('중복 파일을 확인하는 중...');
+
+        const { checkDuplicateVideo } = await import('@/app/actions/video-service');
+        const duplicateCheck = await checkDuplicateVideo(file, videoDuration);
+
+        if (duplicateCheck.isDuplicate && duplicateCheck.duplicateVideo) {
+          console.log('🔄 [Duplicate] 중복 비디오 발견:', duplicateCheck.duplicateVideo.id);
+
+          serverSaveResult = {
+            success: false,
+            isDuplicate: true,
+            videoId: duplicateCheck.duplicateVideo.id,
+            duplicateVideoId: duplicateCheck.duplicateVideo.id,
+            error: '이미 업로드된 동영상입니다.'
+          };
+        } else {
+          // 2단계: S3 업로드 (중복이 아닌 경우만)
+          console.log('🚀 [S3 Upload] S3 업로드 시작...');
+          setUploadStage('S3에 업로드 중...');
+
+          const uploadResult = await uploadVideoToS3(file, {
+            duration: videoDuration,
+            thumbnailUrl: thumbnailPath || undefined,
+            videoDateTime: videoDateTime,
+            onProgress: (stage, progress) => {
+              console.log(`📊 [S3 Progress] ${stage}: ${progress}%`);
+              setUploadStage(stage);
+              // 70-95% 구간을 S3 업로드에 할당
+              setUploadProgress(70 + (progress * 0.25));
+            }
+          });
+
+          console.log('✅ [S3 Upload] S3 업로드 완료:', uploadResult);
+
+          // uploadVideoToS3의 응답을 saveVideoFile 형식으로 변환
+          serverSaveResult = {
+            success: true,
+            videoId: uploadResult.video_id.toString(),
+            video: uploadResult.video
+          };
         }
-        
-        console.log('📤 [Server Save] FormData 준비 완료, 서버에 전송 중...');
-        setUploadStage('파일을 저장하는 중...');
-        setUploadProgress(70);
-        
-        serverSaveResult = await saveVideoFile(
-          formData,
-          videoDuration,
-          thumbnailPath || undefined,
-          videoDateTime
-        );
-        console.log('📥 [Server Save] 서버 응답:', serverSaveResult);
-        setUploadProgress(80);
+
+        setUploadProgress(95);
 
         // 중복 비디오 처리 - success가 false이고 isDuplicate가 true인 경우
         if (serverSaveResult.isDuplicate && !serverSaveResult.success) {

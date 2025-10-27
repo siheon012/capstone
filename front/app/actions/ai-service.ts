@@ -861,20 +861,22 @@ export async function generateVideoSummary(videoId: string): Promise<{
   error?: string;
 }> {
   try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8088';
+
     console.log('🔄 비디오 요약 생성 API 호출:', {
       videoId,
-      url: 'http://localhost:8087/generate_summary',
+      url: `${apiUrl}/api/videos/${videoId}/summary/`,
       timestamp: new Date().toISOString(),
     });
 
-    // Video Summary Service (Port 8087)에 요약 생성 요청
-    const response = await fetch('http://localhost:8087/generate_summary', {
+    // Backend Summary API 호출 (Bedrock VLM 사용)
+    const response = await fetch(`${apiUrl}/api/videos/${videoId}/summary/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        video_id: parseInt(videoId),
+        summary_type: 'events', // 이벤트 기반 요약
       }),
     });
 

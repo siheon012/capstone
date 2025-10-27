@@ -53,6 +53,9 @@ class Video(models.Model):
     ])
     analysis_progress = models.IntegerField(default=0, help_text="Analysis progress 0-100")
     
+    # AI 영상 요약 (VLM으로 생성)
+    summary = models.TextField(blank=True, null=True, help_text="AI 영상 분석 요약 (이모지, 특수기호 포함 가능)")
+    
     # SQS Job 추적
     job_id = models.CharField(max_length=100, null=True, blank=True, help_text="AWS Batch job ID")
     

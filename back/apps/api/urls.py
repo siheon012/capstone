@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .summary_views import generate_video_summary
 
 # DRF Router 설정
 router = DefaultRouter()
@@ -21,5 +22,6 @@ urlpatterns = [
     # 비디오 API
     path('videos/', views.video_list_create, name='video_list_create'),
     path('videos/<str:video_id>/', views.video_detail, name='video_detail'),
+    path('videos/<str:video_id>/summary/', generate_video_summary, name='generate_video_summary'),
     path('videos/check-duplicate/', views.check_duplicate_video, name='check_duplicate_video'),
 ]

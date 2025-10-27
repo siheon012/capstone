@@ -220,9 +220,20 @@ OPENAI_API_KEY = env('OPENAI_API_KEY', default=None)
 OPENAI_MODEL = env('OPENAI_MODEL', default='gpt-3.5-turbo')
 OPENAI_EMBEDDING_MODEL = env('OPENAI_EMBEDDING_MODEL', default='text-embedding-ada-002')
 
-# AWS Bedrock 설정 (대안 LLM)
-AWS_BEDROCK_REGION = env('AWS_BEDROCK_REGION', default='us-east-1')
-AWS_BEDROCK_MODEL_ID = env('AWS_BEDROCK_MODEL_ID', default='anthropic.claude-v2')
+# AWS Bedrock 설정
+AWS_BEDROCK_REGION = env('AWS_BEDROCK_REGION', default='ap-northeast-2')
+AWS_BEDROCK_MODEL_ID = env('AWS_BEDROCK_MODEL_ID', default='anthropic.claude-3-sonnet-20240229-v1:0')
+AWS_BEDROCK_EMBEDDING_MODEL_ID = env('AWS_BEDROCK_EMBEDDING_MODEL_ID', default='amazon.titan-embed-text-v1')
+AWS_BEDROCK_KNOWLEDGE_BASE_ID = env('AWS_BEDROCK_KNOWLEDGE_BASE_ID', default=None)
+USE_BEDROCK = env('USE_BEDROCK', default='true').lower() == 'true'
+
+# Video Analysis FastAPI 설정 (ECS Service Discovery DNS)
+VIDEO_ANALYSIS_URL = env('VIDEO_ANALYSIS_URL', default=None)  # 예: http://video-analysis.capstone.local:7000
+
+# 하이브리드 RAG 설정 (Text2SQL + pgvector)
+USE_HYBRID_SEARCH = env('USE_HYBRID_SEARCH', default='true').lower() == 'true'
+VECTOR_SEARCH_SIMILARITY_THRESHOLD = env('VECTOR_SEARCH_SIMILARITY_THRESHOLD', default=0.3, cast=float)
+HYBRID_SEARCH_LIMIT = env('HYBRID_SEARCH_LIMIT', default=5, cast=int)
 
 # 벡터 검색 설정
 VECTOR_DIMENSION = env('VECTOR_DIMENSION', default=1536, cast=int)  # OpenAI ada-002

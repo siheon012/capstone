@@ -77,7 +77,9 @@ class VideoViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], url_path='upload')
     def upload_video(self, request):
-        """비디오 파일 업로드 - S3 지원 추가"""
+        """비디오 파일 업로드 - S3 지원 + 메타데이터 추출 + 분석 트리거"""
+        from .utils import extract_video_metadata, trigger_video_analysis
+        
         try:
             video_file = request.FILES.get('video')
             if not video_file:
@@ -101,34 +103,60 @@ class VideoViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # S3 업로드 처리
+            print(f"📹 [Video Upload] 1단계: 메타데이터 추출 시작 - {video_file.name}")
+            
+            # ✨ 1단계: 메타데이터 추출
+            metadata = extract_video_metadata(video_file)
+            
+            print(f"✅ [Video Upload] 메타데이터 추출 완료: duration={metadata['duration']}s, fps={metadata['fps']}")
+            
+            # ✨ 2단계: S3 업로드
             s3_key = None
+            s3_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-video-bucket')
+            
             if getattr(settings, 'USE_S3', False):
                 try:
+                    print(f"☁️ [Video Upload] 2단계: S3 업로드 시작 - {s3_bucket}")
+                    
                     s3_client = boto3.client('s3')
                     s3_key = f"videos/{datetime.now().strftime('%Y/%m/%d')}/{video_file.name}"
                     
                     s3_client.upload_fileobj(
                         video_file,
-                        settings.AWS_STORAGE_BUCKET_NAME,
+                        s3_bucket,
                         s3_key,
                         ExtraArgs={'ContentType': video_file.content_type}
                     )
-                    print(f"✅ S3 업로드 성공: {s3_key}")
+                    print(f"✅ [Video Upload] S3 업로드 성공: s3://{s3_bucket}/{s3_key}")
                 except Exception as e:
-                    print(f"❌ S3 업로드 실패: {str(e)}")
+                    print(f"❌ [Video Upload] S3 업로드 실패: {str(e)}")
                     # S3 실패시 로컬 저장으로 폴백
                     s3_key = None
             
-            # Video 객체 생성 및 저장 (클라우드 필드 포함)
+            # ✨ 3단계: Video 객체 생성 (실제 메타데이터 포함)
+            print(f"💾 [Video Upload] 3단계: DB에 Video 객체 생성")
+            
             video_data = {
                 'name': video_file.name,
                 'filename': video_file.name,
                 'original_filename': video_file.name,
                 'file_size': video_file.size,
-                'duration': 0,  # 초기값 (추후 분석으로 업데이트)
+                
+                # ✅ 실제 메타데이터 저장
+                'duration': metadata['duration'],
+                'fps': metadata['fps'],
+                'frame_rate': metadata['fps'],
+                'width': metadata['width'],
+                'height': metadata['height'],
+                'resolution_width': metadata['width'],
+                'resolution_height': metadata['height'],
+                
+                # 클라우드 필드
                 'data_tier': 'hot',
                 'hotness_score': 100.0,
+                'metadata_extracted': True,
+                'analysis_status': 'pending',
+                'analysis_progress': 0,
             }
             
             # S3 또는 로컬 경로 설정
@@ -136,7 +164,7 @@ class VideoViewSet(viewsets.ModelViewSet):
                 video_data.update({
                     's3_key': s3_key,
                     's3_raw_key': s3_key,
-                    's3_bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                    's3_bucket': s3_bucket,
                 })
             else:
                 # 로컬 저장
@@ -144,20 +172,42 @@ class VideoViewSet(viewsets.ModelViewSet):
             
             video = Video.objects.create(**video_data)
             
+            print(f"✅ [Video Upload] Video 객체 생성 완료: video_id={video.video_id}")
+            
+            # ✨ 4단계: Video Analysis FastAPI 트리거 (비동기)
+            if s3_key:
+                print(f"🚀 [Video Upload] 4단계: Video Analysis 트리거 - video_id={video.video_id}")
+                
+                analysis_triggered = trigger_video_analysis(
+                    video_id=video.video_id,
+                    s3_key=s3_key,
+                    s3_bucket=s3_bucket
+                )
+                
+                if analysis_triggered:
+                    video.analysis_status = 'processing'
+                    video.save(update_fields=['analysis_status'])
+                    print(f"✅ [Video Upload] 분석 요청 성공")
+                else:
+                    print(f"⚠️ [Video Upload] 분석 요청 실패 (수동으로 분석 시작 필요)")
+            
             # 시리얼라이저로 응답 데이터 생성
             serializer = self.get_serializer(video)
             
-            print(f"🎯 [Django Video Upload] 비디오 생성 완료: video_id={video.video_id}, name={video.name}")
-            print(f"🔍 [Django Video Upload] 시리얼라이저 데이터: {serializer.data}")
-            
             return Response({
                 'success': True,
-                'videoId': video.video_id,  # 명시적으로 videoId 추가
+                'videoId': video.video_id,
                 'message': '비디오가 성공적으로 업로드되었습니다.',
-                'video': serializer.data
+                'video': serializer.data,
+                'metadata': metadata,
+                'analysis_triggered': s3_key is not None,
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
+            import traceback
+            print(f"❌ [Video Upload] 오류 발생: {str(e)}")
+            print(f"📚 [Video Upload] Traceback: {traceback.format_exc()}")
+            
             return Response(
                 {'error': f'업로드 중 오류가 발생했습니다: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -205,6 +255,36 @@ class VideoViewSet(viewsets.ModelViewSet):
                 video.analysis_progress = 100
             
             video.save(update_fields=['analysis_progress', 'analysis_status'])
+            
+            # ✨ 분석 완료 시 자동으로 Summary 생성
+            if analysis_status == 'completed' and progress == 100:
+                try:
+                    from apps.db.models import Event
+                    from apps.api.vlm_service import get_vlm_service
+                    
+                    events = Event.objects.filter(video=video).order_by('timestamp')
+                    
+                    if events.exists():
+                        print(f"🤖 [Auto-Summary] 자동 요약 생성 시작: video_id={video.video_id}, events={events.count()}개")
+                        
+                        vlm_service = get_vlm_service()
+                        summary = vlm_service.generate_video_summary(
+                            video=video,
+                            events=list(events),
+                            summary_type='events'
+                        )
+                        
+                        # DB에 저장
+                        video.summary = summary
+                        video.save(update_fields=['summary'])
+                        
+                        print(f"✅ [Auto-Summary] 자동 요약 생성 완료: video_id={video.video_id}")
+                    else:
+                        print(f"⚠️ [Auto-Summary] 이벤트가 없어 요약 생성 생략: video_id={video.video_id}")
+                        
+                except Exception as e:
+                    print(f"❌ [Auto-Summary] 자동 요약 생성 실패: {str(e)}")
+                    # 요약 생성 실패해도 진행률 업데이트는 성공으로 처리
             
             return Response({
                 'success': True,

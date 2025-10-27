@@ -39,6 +39,16 @@ services:
       - VECTOR_DB_NAME=${VECTOR_DB_NAME:-vector_db}
       - VECTOR_DB_USER=${VECTOR_DB_USER:-vector_user}
       - VECTOR_DB_PASSWORD=${VECTOR_DB_PASSWORD:-vector_password}
+      # AWS 자격 증명
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_REGION:-ap-northeast-2}
+      # AWS Bedrock 설정
+      - USE_BEDROCK=${USE_BEDROCK:-true}
+      - AWS_BEDROCK_REGION=${AWS_BEDROCK_REGION:-ap-northeast-2}
+      - AWS_BEDROCK_MODEL_ID=${AWS_BEDROCK_MODEL_ID:-anthropic.claude-3-sonnet-20240229-v1:0}
+      - AWS_BEDROCK_EMBEDDING_MODEL_ID=${AWS_BEDROCK_EMBEDDING_MODEL_ID:-amazon.titan-embed-text-v1}
+      - AWS_BEDROCK_KNOWLEDGE_BASE_ID=${AWS_BEDROCK_KNOWLEDGE_BASE_ID:-}
     networks:
       - app-network
     restart: unless-stopped

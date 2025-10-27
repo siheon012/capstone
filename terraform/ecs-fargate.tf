@@ -90,9 +90,24 @@ resource "aws_iam_role_policy" "ecs_task_bedrock_policy" {
         Effect = "Allow"
         Action = [
           "bedrock:InvokeModel",
-          "bedrock:InvokeModelWithResponseStream"
+          "bedrock:InvokeModelWithResponseStream",
+          "bedrock:GetFoundationModelAvailability",
+          "bedrock:ListFoundationModels"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:Retrieve",
+          "bedrock:RetrieveAndGenerate"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestedRegion" = "ap-northeast-2"
+          }
+        }
       }
     ]
   })
@@ -243,6 +258,22 @@ resource "aws_ecs_task_definition" "backend" {
         {
           name  = "ALLOWED_HOSTS"
           value = "*"
+        },
+        {
+          name  = "USE_BEDROCK"
+          value = "true"
+        },
+        {
+          name  = "AWS_BEDROCK_REGION"
+          value = var.region
+        },
+        {
+          name  = "AWS_BEDROCK_MODEL_ID"
+          value = "anthropic.claude-3-sonnet-20240229-v1:0"
+        },
+        {
+          name  = "AWS_BEDROCK_EMBEDDING_MODEL_ID"
+          value = "amazon.titan-embed-text-v1"
         }
       ]
 

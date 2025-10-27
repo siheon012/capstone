@@ -13,7 +13,7 @@ import json
 import logging
 
 from .services.s3_service import s3_service
-from .services.auth_service import jwt_required
+# from .services.auth_service import jwt_required  # TODO: 임시 비활성화 (개발용)
 from .services.sqs_service import sqs_service
 from apps.db.models import Video
 from apps.db.serializers import VideoSerializer
@@ -22,18 +22,18 @@ logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
-@jwt_required
+# @jwt_required  # TODO: 임시 비활성화 (개발용)
 def request_upload_url(request):
     """
     Step 1: 업로드 토큰 및 Pre-signed URL 요청
-    
+
     Request Body:
     {
         "file_name": "video.mp4",
         "file_size": 1048576,
         "content_type": "video/mp4"
     }
-    
+
     Response:
     {
         "upload_token": "jwt_token",
@@ -47,32 +47,33 @@ def request_upload_url(request):
         file_name = data.get('file_name')
         file_size = data.get('file_size')
         content_type = data.get('content_type', 'video/mp4')
-        
+
         # 입력 검증
         if not file_name or not file_size:
             return Response(
-                {'error': 'file_name과 file_size가 필요합니다.'}, 
+                {'error': 'file_name과 file_size가 필요합니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # 파일 크기 제한 (5GB)
         max_size = 5 * 1024 * 1024 * 1024
         if file_size > max_size:
             return Response(
-                {'error': '파일 크기는 5GB를 초과할 수 없습니다.'}, 
+                {'error': '파일 크기는 5GB를 초과할 수 없습니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # 비디오 파일 타입 검증
         allowed_types = ['video/mp4', 'video/avi', 'video/mov', 'video/wmv']
         if content_type not in allowed_types:
             return Response(
-                {'error': f'지원되지 않는 파일 타입입니다. 허용된 타입: {allowed_types}'}, 
+                {'error': f'지원되지 않는 파일 타입입니다. 허용된 타입: {allowed_types}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # JWT에서 사용자 ID 추출
-        user_id = request.user_payload['user_id']
+
+        # JWT에서 사용자 ID 추출 (임시: 하드코딩)
+        # user_id = request.user_payload['user_id']  # JWT 사용 시
+        user_id = 'demo_user'  # TODO: 임시 사용자 ID
         
         # 업로드 토큰 생성
         upload_token = s3_service.generate_upload_token(
@@ -111,7 +112,7 @@ def request_upload_url(request):
 
 
 @api_view(['POST'])
-@jwt_required
+# @jwt_required  # TODO: 임시 비활성화 (개발용)
 def confirm_upload(request):
     """
     Step 2: 업로드 완료 확인 및 비디오 메타데이터 저장
@@ -212,7 +213,7 @@ def confirm_upload(request):
 
 
 @api_view(['GET'])
-@jwt_required
+# @jwt_required  # TODO: 임시 비활성화 (개발용)
 def get_video_download_url(request, video_id):
     """
     비디오 다운로드/스트리밍 URL 생성
@@ -250,7 +251,7 @@ def get_video_download_url(request, video_id):
 
 
 @api_view(['DELETE'])
-@jwt_required
+# @jwt_required  # TODO: 임시 비활성화 (개발용)
 def delete_video(request, video_id):
     """
     비디오 삭제 (DB + S3)

@@ -1,0 +1,152 @@
+version: '3.8'
+
+services:
+  # 프론트엔드 (ECR 이미지 사용)
+  frontend:
+    image: ${ECR_REGISTRY}/capstone-frontend:${IMAGE_TAG:-latest}
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+    volumes:
+      # 사용자 업로드 이미지 및 동적 파일 마운트
+      - ./uploads:/app/public/uploads
+      - ./public/images:/app/public/images
+      - uploaded_files:/app/public/uploaded_video
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 백엔드 (ECR 이미지 사용)
+  backend:
+    image: ${ECR_REGISTRY}/capstone-backend:${IMAGE_TAG:-latest}
+    ports:
+      - '8001:8000'
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres-main:5432/${DB_NAME}
+      - VECTOR_DB_URL=postgresql://${VECTOR_DB_USER}:${VECTOR_DB_PASSWORD}@postgres-vector:5432/${VECTOR_DB_NAME}
+      - SECRET_KEY=${SECRET_KEY}
+      # Vector DB 연결 정보 추가
+      - VECTOR_DB_HOST=postgres-vector
+      - VECTOR_DB_PORT=5432
+      - VECTOR_DB_NAME=${VECTOR_DB_NAME:-vector_db}
+      - VECTOR_DB_USER=${VECTOR_DB_USER:-vector_user}
+      - VECTOR_DB_PASSWORD=${VECTOR_DB_PASSWORD:-vector_password}
+      # AWS 자격 증명
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_REGION:-ap-northeast-2}
+      # AWS Bedrock 설정
+      - USE_BEDROCK=${USE_BEDROCK:-true}
+      - AWS_BEDROCK_REGION=${AWS_BEDROCK_REGION:-ap-northeast-2}
+      - AWS_BEDROCK_MODEL_ID=${AWS_BEDROCK_MODEL_ID:-anthropic.claude-3-sonnet-20240229-v1:0}
+      - AWS_BEDROCK_EMBEDDING_MODEL_ID=${AWS_BEDROCK_EMBEDDING_MODEL_ID:-amazon.titan-embed-text-v1}
+      - AWS_BEDROCK_KNOWLEDGE_BASE_ID=${AWS_BEDROCK_KNOWLEDGE_BASE_ID:-}
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - postgres-main
+      - postgres-vector
+
+  # 영상분석 FastAPI (Docker Hub 이미지)
+  video-analysis:
+    image: shon012/apps:latest
+    ports:
+      - '7000:7000'
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MODEL_PORT=7000
+      # PostgreSQL 연결 정보 (S3 URL 조회용)
+      - DB_HOST=postgres-main
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-capstone_db}
+      - DB_USER=${POSTGRES_USER:-capstone_user}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-capstone_password}
+      # Vector DB 연결 정보 (분석 결과 저장용)
+      - VECTOR_DB_HOST=postgres-vector
+      - VECTOR_DB_PORT=5432
+      - VECTOR_DB_NAME=${VECTOR_DB_NAME:-vector_db}
+      - VECTOR_DB_USER=${VECTOR_DB_USER:-vector_user}
+      - VECTOR_DB_PASSWORD=${VECTOR_DB_PASSWORD:-vector_password}
+      # AWS S3 설정 (영상 다운로드용)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-ap-northeast-2}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+    volumes:
+      # 임시 파일 저장용 (필요시)
+      - uploaded_files:/workspace/uploads
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - postgres-main
+      - postgres-vector
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:7000/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 메인 PostgreSQL (기존 데이터 - S3 URL 저장)
+  postgres-main:
+    image: postgres:15
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-capstone_db}
+      POSTGRES_USER: ${POSTGRES_USER:-capstone_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone_password}
+    volumes:
+      - postgres_main_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Vector PostgreSQL (분석 결과 저장)
+  postgres-vector:
+    image: pgvector/pgvector:pg15
+    ports:
+      - '5433:5432'
+    environment:
+      POSTGRES_DB: ${VECTOR_DB_NAME:-vector_db}
+      POSTGRES_USER: ${VECTOR_DB_USER:-vector_user}
+      POSTGRES_PASSWORD: ${VECTOR_DB_PASSWORD:-vector_password}
+      POSTGRES_INITDB_ARGS: '--encoding=UTF-8'
+    volumes:
+      - postgres_vector_data:/var/lib/postgresql/data
+      - ./init-vector-db.sql:/docker-entrypoint-initdb.d/init-vector-db.sql
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${VECTOR_DB_USER:-vector_user} -d ${VECTOR_DB_NAME:-vector_db}',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  uploaded_files:
+    driver: local
+  postgres_main_data:
+    driver: local
+  postgres_vector_data:
+    driver: local

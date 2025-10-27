@@ -8,9 +8,36 @@ typing_extensions==4.13.2
 gunicorn==22.0.0
 psycopg2-binary==2.9.7
 
-# AWS 및 S3 업로드 관련
-boto3==1.35.50
-botocore==1.35.50
+# Database URL parsing
+dj-database-url==2.2.0
+
+# Cloud & Vector Database Support
+pgvector==0.3.6
+psycopg[binary]==3.2.3
+
+# AWS Services (최신 버전 사용)
+boto3==1.35.72
+botocore==1.35.72
+
+# Django S3 Storage
+django-storages[boto3]==1.14.4
+
+# AWS Bedrock Support
+langchain==0.3.13
+langchain-aws==0.2.6
+langchain-community==0.3.13
+
+# Machine Learning & Embeddings
+openai==1.55.3
+numpy==2.1.3
+scikit-learn==1.6.0
+opencv-python==4.10.0.84  # 비디오 프레임 추출용
+
+# Additional Utilities
+python-dateutil==2.9.0
+requests==2.32.3
+urllib3==2.2.3
+certifi==2024.8.30
 
 # JWT 인증
 PyJWT==2.9.0

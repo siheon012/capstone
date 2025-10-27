@@ -3,16 +3,65 @@ version: '3.8'
 services:
   # 백엔드 (Django)
   backend:
-    build: 
+    build:
       context: ./back
       dockerfile: Dockerfile
+      target: production # production stage 사용
     ports:
-      - "${BACKEND_PORT:-8001}:8000"
+      - '${BACKEND_PORT:-8001}:8000'
+    environment:
+      # Django 설정
+      - DEBUG=${DEBUG:-False}
+      - DJANGO_SETTINGS_MODULE=core.settings
+      - DJANGO_ENV=development
+
+      # 데이터베이스 설정
+      - DB_NAME=${POSTGRES_DB:-capstone_db}
+      - DB_USER=${POSTGRES_USER:-capstone_user}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-capstone_password}
+      - DB_HOST=db
+      - DB_PORT=5432
+
+      # AWS 설정 (로컬 개발용은 비워둠)
+      - USE_S3=${USE_S3:-false}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-northeast-2}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-}
+
+      # AWS Bedrock 설정
+      - USE_BEDROCK=${USE_BEDROCK:-true}
+      - AWS_BEDROCK_REGION=${AWS_BEDROCK_REGION:-ap-northeast-2}
+      - AWS_BEDROCK_MODEL_ID=${AWS_BEDROCK_MODEL_ID:-anthropic.claude-3-sonnet-20240229-v1:0}
+      - AWS_BEDROCK_EMBEDDING_MODEL_ID=${AWS_BEDROCK_EMBEDDING_MODEL_ID:-amazon.titan-embed-text-v1}
+      - AWS_BEDROCK_KNOWLEDGE_BASE_ID=${AWS_BEDROCK_KNOWLEDGE_BASE_ID:-}
+
+      # OpenAI 설정
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+
+      # Gunicorn 설정
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+      - GUNICORN_THREADS=${GUNICORN_THREADS:-2}
+      - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-120}
+      - PORT=8000
+      - LOG_LEVEL=info
+
+      # 추가 설정
+      - COLLECT_STATIC=false
+      - CREATE_SUPERUSER=false
     volumes:
       - ./back:/app
       - ./back/static:/app/static
     depends_on:
-      - db
+      db:
+        condition: service_healthy # DB 헬스체크 통과 후 시작
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:8000/api/health/ || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s # entrypoint.sh migration 시간 고려
+    restart: unless-stopped
     networks:
       - app-network
     environment:
@@ -25,7 +74,7 @@ services:
       context: ./front
       dockerfile: Dockerfile
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - '${FRONTEND_PORT:-3000}:3000'
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8001}
       - NODE_ENV=${NODE_ENV:-development}
@@ -38,17 +87,46 @@ services:
     networks:
       - app-network
 
-  # 데이터베이스 (PostgreSQL)
+  # 데이터베이스 (PostgreSQL with pgvector)
   db:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     ports:
-      - "${DB_PORT:-5433}:5432"
+      - '${DB_PORT:-5433}:5432'
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-capstone_db}
       POSTGRES_USER: ${POSTGRES_USER:-capstone_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-capstone_password}
+      # PostgreSQL 최적화 설정
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-vector-db.sql:/docker-entrypoint-initdb.d/01-init-vector-db.sql
+      # PostgreSQL 설정 파일 (선택사항)
+      # - ./postgresql.conf:/etc/postgresql/postgresql.conf
+    command: |
+      postgres 
+      -c shared_preload_libraries=vector
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-capstone_user} -d ${POSTGRES_DB:-capstone_db}',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
     networks:
       - app-network
 
@@ -56,11 +134,11 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx/ssl:/etc/nginx/ssl  # SSL 인증서용
+      - ./nginx/ssl:/etc/nginx/ssl # SSL 인증서용
     depends_on:
       - frontend
       - backend

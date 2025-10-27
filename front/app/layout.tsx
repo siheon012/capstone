@@ -4,8 +4,14 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import ScrollbarProvider from '@/components/scrollbar-provider';
+import { logEnvironmentInfo } from '@/lib/env-config';
 
 const inter = Inter({ subsets: ['latin'] });
+
+// 개발 환경에서 환경변수 검증 실행
+if (process.env.NODE_ENV === 'development') {
+  logEnvironmentInfo();
+}
 
 export const metadata: Metadata = {
   title: 'Deep Sentinel - CCTV Analysis Platform',
@@ -51,9 +57,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <ScrollbarProvider theme="default">
-            {children}
-          </ScrollbarProvider>
+          <ScrollbarProvider theme="default">{children}</ScrollbarProvider>
         </ThemeProvider>
       </body>
     </html>

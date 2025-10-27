@@ -146,9 +146,8 @@ resource "aws_iam_policy" "developers_s3_access" {
           "s3:GetBucketVersioning"
         ]
         Resource = [
-          aws_s3_bucket.video_storage.arn,
           aws_s3_bucket.raw_videos.arn,
-          aws_s3_bucket.results.arn
+          aws_s3_bucket.thumbnails.arn
         ]
       },
       {
@@ -161,9 +160,8 @@ resource "aws_iam_policy" "developers_s3_access" {
           "s3:GetObjectVersionAcl"
         ]
         Resource = [
-          "${aws_s3_bucket.video_storage.arn}/*",
           "${aws_s3_bucket.raw_videos.arn}/*",
-          "${aws_s3_bucket.results.arn}/*"
+          "${aws_s3_bucket.thumbnails.arn}/*"
         ]
       },
       {

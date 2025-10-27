@@ -70,8 +70,10 @@ resource "aws_iam_role_policy" "ecs_task_s3_policy" {
           "s3:ListBucket"
         ]
         Resource = [
-          "${aws_s3_bucket.video_storage.arn}",
-          "${aws_s3_bucket.video_storage.arn}/*"
+          "${aws_s3_bucket.raw_videos.arn}",
+          "${aws_s3_bucket.raw_videos.arn}/*",
+          "${aws_s3_bucket.thumbnails.arn}",
+          "${aws_s3_bucket.thumbnails.arn}/*"
         ]
       }
     ]
@@ -163,7 +165,7 @@ resource "aws_ecs_task_definition" "frontend" {
         },
         {
           name  = "NEXT_PUBLIC_S3_BUCKET"
-          value = aws_s3_bucket.video_storage.id
+          value = aws_s3_bucket.raw_videos.id
         },
         {
           name  = "NEXT_PUBLIC_S3_REGION"
@@ -241,7 +243,7 @@ resource "aws_ecs_task_definition" "backend" {
         },
         {
           name  = "AWS_STORAGE_BUCKET_NAME"
-          value = aws_s3_bucket.video_storage.id
+          value = aws_s3_bucket.raw_videos.id
         },
         {
           name  = "AWS_S3_REGION_NAME"

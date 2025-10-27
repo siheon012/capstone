@@ -108,9 +108,16 @@ class EventSerializer(serializers.ModelSerializer):
     similarity_score = serializers.SerializerMethodField()
     tier_info = serializers.SerializerMethodField()
     
+    # 썸네일 URL (Presigned URL 자동 생성)
+    thumbnail_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = Event
         fields = '__all__'
+    
+    def get_thumbnail_url(self, obj):
+        """썸네일 Presigned URL 생성"""
+        return obj.thumbnail_url  # @property 메서드 사용
     
     def get_searchable_content(self, obj):
         """검색 가능한 내용 생성"""

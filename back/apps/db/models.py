@@ -5,6 +5,9 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import datetime, timedelta
 from pgvector.django import VectorField
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Video(models.Model):
@@ -152,6 +155,24 @@ class Event(models.Model):
     # 추가 메타데이터
     attributes = models.JSONField(default=dict, blank=True)  # 추가 속성들
     
+    # S3 썸네일 정보 (FastAPI 영상분석에서 생성)
+    s3_thumbnail_bucket = models.CharField(
+        max_length=63, 
+        default='capstone-dev-thumbnails',
+        help_text="썸네일 이미지가 저장된 S3 버킷"
+    )
+    s3_thumbnail_key = models.CharField(
+        max_length=500, 
+        null=True, 
+        blank=True,
+        help_text="썸네일 이미지의 S3 객체 키 (예: events/event_001/frame_1234.jpg)"
+    )
+    thumbnail_uploaded_at = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text="썸네일이 S3에 업로드된 시각"
+    )
+    
     # RAG 검색을 위한 임베딩
     embedding = VectorField(dimensions=1536, blank=True, null=True)
     searchable_text = models.TextField(blank=True)
@@ -202,6 +223,26 @@ class Event(models.Model):
             self.action, self.emotion, self.interaction_target
         ]
         self.keywords = [k for k in self.keywords if k]
+    
+    @property
+    def thumbnail_url(self):
+        """썸네일 Presigned URL 생성"""
+        if not self.s3_thumbnail_key:
+            return None
+        
+        try:
+            s3_client = boto3.client('s3')
+            return s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': self.s3_thumbnail_bucket,
+                    'Key': self.s3_thumbnail_key
+                },
+                ExpiresIn=3600  # 1시간 유효
+            )
+        except Exception as e:
+            logger.warning(f"썸네일 URL 생성 실패: {e}")
+            return None
     
     def __str__(self):
         return f"{self.video.name or self.video.filename} - {self.event_type} at {self.timestamp}s"

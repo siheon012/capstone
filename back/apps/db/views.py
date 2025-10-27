@@ -7,13 +7,16 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.conf import settings
 import os
 import json
+import boto3
 from datetime import datetime
-from .models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData
+from .models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData, VideoAnalysis, AnalysisJob
 from .serializers import (
     VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer,
-    DepthDataSerializer, DisplayDataSerializer, DepthDataBulkCreateSerializer, DisplayDataBulkCreateSerializer
+    DepthDataSerializer, DisplayDataSerializer, DepthDataBulkCreateSerializer, DisplayDataBulkCreateSerializer,
+    VideoAnalysisSerializer, AnalysisJobSerializer
 )
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -23,7 +26,7 @@ class VideoViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def create(self, request, *args, **kwargs):
-        """비디오 생성 - 로깅 추가"""
+        """비디오 생성 - 클라우드 지원 추가"""
         print(f"🎬 [VideoViewSet CREATE] 요청 시작")
         print(f"📦 [VideoViewSet CREATE] Request method: {request.method}")
         print(f"📂 [VideoViewSet CREATE] Request headers: {dict(request.headers)}")
@@ -42,6 +45,18 @@ class VideoViewSet(viewsets.ModelViewSet):
             
             # 기본 create 메서드 호출
             response = super().create(request, *args, **kwargs)
+            
+            # 생성된 비디오에 대해 검색 통계 초기화
+            if response.status_code == status.HTTP_201_CREATED:
+                video_id = response.data.get('video_id')
+                if video_id:
+                    video = Video.objects.get(video_id=video_id)
+                    # 클라우드 필드 초기화
+                    if hasattr(video, 'increment_search_count'):
+                        # 새 비디오는 hot 티어로 시작
+                        video.data_tier = 'hot'
+                        video.hotness_score = 100.0
+                        video.save()
             
             print(f"✅ [VideoViewSet CREATE] 생성 성공")
             print(f"📋 [VideoViewSet CREATE] Response status: {response.status_code}")
@@ -62,7 +77,7 @@ class VideoViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], url_path='upload')
     def upload_video(self, request):
-        """비디오 파일 업로드"""
+        """비디오 파일 업로드 - S3 지원 추가"""
         try:
             video_file = request.FILES.get('video')
             if not video_file:
@@ -78,22 +93,56 @@ class VideoViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # 파일 크기 제한
-            max_size = 5 * 1024 * 1024 * 1024
+            # 파일 크기 제한 (10GB)
+            max_size = 10 * 1024 * 1024 * 1024
             if video_file.size > max_size:
                 return Response(
-                    {'error': '파일 크기는 5GB를 초과할 수 없습니다.'},
+                    {'error': '파일 크기는 10GB를 초과할 수 없습니다.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Video 객체 생성 및 저장
-            video = Video.objects.create(
-                name=video_file.name,
-                video_file=video_file,
-                size=video_file.size,  # file_size -> size로 변경
-                duration=0,  # 초기값 설정 (추후 분석으로 업데이트)
-                thumbnail_path=""  # 초기값 설정 (추후 썸네일 생성으로 업데이트)
-            )
+            # S3 업로드 처리
+            s3_key = None
+            if getattr(settings, 'USE_S3', False):
+                try:
+                    s3_client = boto3.client('s3')
+                    s3_key = f"videos/{datetime.now().strftime('%Y/%m/%d')}/{video_file.name}"
+                    
+                    s3_client.upload_fileobj(
+                        video_file,
+                        settings.AWS_STORAGE_BUCKET_NAME,
+                        s3_key,
+                        ExtraArgs={'ContentType': video_file.content_type}
+                    )
+                    print(f"✅ S3 업로드 성공: {s3_key}")
+                except Exception as e:
+                    print(f"❌ S3 업로드 실패: {str(e)}")
+                    # S3 실패시 로컬 저장으로 폴백
+                    s3_key = None
+            
+            # Video 객체 생성 및 저장 (클라우드 필드 포함)
+            video_data = {
+                'name': video_file.name,
+                'filename': video_file.name,
+                'original_filename': video_file.name,
+                'file_size': video_file.size,
+                'duration': 0,  # 초기값 (추후 분석으로 업데이트)
+                'data_tier': 'hot',
+                'hotness_score': 100.0,
+            }
+            
+            # S3 또는 로컬 경로 설정
+            if s3_key:
+                video_data.update({
+                    's3_key': s3_key,
+                    's3_raw_key': s3_key,
+                    's3_bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                })
+            else:
+                # 로컬 저장
+                video_data['video_file'] = video_file
+            
+            video = Video.objects.create(**video_data)
             
             # 시리얼라이저로 응답 데이터 생성
             serializer = self.get_serializer(video)
@@ -374,3 +423,233 @@ class DisplayDataViewSet(viewsets.ModelViewSet):
             'depth_groups': depth_groups,
             'total_count': len(serializer.data)
         })
+
+
+# 새로운 클라우드 모델을 위한 ViewSet들
+class VideoAnalysisViewSet(viewsets.ModelViewSet):
+    """비디오 분석 결과 ViewSet"""
+    queryset = VideoAnalysis.objects.all()
+    serializer_class = VideoAnalysisSerializer
+    
+    def get_queryset(self):
+        queryset = VideoAnalysis.objects.all()
+        video_id = self.request.query_params.get('video_id', None)
+        analysis_type = self.request.query_params.get('analysis_type', None)
+        tier = self.request.query_params.get('tier', None)
+        
+        if video_id is not None:
+            queryset = queryset.filter(video_id=video_id)
+        if analysis_type is not None:
+            queryset = queryset.filter(analysis_type=analysis_type)
+        if tier is not None:
+            queryset = queryset.filter(data_tier=tier)
+            
+        return queryset.order_by('-created_at')
+    
+    @action(detail=False, methods=['post'], url_path='vector-search')
+    def vector_search(self, request):
+        """벡터 유사도 검색"""
+        try:
+            from .search_service import RAGSearchService
+            
+            query = request.data.get('query', '')
+            video_id = request.data.get('video_id', None)
+            limit = request.data.get('limit', 10)
+            
+            if not query:
+                return Response(
+                    {'error': '검색 쿼리가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # RAG 검색 서비스 사용
+            search_service = RAGSearchService()
+            results = search_service.search_similar_events(
+                query=query,
+                video_id=video_id,
+                limit=limit
+            )
+            
+            return Response({
+                'query': query,
+                'results': results,
+                'count': len(results)
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'벡터 검색 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'], url_path='generate-embedding')
+    def generate_embedding(self, request):
+        """텍스트 임베딩 생성"""
+        try:
+            text = request.data.get('text', '')
+            if not text:
+                return Response(
+                    {'error': '임베딩할 텍스트가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            from .search_service import RAGSearchService
+            search_service = RAGSearchService()
+            embedding = search_service.generate_embedding(text)
+            
+            return Response({
+                'text': text,
+                'embedding': embedding,
+                'dimension': len(embedding) if embedding else 0
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'임베딩 생성 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class AnalysisJobViewSet(viewsets.ModelViewSet):
+    """AWS Batch 분석 작업 ViewSet"""
+    queryset = AnalysisJob.objects.all()
+    serializer_class = AnalysisJobSerializer
+    
+    def get_queryset(self):
+        queryset = AnalysisJob.objects.all()
+        video_id = self.request.query_params.get('video_id', None)
+        status_filter = self.request.query_params.get('status', None)
+        
+        if video_id is not None:
+            queryset = queryset.filter(video_id=video_id)
+        if status_filter is not None:
+            queryset = queryset.filter(status=status_filter)
+            
+        return queryset.order_by('-created_at')
+    
+    @action(detail=True, methods=['post'], url_path='update-status')
+    def update_status(self, request, pk=None):
+        """AWS Batch에서 작업 상태 업데이트"""
+        try:
+            job = self.get_object()
+            old_status = job.status
+            
+            # AWS에서 최신 상태 조회
+            job.update_status_from_aws()
+            
+            if job.status != old_status:
+                return Response({
+                    'job_id': job.job_id,
+                    'old_status': old_status,
+                    'new_status': job.status,
+                    'updated': True
+                })
+            else:
+                return Response({
+                    'job_id': job.job_id,
+                    'status': job.status,
+                    'updated': False
+                })
+                
+        except Exception as e:
+            return Response(
+                {'error': f'상태 업데이트 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'], url_path='submit-analysis')
+    def submit_analysis(self, request):
+        """새로운 분석 작업 제출"""
+        try:
+            video_id = request.data.get('video_id')
+            analysis_types = request.data.get('analysis_types', [])
+            
+            if not video_id:
+                return Response(
+                    {'error': 'video_id가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not analysis_types:
+                return Response(
+                    {'error': 'analysis_types가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # AWS Batch 작업 제출 로직 (실제 구현 필요)
+            job_name = f"video-analysis-{video_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            job_id = f"batch-job-{video_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            
+            # AnalysisJob 생성
+            analysis_job = AnalysisJob.objects.create(
+                video_id=video_id,
+                job_id=job_id,
+                job_name=job_name,
+                job_queue='video-analysis-queue',
+                job_definition='video-analysis-job-def',
+                analysis_types=analysis_types,
+                status='submitted'
+            )
+            
+            serializer = self.get_serializer(analysis_job)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'분석 작업 제출 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# 데이터 티어링 관리 ViewSet
+class TierManagementViewSet(viewsets.GenericViewSet):
+    """데이터 티어링 관리 API"""
+    
+    @action(detail=False, methods=['post'], url_path='promote-to-hot')
+    def promote_to_hot(self, request):
+        """Hot 티어로 승격"""
+        try:
+            video_id = request.data.get('video_id')
+            if not video_id:
+                return Response(
+                    {'error': 'video_id가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            from .tier_manager import TierManager
+            tier_manager = TierManager()
+            result = tier_manager.promote_to_hot(video_id)
+            
+            return Response({
+                'success': True,
+                'video_id': video_id,
+                'message': f'비디오가 Hot 티어로 승격되었습니다.',
+                'result': result
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'티어 승격 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'], url_path='run-tier-management')
+    def run_tier_management(self, request):
+        """티어 관리 실행"""
+        try:
+            from .tier_manager import TierManager
+            tier_manager = TierManager()
+            
+            results = tier_manager.run_daily_tier_management()
+            
+            return Response({
+                'success': True,
+                'message': '티어 관리가 완료되었습니다.',
+                'results': results
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'티어 관리 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -3,33 +3,33 @@ from .models import Video, Event, PromptSession, PromptInteraction, DepthData, D
 
 @admin.register(Video)
 class VideoAdmin(admin.ModelAdmin):
-    list_display = ['video_id', 'name', 'duration', 'size', 'upload_date', 'chat_count']
-    list_filter = ['upload_date', 'major_event']
-    search_fields = ['name', 'major_event']
-    readonly_fields = ['upload_date']
+    list_display = ['video_id', 'name', 'duration', 'file_size', 'upload_date', 'data_tier', 'analysis_status']
+    list_filter = ['upload_date', 'data_tier', 'analysis_status']
+    search_fields = ['name', 'filename', 'description']
+    readonly_fields = ['upload_date', 'created_at', 'updated_at', 'last_accessed']
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ['video', 'timestamp', 'event_type', 'obj_id', 'age', 'gender', 'action_detected']
-    list_filter = ['event_type', 'gender', 'video']
-    search_fields = ['event_type', 'action_detected', 'location']
+    list_display = ['video', 'timestamp', 'event_type', 'age_group', 'gender', 'action']
+    list_filter = ['event_type', 'gender', 'age_group', 'video']
+    search_fields = ['event_type', 'action', 'interaction_target']
     raw_id_fields = ['video']
 
 @admin.register(PromptSession)
 class PromptSessionAdmin(admin.ModelAdmin):
-    list_display = ['session_id', 'video', 'interaction_count', 'created_at', 'updated_at']
-    list_filter = ['created_at', 'updated_at']
-    search_fields = ['first_prompt', 'first_response']
-    raw_id_fields = ['video', 'main_event']
-    readonly_fields = ['created_at', 'updated_at']
+    list_display = ['session_id', 'user_id', 'total_interactions', 'status', 'created_at', 'updated_at']
+    list_filter = ['status', 'created_at', 'updated_at', 'data_tier']
+    search_fields = ['session_id', 'user_id', 'session_name', 'session_summary']
+    raw_id_fields = ['main_event']
+    readonly_fields = ['created_at', 'updated_at', 'last_interaction']
 
 @admin.register(PromptInteraction)
 class PromptInteractionAdmin(admin.ModelAdmin):
-    list_display = ['session', 'video', 'processing_status', 'found_events_count', 'timestamp']
-    list_filter = ['processing_status', 'timestamp']
-    search_fields = ['input_prompt', 'output_response']
-    raw_id_fields = ['session', 'video']
-    readonly_fields = ['timestamp', 'processed_at']
+    list_display = ['interaction_id', 'session', 'sequence_number', 'user_intent', 'created_at']
+    list_filter = ['user_intent', 'analysis_type', 'created_at']
+    search_fields = ['interaction_id', 'user_prompt', 'ai_response']
+    raw_id_fields = ['session']
+    readonly_fields = ['created_at']
 
 @admin.register(DepthData)
 class DepthDataAdmin(admin.ModelAdmin):

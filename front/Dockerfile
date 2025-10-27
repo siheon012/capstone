@@ -45,6 +45,16 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# 빌드 시 환경변수 전달 (App Runner에서 주입)
+ARG AWS_APP_RUNNER_URL
+ARG AWS_STORAGE_BUCKET_NAME
+ARG AWS_REGION
+
+# 프로덕션 환경변수 설정
+ENV NEXT_PUBLIC_API_URL=${AWS_APP_RUNNER_URL}
+ENV NEXT_PUBLIC_S3_BUCKET=${AWS_STORAGE_BUCKET_NAME}
+ENV NEXT_PUBLIC_S3_REGION=${AWS_REGION}
+
 # 애플리케이션 빌드
 RUN yarn build
 
@@ -101,15 +111,20 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 
+# 런타임 환경변수 (App Runner에서 주입될 예정)
+ENV AWS_APP_RUNNER_URL=""
+ENV AWS_STORAGE_BUCKET_NAME=""
+ENV AWS_REGION="ap-northeast-2"
+
 # 프로덕션 서버용 포트
 EXPOSE 3000
 
 # 보안을 위해 nextjs 사용자로 실행
 USER nextjs
 
-# 헬스체크 추가
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node --version || exit 1
+# 헬스체크 추가 (더 상세한 체크)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
 
 # 프로덕션 서버 실행
 CMD ["yarn", "start"]

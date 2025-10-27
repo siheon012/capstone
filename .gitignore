@@ -88,3 +88,26 @@ temp/
 tmp/
 
 # env 템플릿 파일들은 추적됨 (.env.*.template)
+
+# Terraform 관련 파일들
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+tfplan
+tfplan.*
+.terraform.lock.hcl
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc

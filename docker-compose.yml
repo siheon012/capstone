@@ -49,6 +49,10 @@ services:
       # 추가 설정
       - COLLECT_STATIC=false
       - CREATE_SUPERUSER=false
+
+      # LocalStack 설정
+      - USE_LOCALSTACK=${USE_LOCALSTACK:-false}
+      - AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-}
     volumes:
       - ./back:/app
       - ./back/static:/app/static
@@ -64,9 +68,6 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-    environment:
-      - USE_LOCALSTACK=${USE_LOCALSTACK:-false}
-      - AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-}
 
   # 프론트엔드 (Next.js)
   frontend:
@@ -149,7 +150,7 @@ services:
   localstack:
     image: localstack/localstack:3.0
     ports:
-      - "${LOCALSTACK_PORT:-4566}:4566"
+      - '${LOCALSTACK_PORT:-4566}:4566'
     environment:
       - SERVICES=s3,sqs
       - DEBUG=1

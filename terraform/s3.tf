@@ -22,9 +22,6 @@ resource "aws_s3_bucket" "thumbnails" {
   }
 }
 
-# video_storage 버킷 제거됨 (raw_videos로 통합)
-# capstone-dev-results 버킷 제거됨 (PostgreSQL + pgvector에 저장)
-
 # ============================================
 # S3 버킷 설정
 # ============================================
@@ -99,3 +96,4 @@ output "s3_thumbnails_bucket" {
   description = "Thumbnails S3 bucket name"
   value       = aws_s3_bucket.thumbnails.id
 }
+

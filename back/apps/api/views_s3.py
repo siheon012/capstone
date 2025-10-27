@@ -138,24 +138,25 @@ def confirm_upload(request):
         s3_key = data.get('s3_key')
         duration = data.get('duration', 0)
         thumbnail_url = data.get('thumbnail_url')
-        
+        video_datetime = data.get('video_datetime')  # 비디오 촬영 시간 추가
+
         # 입력 검증
         if not upload_token or not s3_key:
             return Response(
-                {'error': 'upload_token과 s3_key가 필요합니다.'}, 
+                {'error': 'upload_token과 s3_key가 필요합니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # 업로드 토큰 검증
         token_payload = s3_service.validate_upload_token(upload_token)
-        
+
         # S3에 파일이 실제로 업로드되었는지 확인
         if not s3_service.check_file_exists(s3_key):
             return Response(
-                {'error': 'S3에서 파일을 찾을 수 없습니다. 업로드를 다시 시도해주세요.'}, 
+                {'error': 'S3에서 파일을 찾을 수 없습니다. 업로드를 다시 시도해주세요.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # 비디오 메타데이터 DB 저장
         video_data = {
             'name': token_payload['file_name'],
@@ -166,6 +167,10 @@ def confirm_upload(request):
             'chat_count': 0,
             'major_event': None
         }
+
+        # 비디오 촬영 시간이 있으면 추가
+        if video_datetime:
+            video_data['time_in_video'] = video_datetime
         
         video = Video.objects.create(**video_data)
         serializer = VideoSerializer(video)

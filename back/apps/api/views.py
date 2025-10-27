@@ -1,12 +1,98 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
+from django.http import JsonResponse
+from django.db import connection
+from django.conf import settings
 from apps.db.models import Video, Event, PromptSession, PromptInteraction
 from apps.db.serializers import VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer
+from apps.api.bedrock_service import get_bedrock_service
+from apps.api.hybrid_search_service import get_hybrid_search_service
 import json
 import requests
 import re
-from django.db import connection
+
+# 헬스체크 엔드포인트
+@api_view(['GET'])
+def health_check(request):
+    """
+    헬스체크 엔드포인트 - 서버 상태 확인
+    ALB Target Group Health Check용
+    """
+    health_status = {
+        'status': 'healthy',
+        'timestamp': None,
+        'checks': {
+            'database': 'unknown',
+            'pgvector': 'unknown',
+            's3': 'unknown'
+        },
+        'details': {}
+    }
+    
+    try:
+        from django.utils import timezone
+        health_status['timestamp'] = timezone.now().isoformat()
+        
+        # 1. 데이터베이스 연결 확인
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                health_status['checks']['database'] = 'connected'
+        except Exception as e:
+            health_status['checks']['database'] = 'disconnected'
+            health_status['details']['database_error'] = str(e)
+            health_status['status'] = 'unhealthy'
+        
+        # 2. pgvector 확장 확인
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
+                result = cursor.fetchone()
+                if result:
+                    health_status['checks']['pgvector'] = 'enabled'
+                else:
+                    health_status['checks']['pgvector'] = 'disabled'
+        except Exception as e:
+            health_status['checks']['pgvector'] = 'error'
+            health_status['details']['pgvector_error'] = str(e)
+        
+        # 3. S3 연결 확인 (선택사항)
+        try:
+            import os
+            if os.environ.get('USE_S3', 'false').lower() == 'true':
+                import boto3
+                from botocore.exceptions import ClientError
+                
+                s3_client = boto3.client('s3')
+                bucket_name = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+                
+                if bucket_name:
+                    try:
+                        s3_client.head_bucket(Bucket=bucket_name)
+                        health_status['checks']['s3'] = 'connected'
+                    except ClientError:
+                        health_status['checks']['s3'] = 'bucket_not_found'
+                else:
+                    health_status['checks']['s3'] = 'not_configured'
+            else:
+                health_status['checks']['s3'] = 'disabled'
+        except Exception as e:
+            health_status['checks']['s3'] = 'error'
+            health_status['details']['s3_error'] = str(e)
+        
+        # 최종 상태 결정
+        if health_status['checks']['database'] != 'connected':
+            return JsonResponse(health_status, status=503)
+        
+        return JsonResponse(health_status, status=200)
+    
+    except Exception as e:
+        return JsonResponse({
+            'status': 'unhealthy',
+            'error': str(e),
+            'message': 'Unexpected error occurred'
+        }, status=503)
 
 @api_view(['POST'])
 def process_prompt(request):
@@ -251,99 +337,68 @@ def check_duplicate_video(request):
 
 def process_prompt_logic(prompt_text, video=None):
     """
-    프롬프트 처리 로직 - FastAPI text2sql 호출
+    프롬프트 처리 로직 - AWS Bedrock 하이브리드 RAG
     
-    1. FastAPI에 프롬프트 전송하여 SQL 생성
-    2. 생성된 SQL로 타임스탬프 추출
-    3. DB 쿼리 실행 (특정 비디오로 제한)
-    4. 타임라인 추출 → 영상 캡쳐
-    5. VLM에 캡쳐 이미지 + 프롬프트 전송
-    6. 응답 생성
+    1. Text2SQL: 정확한 조건 검색 (timestamp, event_type 등)
+    2. pgvector: 의미 기반 유사도 검색 (임베딩)
+    3. 결과 병합 및 중복 제거
+    4. Bedrock RAG: 자연어 응답 생성
     
     Args:
         prompt_text: 사용자 프롬프트
         video: 대상 비디오 객체 (None이면 전체 검색)
     """
+    use_bedrock = getattr(settings, 'USE_BEDROCK', True)
+    use_hybrid_search = getattr(settings, 'USE_HYBRID_SEARCH', True)
+    
     try:
-        # 1. FastAPI text2sql 호출
-        fastapi_url = "http://localhost:8087/api/process"
-        fastapi_payload = {"prompt": prompt_text}
-        
-        print(f"FastAPI 호출: {fastapi_url}")
-        print(f"Payload: {fastapi_payload}")
-        
-        response = requests.post(
-            fastapi_url,
-            json=fastapi_payload,
-            headers={"Content-Type": "application/json"},
-            timeout=30
-        )
-        
-        if response.status_code != 200:
-            return f"FastAPI 호출 실패: {response.status_code}", None
+        # ============================================
+        # 하이브리드 RAG: Text2SQL + pgvector
+        # ============================================
+        if use_bedrock and use_hybrid_search:
+            print(f"🚀 하이브리드 RAG 검색 사용 (Text2SQL + pgvector)")
+            hybrid_service = get_hybrid_search_service()
             
-        text2sql_result = response.json()
-        print(f"FastAPI 응답: {text2sql_result}")
-        
-        # 2. SQL 쿼리 추출 및 실행
-        # FastAPI 응답 구조에 맞춰 'result' 키 사용
-        if 'result' not in text2sql_result:
-            return "SQL 쿼리가 생성되지 않았습니다.", None
+            found_events, response_text = hybrid_service.hybrid_search(
+                prompt=prompt_text,
+                video=video,
+                use_vector_search=True,  # pgvector 검색 활성화
+                use_text2sql=True         # Text2SQL 검색 활성화
+            )
             
-        sql_query = text2sql_result['result']
-        print(f"생성된 SQL: {sql_query}")
+            relevant_event = found_events[0] if found_events else None
+            return response_text, relevant_event
         
-        # Django 테이블 이름으로 변환
-        sql_query = sql_query.replace('events', 'db_event')
-        sql_query = sql_query.replace('videos', 'db_video')
-        
-        # 특정 비디오로 제한하는 WHERE 조건 추가
-        if video:
-            # 기존 WHERE 절이 있는지 확인
-            if 'WHERE' in sql_query.upper():
-                # 기존 WHERE 절에 AND 조건 추가
-                sql_query = sql_query.replace('WHERE', f'WHERE db_event.video_id = {video.video_id} AND')
-            else:
-                # WHERE 절이 없으면 추가
-                # FROM 절 다음에 WHERE 절 추가
-                sql_query = re.sub(r'(FROM\s+\w+)', r'\1 WHERE db_event.video_id = ' + str(video.video_id), sql_query, flags=re.IGNORECASE)
+        # ============================================
+        # 1. Text2SQL: 프롬프트 → SQL 변환 (Bedrock Only)
+        # ============================================
+        elif use_bedrock:
+            print(f"🤖 Bedrock Text2SQL 사용")
+            bedrock_service = get_bedrock_service()
             
-            print(f"비디오 필터링 적용됨: video_id = {video.video_id}")
-            print(f"필터링된 SQL: {sql_query}")
+            video_id = video.video_id if video else None
+            text2sql_result = bedrock_service.text_to_sql(
+                prompt=prompt_text,
+                video_id=video_id
+            )
+            
+            if text2sql_result.get('error'):
+                return f"SQL 생성 오류: {text2sql_result['error']}", None
+            
+            sql_query = text2sql_result.get('sql')
+            print(f"✅ Bedrock이 생성한 SQL: {sql_query}")
+            
+        else:
+            # Bedrock이 비활성화된 경우 에러 반환
+            return "Bedrock이 비활성화되어 있습니다. USE_BEDROCK=true로 설정하세요.", None
         
-        # PostgreSQL TIME 타입을 초 단위 정수로 변환
-        # 예: TIME '10:00:00' -> 36000 (10시간 * 3600초)
-        # 예: TIME '13:00:00' -> 46800 (13시간 * 3600초)
-        import re
+        # ============================================
+        # 2. SQL 실행 및 데이터 검색
+        # ============================================
+        if not sql_query:
+            return "SQL 쿼리를 생성하지 못했습니다.", None
         
-        def time_to_seconds(time_str):
-            """TIME '10:00:00' -> 36000초 변환"""
-            time_match = re.search(r"TIME '(\d{2}):(\d{2}):(\d{2})'", time_str)
-            if time_match:
-                hours, minutes, seconds = map(int, time_match.groups())
-                total_seconds = hours * 3600 + minutes * 60 + seconds
-                return str(total_seconds)
-            return time_str
-        
-        # timestamp::time 패턴을 timestamp로 변경
-        sql_query = re.sub(r'timestamp::time', 'timestamp', sql_query)
-        
-        # TIME '시:분:초' 패턴을 초 단위로 변환
-        time_pattern = r"TIME '(\d{2}):(\d{2}):(\d{2})'"
-        def replace_time(match):
-            hours, minutes, seconds = map(int, match.groups())
-            total_seconds = hours * 3600 + minutes * 60 + seconds
-            return str(total_seconds)
-        
-        sql_query = re.sub(time_pattern, replace_time, sql_query)
-        
-        print(f"Django 테이블명으로 변환된 SQL: {sql_query}")
-        
-        # 3. 질문 분류 (SQL 및 프롬프트 기반)
-        question_type = classify_question_type(prompt_text, sql_query)
-        print(f"🔍 질문 분류: {question_type}")
-        
-        # 4. DB에서 쿼리 실행
+        # DB에서 쿼리 실행
         with connection.cursor() as cursor:
             cursor.execute(sql_query)
             query_results = cursor.fetchall()
@@ -351,19 +406,20 @@ def process_prompt_logic(prompt_text, video=None):
         if not query_results:
             return "요청하신 조건에 해당하는 이벤트를 찾을 수 없습니다.", None
             
-        print(f"쿼리 결과: {query_results}")
+        print(f"✅ 쿼리 결과: {len(query_results)}개 발견")
         
-        # 5. 실제 이벤트 데이터 조회하여 상세 응답 생성
+        # ============================================
+        # 3. 이벤트 객체 조회 및 정리
+        # ============================================
         found_events = []
         relevant_event = None
         
         for result in query_results:
             try:
-                # SQL 쿼리 결과는 timestamp 값이므로 timestamp로 검색
+                # timestamp 값 추출 (첫 번째 컬럼 가정)
                 timestamp_value = result[0]
-                print(f"🔍 SQL 결과에서 timestamp 값: {timestamp_value}")
                 
-                # 해당 비디오의 해당 timestamp 이벤트 검색
+                # Event 객체 조회
                 if video:
                     events = Event.objects.filter(timestamp=timestamp_value, video=video)
                 else:
@@ -372,30 +428,61 @@ def process_prompt_logic(prompt_text, video=None):
                 if events.exists():
                     event = events.first()
                     found_events.append(event)
-                    print(f"✅ timestamp {timestamp_value}로 이벤트 발견: ID={event.id}, 타입={event.event_type}")
                     
                     # 첫 번째 이벤트를 relevant_event로 설정
                     if relevant_event is None:
                         relevant_event = event
-                        print(f"✅ 주요 이벤트 매핑: ID={relevant_event.id}, timestamp={relevant_event.timestamp}, 비디오={relevant_event.video.name}, 타입={relevant_event.event_type}")
-                else:
-                    print(f"⚠️ 해당 비디오에서 timestamp {timestamp_value}에 해당하는 이벤트를 찾을 수 없음")
+                        
             except Exception as e:
-                print(f"이벤트 매핑 오류: {e}")
+                print(f"⚠️ 이벤트 매핑 오류: {e}")
         
-        # 5. 질문 타입별 처리 및 응답 생성
-        if question_type == 'ABNORMAL_BEHAVIOR':
-            # 이상행동 질문: 같은 시나리오 그룹화 후 첫 번째 timestamp 반환
-            response_text, relevant_event = process_abnormal_behavior_query(found_events)
+        if not found_events:
+            return "이벤트를 찾았으나 상세 정보를 조회할 수 없습니다.", None
+        
+        # ============================================
+        # 4. Bedrock RAG: 자연어 응답 생성
+        # ============================================
+        if use_bedrock:
+            print(f"🤖 Bedrock RAG를 통해 응답 생성")
+            bedrock_service = get_bedrock_service()
+            
+            # Event 객체를 딕셔너리로 변환
+            events_data = []
+            for event in found_events:
+                events_data.append({
+                    'timestamp': event.timestamp,
+                    'event_type': event.event_type,
+                    'action_detected': event.action_detected,
+                    'location': event.location,
+                    'age': event.age,
+                    'gender': event.gender,
+                    'scene_analysis': event.scene_analysis,
+                })
+            
+            video_name = video.name if video else "알 수 없음"
+            
+            response_text = bedrock_service.format_timeline_response(
+                prompt=prompt_text,
+                events=events_data,
+                video_name=video_name
+            )
+            
         else:
-            # 마케팅 질문: 개별 이벤트 나열
-            response_text, relevant_event = process_marketing_query(found_events)
+            # 기존 질문 타입별 처리 (폴백)
+            print(f"🔄 기존 질문 분류 방식 사용 (폴백)")
+            question_type = classify_question_type(prompt_text, sql_query)
+            
+            if question_type == 'ABNORMAL_BEHAVIOR':
+                response_text, relevant_event = process_abnormal_behavior_query(found_events)
+            else:
+                response_text, relevant_event = process_marketing_query(found_events)
         
         return response_text, relevant_event
         
-    except requests.exceptions.RequestException as e:
-        return f"FastAPI 연결 오류: {str(e)}", None
     except Exception as e:
+        print(f"❌ 처리 중 오류 발생: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return f"처리 중 오류 발생: {str(e)}", None
 
 

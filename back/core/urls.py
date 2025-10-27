@@ -16,9 +16,12 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from .health import healthz
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('db/', include('apps.db.urls')),
     path('api/', include('apps.api.urls')),
+    path('api/s3/', include('apps.api.urls_s3')),  # S3 업로드 전용 엔드포인트
+    path('healthz/', healthz, name='health_check'),  # App Runner/ECS 헬스체크
 ]

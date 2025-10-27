@@ -14,6 +14,7 @@ import logging
 
 from .services.s3_service import s3_service
 from .services.auth_service import jwt_required
+from .services.sqs_service import sqs_service
 from apps.db.models import Video
 from apps.db.serializers import VideoSerializer
 
@@ -168,13 +169,32 @@ def confirm_upload(request):
         video = Video.objects.create(**video_data)
         serializer = VideoSerializer(video)
         
-        logger.info(f"✅ 비디오 업로드 완료: video_id={video.video_id}, s3_key={s3_key}")
+        # 🚀 SQS 메시지 발행: 비디오 처리 요청
+        sqs_result = sqs_service.send_video_processing_message(
+            s3_bucket=s3_service.bucket_name,
+            s3_key=s3_key,
+            video_id=str(video.video_id),
+            additional_data={
+                'video_name': token_payload['file_name'],
+                'file_size': token_payload['file_size'],
+                'duration': duration
+            }
+        )
+        
+        if sqs_result['success']:
+            logger.info(f"SQS 메시지 발송 성공: video_id={video.video_id}, message_id={sqs_result['message_id']}")
+        else:
+            logger.error(f"SQS 메시지 발송 실패: video_id={video.video_id}, error={sqs_result['error']}")
+            # SQS 실패해도 업로드는 성공으로 처리 (비동기 처리이므로)
+        
+        logger.info(f"비디오 업로드 완료: video_id={video.video_id}, s3_key={s3_key}")
         
         return Response({
             'success': True,
             'video_id': video.video_id,
             'message': '업로드가 완료되었습니다.',
-            'video': serializer.data
+            'video': serializer.data,
+            'processing_queued': sqs_result['success']
         }, status=status.HTTP_201_CREATED)
         
     except ValueError as e:

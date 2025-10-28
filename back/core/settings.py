@@ -172,9 +172,14 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # AWS 설정
 AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default=None)
 AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default=None)
-AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME', default='capstone-dev-bucket')
+AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME', default='capstone-dev-raw')
 AWS_S3_REGION_NAME = env('AWS_DEFAULT_REGION', default='ap-northeast-2')
 AWS_S3_CUSTOM_DOMAIN = env('AWS_S3_CUSTOM_DOMAIN', default=None)
+
+# S3 버킷 이름 설정
+AWS_RAW_BUCKET_NAME = env('AWS_RAW_BUCKET_NAME', default='capstone-dev-raw')
+AWS_THUMBNAILS_BUCKET_NAME = env('AWS_THUMBNAILS_BUCKET_NAME', default='capstone-dev-thumbnails')
+AWS_HIGHLIGHTS_BUCKET_NAME = env('AWS_HIGHLIGHTS_BUCKET_NAME', default='capstone-dev-highlights')
 
 # 파일 저장소 설정 (AWS S3 vs 로컬)
 USE_S3 = bool(AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME)

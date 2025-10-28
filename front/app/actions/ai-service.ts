@@ -93,15 +93,16 @@ export async function startAnalyzeVideo(
 
     console.log('📍 [AI Service] 비디오 파일 경로:', videoPath);
 
-    // Docker 7500 포트의 영상 분석 모델 API 호출
-    const response = await fetch('http://localhost:7500/analyze', {
+    // 서버(백엔드)를 통해 분석 작업 제출 (AWS Batch 등으로 라우팅)
+    const analysisUrl = `${config.api.videoAnalysis}submit-analysis`;
+    const response = await fetch(analysisUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        video_id: parseInt(videoId), // 정수형으로 변환
-        video_path: videoPath, // 비디오 파일 경로 추가
+        video_id: parseInt(videoId, 10), // 정수형으로 변환
+        analysis_types: ['default'],
       }),
     });
 
@@ -196,7 +197,7 @@ export async function getAnalysisResult(
     console.log('🔍 [AI Service] 분석 결과 조회 시작:', videoId);
 
     const eventsResponse = await fetch(
-      `http://localhost:8088/db/events/?video=${videoId}`,
+      `${config.api.database}/events/?video=${videoId}`,
       {
         method: 'GET',
         headers: {
@@ -284,13 +285,13 @@ export async function analyzeVideo(
   try {
     console.log('🔄 영상 분석 API 호출 시작:', {
       videoId,
-      url: 'http://localhost:7500/analyze',
+      url: config.api.videoAnalysis || 'http://localhost:7500/analyze',
       timestamp: new Date().toISOString(),
     });
 
     // 먼저 Django에서 비디오 정보를 가져와서 파일 경로 확인
     const videoInfoResponse = await fetch(
-      `http://localhost:8088/db/videos/${videoId}/`,
+      `${config.api.database}/videos/${videoId}/`,
       {
         method: 'GET',
         headers: {
@@ -347,15 +348,16 @@ export async function analyzeVideo(
 
     console.log('📍 [AI Service] 비디오 파일 경로:', videoPath);
 
-    // Docker 7500 포트의 영상 분석 모델 API 호출
-    const response = await fetch('http://localhost:7500/analyze', {
+    // Submit analysis request via backend API (which will route to Batch/AI)
+    const analysisUrl2 = `${config.api.videoAnalysis}submit-analysis`;
+    const response = await fetch(analysisUrl2, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        video_id: parseInt(videoId), // 정수형으로 변환
-        video_path: videoPath, // 비디오 파일 경로 추가
+        video_id: parseInt(videoId, 10),
+        analysis_types: ['default'],
       }),
     });
 
@@ -423,7 +425,7 @@ export async function analyzeVideo(
         console.log('🔍 [AI Service] 저장된 이벤트 데이터 조회 시작:', videoId);
 
         const eventsResponse = await fetch(
-          `http://localhost:8088/db/events/?video=${videoId}`,
+          `${config.api.database}/events/?video=${videoId}`,
           {
             method: 'GET',
             headers: {

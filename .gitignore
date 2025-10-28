@@ -111,3 +111,6 @@ localstack/
 
 # ISSUE 정리 파일
 ISSUE.md
+
+# memi 폴더 전체 제외
+memi/

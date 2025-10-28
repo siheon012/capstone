@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 백엔드 (Django)
   backend:

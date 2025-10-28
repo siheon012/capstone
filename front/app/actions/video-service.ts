@@ -12,6 +12,12 @@ const config = getAppConfig();
 const DJANGO_API_BASE = config.api.baseUrl;
 const DJANGO_DB_BASE = config.api.database;
 
+console.log('🔧 [Video Service] API 설정:', {
+  DJANGO_API_BASE,
+  DJANGO_DB_BASE,
+  config: config.api
+});
+
 // Django Video API 통신 함수들
 async function createVideoInDjango(videoData: {
   name: string;
@@ -26,7 +32,7 @@ async function createVideoInDjango(videoData: {
       name: videoData.name,
       size: videoData.size,
       duration: videoData.duration,
-      url: `${DJANGO_API_BASE}/videos/`,
+      url: `${DJANGO_DB_BASE}/videos/`,
     });
 
     const requestBody = {
@@ -46,7 +52,7 @@ async function createVideoInDjango(videoData: {
 
     console.log('🔗 [Django API] 연결 시도 시작...');
 
-    const response = await fetch(`${DJANGO_API_BASE}/videos/`, {
+    const response = await fetch(`${DJANGO_DB_BASE}/videos/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -117,7 +123,7 @@ async function getVideosFromDjango(): Promise<{
   error?: string;
 }> {
   try {
-    const response = await fetch(`${DJANGO_API_BASE}/videos/`, {
+    const response = await fetch(`${DJANGO_DB_BASE}/videos/`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -142,7 +148,7 @@ async function deleteVideoFromDjango(
   videoId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch(`${DJANGO_API_BASE}/videos/${videoId}/`, {
+    const response = await fetch(`${DJANGO_DB_BASE}/videos/${videoId}/`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -260,16 +266,19 @@ export async function checkDuplicateVideo(
         normalizedVideoFileName: normalizedVideoFullFileName,
         uploadFileName: file.name,
         normalizedUploadFileName: normalizedFullFileName,
-        videoSize: video.size,
+        videoSize: video.size || video.file_size,
+        uploadFileSize: file.size,
         videoDuration: video.duration,
+        uploadDuration: videoDuration,
         fileNameMatch: normalizedVideoFullFileName === normalizedFullFileName,
-        fileSizeMatch: video.size === file.size,
+        fileSizeMatch: (video.size || video.file_size) === file.size,
       });
 
       // 1차: 정규화된 파일명과 크기로 기본 중복 확인
+      const videoFileSize = video.size || video.file_size;
       if (
         normalizedVideoFullFileName === normalizedFullFileName &&
-        video.size === file.size
+        videoFileSize === file.size
       ) {
         console.log('파일명과 크기 일치됨, duration 체크 중...');
 
@@ -293,10 +302,12 @@ export async function checkDuplicateVideo(
                 name: video.name,
                 filePath: video.file_path || `/uploads/videos/${video.name}`,
                 duration: video.duration,
-                size: video.size,
-                uploadDate: new Date(video.upload_date),
+                size: video.size || video.file_size,
+                uploadDate: new Date(video.upload_date || video.created_at),
                 thumbnail:
-                  video.computed_thumbnail_path || video.thumbnail_path,
+                  video.thumbnail_url ||
+                  video.computed_thumbnail_path ||
+                  video.thumbnail_path,
                 chatCount: video.chat_count,
                 majorEvent: video.major_event,
               },
@@ -312,9 +323,12 @@ export async function checkDuplicateVideo(
               name: video.name,
               filePath: video.file_path || `/uploads/videos/${video.name}`,
               duration: video.duration,
-              size: video.size,
-              uploadDate: new Date(video.upload_date),
-              thumbnail: video.computed_thumbnail_path || video.thumbnail_path,
+              size: video.size || video.file_size,
+              uploadDate: new Date(video.upload_date || video.created_at),
+              thumbnail:
+                video.thumbnail_url ||
+                video.computed_thumbnail_path ||
+                video.thumbnail_path,
               chatCount: video.chat_count,
               majorEvent: video.major_event,
             },
@@ -542,15 +556,33 @@ export async function getUploadedVideos(
       (video: any) => ({
         id: video.video_id.toString(),
         name: video.name,
-        filePath: video.file_path || `/uploads/videos/${video.name}`,
-        duration: video.duration,
-        size: video.size,
-        uploadDate: new Date(video.upload_date),
-        thumbnail: video.computed_thumbnail_path || video.thumbnail_path,
+        // ✅ S3 URL 우선 사용, fallback으로 로컬 경로
+        filePath:
+          video.current_s3_url ||
+          video.file_path ||
+          `/uploads/videos/${video.name}`,
+        // Duration NaN 처리
+        duration:
+          isNaN(video.duration) ||
+          video.duration === null ||
+          video.duration === undefined
+            ? 0
+            : video.duration,
+        size: video.size || video.file_size,
+        uploadDate: new Date(video.upload_date || video.created_at),
+        // thumbnail_url 우선 사용 (S3 presigned URL)
+        thumbnail:
+          video.thumbnail_url ||
+          video.computed_thumbnail_path ||
+          video.thumbnail_path,
         chatCount: video.chat_count,
         majorEvent: video.major_event,
-        // Django API의 time_in_video 필드를 올바르게 매핑
-        timeInVideo: video.time_in_video ? new Date(video.time_in_video) : null,
+        // recorded_at 필드를 time_in_video로 매핑
+        timeInVideo: video.recorded_at
+          ? new Date(video.recorded_at)
+          : video.time_in_video
+          ? new Date(video.time_in_video)
+          : null,
         // summary 필드 추가
         summary: video.summary || null,
       })
@@ -763,7 +795,7 @@ export async function updateVideoMetadata(
 ): Promise<boolean> {
   try {
     // Django API로 메타데이터 업데이트
-    const response = await fetch(`${DJANGO_API_BASE}/videos/${videoId}/`, {
+    const response = await fetch(`${DJANGO_DB_BASE}/videos/${videoId}/`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

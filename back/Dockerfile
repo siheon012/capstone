@@ -24,6 +24,14 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libffi-dev \
     libssl-dev \
+    dos2unix \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -97,8 +105,10 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 # 소스코드 복사
 COPY --chown=django:django . .
 
-# entrypoint.sh 실행 권한 부여
-RUN chmod +x /app/entrypoint.sh
+# entrypoint.sh CRLF→LF 변환 및 권한 설정 (소스 복사 후 다시 실행)
+RUN dos2unix /app/entrypoint.sh && \
+    chmod +x /app/entrypoint.sh && \
+    ls -la /app/entrypoint.sh
 
 # 프로덕션 환경변수
 ENV DJANGO_SETTINGS_MODULE=core.settings
@@ -143,5 +153,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # django 사용자로 실행
 USER django
 
-# Entrypoint 스크립트 사용
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Entrypoint 스크립트 사용 (bash로 명시적 실행)
+ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]

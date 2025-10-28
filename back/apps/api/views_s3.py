@@ -11,7 +11,10 @@ from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 import json
 import logging
+import os
+import uuid
 
+from datetime import datetime
 from .services.s3_service import s3_service
 # from .services.auth_service import jwt_required  # TODO: 임시 비활성화 (개발용)
 from .services.sqs_service import sqs_service
@@ -158,22 +161,55 @@ def confirm_upload(request):
             )
 
         # 비디오 메타데이터 DB 저장
-        video_data = {
-            'name': token_payload['file_name'],
-            'video_file': s3_key,  # S3 키를 파일 경로로 저장
-            'size': token_payload['file_size'],
-            'duration': duration,
-            'thumbnail_path': thumbnail_url or '',
-            'chat_count': 0,
-            'major_event': None
-        }
+        try:
+            logger.info(f"📦 Video 데이터 준비: file_name={token_payload['file_name']}, s3_key={s3_key}")
+            
+            # thumbnail_url에서 S3 키만 추출 (전체 URL이 아닌)
+            thumbnail_s3_key = ''
+            if thumbnail_url:
+                # URL에서 버킷명 이후의 키만 추출
+                # 예: https://capstone-dev-thumbnails.s3.ap-northeast-2.amazonaws.com/thumbnails/2025/10/28/xxx.png
+                # -> thumbnails/2025/10/28/xxx.png
+                if 's3' in thumbnail_url and '.amazonaws.com/' in thumbnail_url:
+                    thumbnail_s3_key = thumbnail_url.split('.amazonaws.com/')[-1]
+                    # URL 인코딩된 부분 디코딩
+                    from urllib.parse import unquote
+                    thumbnail_s3_key = unquote(thumbnail_s3_key.split('?')[0])  # 쿼리 파라미터 제거
+                else:
+                    # 이미 키 형식이면 그대로 사용
+                    thumbnail_s3_key = thumbnail_url
+            
+            logger.info(f"🖼️ Thumbnail S3 key: {thumbnail_s3_key[:100]}...")  # 처음 100자만 로깅
+            
+            video_data = {
+                'name': token_payload['file_name'],
+                'filename': token_payload['file_name'],
+                'original_filename': token_payload['file_name'],
+                's3_key': s3_key,  # Primary S3 object key
+                's3_raw_key': s3_key,  # S3 raw video key
+                'file_size': token_payload['file_size'],
+                'duration': duration,
+                's3_thumbnail_key': thumbnail_s3_key,
+                'thumbnail_s3_key': thumbnail_s3_key,
+            }
 
-        # 비디오 촬영 시간이 있으면 추가
-        if video_datetime:
-            video_data['time_in_video'] = video_datetime
-        
-        video = Video.objects.create(**video_data)
-        serializer = VideoSerializer(video)
+            # 비디오 촬영 시간이 있으면 추가
+            if video_datetime:
+                video_data['recorded_at'] = video_datetime
+            
+            logger.info(f"🔨 Video.objects.create 호출 중...")
+            video = Video.objects.create(**video_data)
+            logger.info(f"✅ Video 생성 성공: video_id={video.video_id}")
+            
+            serializer = VideoSerializer(video)
+            logger.info(f"✅ Serializer 생성 성공")
+            
+        except Exception as db_error:
+            logger.error(f"❌ DB 저장 실패: {type(db_error).__name__}: {str(db_error)}")
+            logger.error(f"📋 video_data: {video_data}")
+            import traceback
+            logger.error(f"📚 Traceback: {traceback.format_exc()}")
+            raise
         
         # 🚀 SQS 메시지 발행: 비디오 처리 요청
         sqs_result = sqs_service.send_video_processing_message(
@@ -204,15 +240,19 @@ def confirm_upload(request):
         }, status=status.HTTP_201_CREATED)
         
     except ValueError as e:
-        logger.error(f"❌ 업로드 확인 실패: {e}")
+        logger.error(f"❌ [ValueError] 업로드 확인 실패: {e}")
+        import traceback
+        logger.error(f"📚 Traceback: {traceback.format_exc()}")
         return Response(
             {'error': str(e)}, 
             status=status.HTTP_400_BAD_REQUEST
         )
     except Exception as e:
-        logger.error(f"❌ 서버 오류: {e}")
+        logger.error(f"❌ [Exception] 서버 오류: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(f"📚 Traceback: {traceback.format_exc()}")
         return Response(
-            {'error': '서버 내부 오류가 발생했습니다.'}, 
+            {'error': f'서버 내부 오류: {type(e).__name__}: {str(e)}'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -287,5 +327,81 @@ def delete_video(request, video_id):
         logger.error(f"❌ 비디오 삭제 실패: {e}")
         return Response(
             {'error': '비디오 삭제에 실패했습니다.'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@csrf_exempt
+def upload_thumbnail(request):
+    """
+    썸네일 업로드 (S3 thumbnails 버킷)
+    
+    Request:
+    - multipart/form-data
+    - thumbnail: File (이미지 파일)
+    - fileName: string (파일명)
+    
+    Response:
+    {
+        "success": true,
+        "thumbnail_url": "https://s3.../thumbnails/xxx.png",
+        "s3_key": "thumbnails/xxx.png"
+    }
+    """
+    try:
+        if 'thumbnail' not in request.FILES:
+            return Response(
+                {'error': '썸네일 파일이 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        thumbnail_file = request.FILES['thumbnail']
+        file_name = request.POST.get('fileName', thumbnail_file.name)
+        
+        # 파일명에서 확장자 추출
+        file_ext = file_name.split('.')[-1] if '.' in file_name else 'png'
+        
+        # S3 키 생성 (thumbnails/YYYY/MM/DD/uuid_filename.ext)
+        now = datetime.now()
+        s3_key = f"thumbnails/{now.year}/{now.month:02d}/{now.day:02d}/{uuid.uuid4()}_{file_name}"
+        
+        # thumbnails 버킷 설정
+        thumbnails_bucket = os.environ.get('AWS_S3_THUMBNAILS_BUCKET', 'capstone-dev-thumbnails')
+        
+        # S3에 업로드
+        s3_client = s3_service.s3_client
+        s3_client.upload_fileobj(
+            thumbnail_file,
+            thumbnails_bucket,
+            s3_key,
+            ExtraArgs={
+                'ContentType': thumbnail_file.content_type or 'image/png',
+                'ACL': 'private'
+            }
+        )
+        
+        # 썸네일 URL 생성 (Pre-signed URL, 7일 유효)
+        thumbnail_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': thumbnails_bucket,
+                'Key': s3_key
+            },
+            ExpiresIn=7 * 24 * 3600  # 7일
+        )
+        
+        logger.info(f"🖼️ 썸네일 업로드 완료: s3_key={s3_key}, bucket={thumbnails_bucket}")
+        
+        return Response({
+            'success': True,
+            'thumbnail_url': thumbnail_url,
+            's3_key': s3_key
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        logger.error(f"❌ 썸네일 업로드 실패: {e}")
+        return Response(
+            {'error': f'썸네일 업로드에 실패했습니다: {str(e)}'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

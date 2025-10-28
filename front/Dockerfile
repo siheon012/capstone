@@ -26,7 +26,7 @@ FROM base AS deps
 COPY package*.json yarn.lock* ./
 
 # 의존성 설치 (yarn 1.22 호환)
-RUN yarn install --frozen-lockfile --network-timeout 300000
+RUN yarn install --network-timeout 300000
 
 # ==========================================
 # Builder Stage: 애플리케이션 빌드
@@ -93,7 +93,7 @@ WORKDIR /app
 
 # 프로덕션 의존성만 설치
 COPY package*.json yarn.lock* ./
-RUN yarn install --production --frozen-lockfile --network-timeout 300000 && yarn cache clean
+RUN yarn install --production --network-timeout 300000 && yarn cache clean
 
 # 빌드된 애플리케이션 복사
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next

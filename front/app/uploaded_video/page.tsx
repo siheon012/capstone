@@ -31,7 +31,11 @@ import {
 } from '@/components/ui/select';
 import type { UploadedVideo } from '@/app/types/video';
 import type { ChatSession } from '@/app/types/session';
-import { getUploadedVideos, deleteVideo, getVideoEventStats } from '@/app/actions/video-service';
+import {
+  getUploadedVideos,
+  deleteVideo,
+  getVideoEventStats,
+} from '@/app/actions/video-service';
 import { getAllSessions } from '@/app/actions/session-service';
 import Link from 'next/link';
 import SmartHeader from '@/components/smart-header';
@@ -58,7 +62,9 @@ export default function UploadedVideoPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
   // Event 테이블에서 가져온 비디오별 이벤트 통계
-  const [videoEventStats, setVideoEventStats] = useState<{ [videoId: string]: { eventType: string; count: number } }>({});
+  const [videoEventStats, setVideoEventStats] = useState<{
+    [videoId: string]: { eventType: string; count: number };
+  }>({});
 
   // useToast 훅 제거 - 자체 토스트 시스템 사용
   // const { toast } = useToast();
@@ -133,15 +139,15 @@ export default function UploadedVideoPage() {
       // 비디오 목록과 세션 목록을 병렬로 로드
       const [videoResponse, sessionResponse] = await Promise.all([
         getUploadedVideos(),
-        getAllSessions()
+        getAllSessions(),
       ]);
-      
+
       console.log('비디오 응답:', videoResponse);
       console.log('세션 응답:', sessionResponse);
-      
+
       if (videoResponse.success) {
         setVideos(videoResponse.data);
-        
+
         // 각 비디오에 대한 Event 테이블 통계 로드
         const eventStatsPromises = videoResponse.data.map(async (video) => {
           const statsResponse = await getVideoEventStats(video.id);
@@ -154,20 +160,27 @@ export default function UploadedVideoPage() {
           }
           return null;
         });
-        
+
         const eventStats = await Promise.all(eventStatsPromises);
-        const validEventStats = eventStats.filter(stat => stat !== null) as Array<{ videoId: string; eventType: string; count: number }>;
-        
+        const validEventStats = eventStats.filter(
+          (stat) => stat !== null
+        ) as Array<{ videoId: string; eventType: string; count: number }>;
+
         // 통계를 상태에 저장
-        const statsMap: { [videoId: string]: { eventType: string; count: number } } = {};
-        validEventStats.forEach(stat => {
-          statsMap[stat.videoId] = { eventType: stat.eventType, count: stat.count };
+        const statsMap: {
+          [videoId: string]: { eventType: string; count: number };
+        } = {};
+        validEventStats.forEach((stat) => {
+          statsMap[stat.videoId] = {
+            eventType: stat.eventType,
+            count: stat.count,
+          };
         });
         setVideoEventStats(statsMap);
-        
+
         console.log('로드된 비디오 이벤트 통계:', statsMap);
       }
-      
+
       if (sessionResponse.success) {
         setSessions(sessionResponse.data);
         console.log('로드된 세션들:', sessionResponse.data);
@@ -296,7 +309,7 @@ export default function UploadedVideoPage() {
   // Event 테이블에서 가져온 통계를 기반으로 가장 많이 발생한 이벤트 반환
   const getMostFrequentEventForVideo = (videoId: string) => {
     const eventStat = videoEventStats[videoId];
-    
+
     if (eventStat) {
       console.log(`비디오 ${videoId}의 Event 테이블 통계:`, eventStat);
       return {
@@ -305,22 +318,28 @@ export default function UploadedVideoPage() {
         total: eventStat.count, // Event 테이블 기반이므로 총 이벤트 수와 동일
       };
     }
-    
+
     console.log(`비디오 ${videoId}에 대한 Event 통계가 없음`);
     return null;
   };
 
   const formatFileSize = (bytes: number) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    if (bytes === 0) return '0 Bytes';
+    // NaN, null, undefined, 0 처리
+    if (!bytes || isNaN(bytes) || bytes === 0) return '0 Bytes';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
   const formatDuration = (seconds: number) => {
+    // NaN, null, undefined 처리
+    if (isNaN(seconds) || seconds === null || seconds === undefined) {
+      return '0:00';
+    }
+
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
 
     if (hours > 0) {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs
@@ -349,6 +368,7 @@ export default function UploadedVideoPage() {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
+      timeZone: 'Asia/Seoul', // 한국 서울 시간대 명시
     });
   };
 
@@ -358,32 +378,34 @@ export default function UploadedVideoPage() {
       const matchesSearch =
         video.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         video.description?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       // 사건 필터링 로직 개선
       const matchesFilter = (() => {
         if (filterEvent === 'all') {
           return true;
         }
-        
+
         if (filterEvent === 'none') {
           // Event 테이블 통계와 비디오의 majorEvent 모두 없는 경우
           const mostFrequentEvent = getMostFrequentEventForVideo(video.id);
           return !mostFrequentEvent && !video.majorEvent;
         }
-        
+
         // 특정 사건으로 필터링하는 경우
         const mostFrequentEvent = getMostFrequentEventForVideo(video.id);
-        
+
         // Event 테이블에서 분석된 이벤트가 있으면 우선 확인
         if (mostFrequentEvent) {
-          const translatedEventType = translateEventType(mostFrequentEvent.type);
+          const translatedEventType = translateEventType(
+            mostFrequentEvent.type
+          );
           return translatedEventType === filterEvent;
         }
-        
+
         // Event 테이블 통계가 없으면 비디오의 majorEvent 확인
         return video.majorEvent === filterEvent;
       })();
-      
+
       return matchesSearch && matchesFilter;
     })
     .sort((a, b) => {
@@ -616,13 +638,15 @@ export default function UploadedVideoPage() {
                               {video.name}
                             </h3>
                           </Link>
-                          
+
                           {/* 영상의 실제 시각 정보 */}
                           <div className="text-sm text-gray-400 mb-2">
-                            <span className="text-[#00e6b4]">영상의 실제 시각:</span>{' '}
+                            <span className="text-[#00e6b4]">
+                              영상의 실제 시각:
+                            </span>{' '}
                             <span>{formatVideoTime(video.timeInVideo)}</span>
                           </div>
-                          
+
                           {video.description && (
                             <p className="text-sm text-gray-400 mb-2 line-clamp-2">
                               {video.description}
@@ -632,11 +656,14 @@ export default function UploadedVideoPage() {
 
                         {/* 주요 사건 배지 - Event 테이블에서 가져온 통계 또는 비디오의 majorEvent */}
                         {(() => {
-                          const mostFrequentEvent = getMostFrequentEventForVideo(video.id);
-                          
+                          const mostFrequentEvent =
+                            getMostFrequentEventForVideo(video.id);
+
                           // Event 테이블에서 분석된 이벤트가 있으면 우선 표시
                           if (mostFrequentEvent) {
-                            const eventText = translateEventType(mostFrequentEvent.type);
+                            const eventText = translateEventType(
+                              mostFrequentEvent.type
+                            );
                             return (
                               <Badge
                                 className={`flex-shrink-0 text-xs whitespace-nowrap ${
@@ -649,11 +676,12 @@ export default function UploadedVideoPage() {
                                     : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
                                 }`}
                               >
-                                주요 사건: {eventText}({mostFrequentEvent.count} times)
+                                주요 사건: {eventText}({mostFrequentEvent.count}{' '}
+                                times)
                               </Badge>
                             );
                           }
-                          
+
                           // 비디오의 majorEvent가 있으면 표시
                           if (video.majorEvent) {
                             return (
@@ -672,7 +700,7 @@ export default function UploadedVideoPage() {
                               </Badge>
                             );
                           }
-                          
+
                           return null;
                         })()}
                       </div>

@@ -116,7 +116,7 @@ class SQSVideoProcessingService:
             return {
                 'success': True,
                 'message_id': response['MessageId'],
-                'md5_of_body': response['MD5OfBody']
+                'md5_of_body': response.get('MD5OfBody', 'N/A')
             }
             
         except Exception as e:

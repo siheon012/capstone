@@ -18,7 +18,8 @@ export interface VideoUploadMetadata {
   thumbnail_url?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+// 상대 경로 사용 (Next.js rewrites를 통해 ALB로 프록시됨, Mixed Content 해결)
+const API_BASE = '';
 
 /**
  * JWT 토큰을 가져오는 함수 (실제 인증 시스템에 맞게 구현)
@@ -39,9 +40,9 @@ export async function requestUploadUrl(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
+        Authorization: `Bearer ${getAuthToken()}`,
       },
-      body: JSON.stringify(metadata)
+      body: JSON.stringify(metadata),
     });
 
     if (!response.ok) {
@@ -51,7 +52,7 @@ export async function requestUploadUrl(
 
     const data = await response.json();
     console.log('✅ 업로드 URL 요청 성공:', data);
-    
+
     return data;
   } catch (error) {
     console.error('❌ 업로드 URL 요청 실패:', error);
@@ -69,7 +70,7 @@ export async function uploadToS3(
 ): Promise<void> {
   try {
     const xhr = new XMLHttpRequest();
-    
+
     return new Promise((resolve, reject) => {
       xhr.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable && onProgress) {
@@ -119,13 +120,13 @@ export async function confirmUpload(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAuthToken()}`
+        Authorization: `Bearer ${getAuthToken()}`,
       },
       body: JSON.stringify({
         upload_token: config.upload_token,
         s3_key: config.s3_key,
-        ...metadata
-      })
+        ...metadata,
+      }),
     });
 
     if (!response.ok) {
@@ -135,7 +136,7 @@ export async function confirmUpload(
 
     const data = await response.json();
     console.log('✅ 업로드 확인 성공:', data);
-    
+
     return data;
   } catch (error) {
     console.error('❌ 업로드 확인 실패:', error);
@@ -166,7 +167,7 @@ export async function uploadVideoToS3(
       file_size: file.size,
       content_type: file.type,
       duration: duration,
-      thumbnail_url: thumbnailUrl
+      thumbnail_url: thumbnailUrl,
     };
 
     const config = await requestUploadUrl(metadata);
@@ -176,8 +177,11 @@ export async function uploadVideoToS3(
 
     await uploadToS3(file, config, (uploadProgress) => {
       // 20% ~ 80% 구간을 S3 업로드 진행률로 할당
-      const adjustedProgress = 20 + (uploadProgress * 0.6);
-      onProgress?.(`Uploading... ${uploadProgress.toFixed(1)}%`, adjustedProgress);
+      const adjustedProgress = 20 + uploadProgress * 0.6;
+      onProgress?.(
+        `Uploading... ${uploadProgress.toFixed(1)}%`,
+        adjustedProgress
+      );
     });
 
     // Step 3: 업로드 확인
@@ -186,13 +190,12 @@ export async function uploadVideoToS3(
     const result = await confirmUpload(config, {
       duration: duration || 0,
       thumbnail_url: thumbnailUrl,
-      video_datetime: videoDateTime
+      video_datetime: videoDateTime,
     });
 
     onProgress?.('Upload completed!', 100);
 
     return result;
-
   } catch (error) {
     console.error('❌ 전체 업로드 프로세스 실패:', error);
     throw error;
@@ -204,12 +207,15 @@ export async function uploadVideoToS3(
  */
 export async function getVideoDownloadUrl(videoId: number): Promise<string> {
   try {
-    const response = await fetch(`${API_BASE}/api/s3/video/${videoId}/download/`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${getAuthToken()}`
+    const response = await fetch(
+      `${API_BASE}/api/s3/video/${videoId}/download/`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${getAuthToken()}`,
+        },
       }
-    });
+    );
 
     if (!response.ok) {
       const error = await response.json();
@@ -218,7 +224,6 @@ export async function getVideoDownloadUrl(videoId: number): Promise<string> {
 
     const data = await response.json();
     return data.download_url;
-    
   } catch (error) {
     console.error('❌ 다운로드 URL 요청 실패:', error);
     throw error;

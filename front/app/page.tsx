@@ -1,6 +1,6 @@
 'use client';
 
-console.log("🔥 page.tsx 파일이 로드됨 - 최상단");
+console.log('🔥 page.tsx 파일이 로드됨 - 최상단');
 
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
@@ -74,8 +74,8 @@ const getVideoDurationFromFile = (file: File): Promise<number> => {
 export default function CCTVAnalysis() {
   // 분석 진행률 폴링 interval을 안전하게 관리하기 위한 ref
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  console.log("🏠 CCTVAnalysis 컴포넌트 렌더링됨");
-  
+  console.log('🏠 CCTVAnalysis 컴포넌트 렌더링됨');
+
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [videoFileName, setVideoFileName] = useState<string>('');
   const [videoId, setVideoId] = useState<string | null>(null);
@@ -93,12 +93,14 @@ export default function CCTVAnalysis() {
     },
   ]);
   const [inputMessage, setInputMessage] = useState('');
-  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
-  
-  console.log("🏠 현재 상태:", {
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(
+    null
+  );
+
+  console.log('🏠 현재 상태:', {
     videoSrc: !!videoSrc,
     inputMessage,
-    messagesCount: messages.length
+    messagesCount: messages.length,
   });
   const [timeMarkers, setTimeMarkers] = useState<number[]>([]);
   const [currentHistoryId, setCurrentHistoryId] = useState<string>();
@@ -144,7 +146,7 @@ export default function CCTVAnalysis() {
     if (process.env.NODE_ENV === 'development') {
       console.log('📊 [Debug] analysisProgress 상태 변경:', {
         analysisProgress,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
   }, [analysisProgress]);
@@ -173,7 +175,7 @@ export default function CCTVAnalysis() {
   }>({
     aiService: 'unknown',
     backend: 'unknown',
-    lastCheck: null
+    lastCheck: null,
   });
 
   // 분석 재시도 관련 state
@@ -181,14 +183,17 @@ export default function CCTVAnalysis() {
   const [maxAnalysisRetries] = useState(2);
 
   // 실제 AI 분석을 수행하는 함수 (분석 애니메이션과 동시 실행)
-  const startActualAIAnalysis = async (currentVideoId: string | null, file: File) => {
+  const startActualAIAnalysis = async (
+    currentVideoId: string | null,
+    file: File
+  ) => {
     console.log('🎬 [AI Analysis Start] 함수 진입:', {
       videoId: currentVideoId,
       fileName: file.name,
       currentAnimationState: isAnalyzing,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-    
+
     if (!currentVideoId) {
       console.error('❌ [AI Analysis] Video ID가 없어 분석을 시작할 수 없음');
       setIsAnalyzing(false);
@@ -215,83 +220,99 @@ export default function CCTVAnalysis() {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
-        startTime: new Date().toISOString()
+        startTime: new Date().toISOString(),
       });
-      
-      // ai-service의 분석 시작 함수 호출 (즉시 반환되는 버전)
-      const { startAnalyzeVideo } = await import('./actions/ai-service');
-      
-      // 🔑 중요: 분석 시작만 요청하고, 완료는 기다리지 않음
-      // 진행률 폴링이 완료를 감지할 때까지 애니메이션 유지
-      const startResult = await startAnalyzeVideo(currentVideoId);
-      
-      if (startResult.success) {
-        console.log('✅ [AI Analysis] AI 분석 시작 성공:', {
+
+      // ✅ S3 업로드 완료 → SQS 이벤트 → Lambda → Batch 자동 실행
+      // Frontend에서 별도로 분석 시작 API를 호출할 필요 없음
+      console.log(
+        '✅ [AI Analysis] S3 업로드 완료 - SQS → Lambda → Batch 자동 실행 대기:',
+        {
           videoId: currentVideoId,
-          message: startResult.message,
-          timestamp: new Date().toISOString()
-        });
-      } else {
-        throw new Error(startResult.message || 'AI 분석 시작에 실패했습니다.');
-      }
-      
-      console.log('✅ [AI Analysis] AI 분석 시작 요청 완료 - 진행률 폴링으로 완료 대기:', {
-        videoId: currentVideoId,
-        timestamp: new Date().toISOString()
-      });
-      
+          s3Key: `videos/${uploadedFileName}`,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      // 진행률 폴링이 자동으로 Batch 작업 완료를 감지할 때까지 대기
+
       // 진행률 폴링이 완료를 감지하면 자동으로 애니메이션 종료됨
     } catch (analysisError) {
       const errorDetails = {
         videoId: currentVideoId,
         fileName: file.name,
-        error: analysisError instanceof Error ? analysisError.message : String(analysisError),
+        error:
+          analysisError instanceof Error
+            ? analysisError.message
+            : String(analysisError),
         timestamp: new Date().toISOString(),
-        duration: `${Math.round((Date.now() - startAnalysisTime) / 1000)}초`
+        duration: `${Math.round((Date.now() - startAnalysisTime) / 1000)}초`,
       };
-      
+
       console.error('❌ [AI Analysis] AI 분석 실패:', errorDetails);
-      
+
       // 분석 실패 시 처리
       stopProgressPolling();
       setIsAnalyzing(false);
       setAnalysisProgress(0);
-      
+
       // 에러 타입에 따른 사용자 친화적 메시지
       let userErrorMessage = '알 수 없는 오류가 발생했습니다.';
-      
+
       if (analysisError instanceof Error) {
         const errorMsg = analysisError.message.toLowerCase();
-        
+
         if (errorMsg.includes('timeout') || errorMsg.includes('타임아웃')) {
-          userErrorMessage = '대용량 파일 처리 시간이 초과되었습니다. 파일 크기를 줄이거나 다시 시도해주세요.';
+          userErrorMessage =
+            '대용량 파일 처리 시간이 초과되었습니다. 파일 크기를 줄이거나 다시 시도해주세요.';
         } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
-          userErrorMessage = '네트워크 연결 문제가 발생했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.';
-        } else if (errorMsg.includes('decode') || errorMsg.includes('format') || errorMsg.includes('codec')) {
-          userErrorMessage = '비디오 형식이 지원되지 않습니다. MP4 (H.264) 형식으로 변환하여 다시 시도해주세요.';
+          userErrorMessage =
+            '네트워크 연결 문제가 발생했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.';
+        } else if (
+          errorMsg.includes('decode') ||
+          errorMsg.includes('format') ||
+          errorMsg.includes('codec')
+        ) {
+          userErrorMessage =
+            '비디오 형식이 지원되지 않습니다. MP4 (H.264) 형식으로 변환하여 다시 시도해주세요.';
         } else if (errorMsg.includes('memory') || errorMsg.includes('메모리')) {
-          userErrorMessage = '파일이 너무 커서 처리할 수 없습니다. 파일 크기를 줄여서 다시 시도해주세요.';
+          userErrorMessage =
+            '파일이 너무 커서 처리할 수 없습니다. 파일 크기를 줄여서 다시 시도해주세요.';
         } else if (errorMsg.includes('server') || errorMsg.includes('서버')) {
-          userErrorMessage = '서버에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+          userErrorMessage =
+            '서버에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
         }
       }
-      
+
       if (analysisError instanceof Error) {
         const errorMessage = analysisError.message.toLowerCase();
-        
-        if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-          userErrorMessage = '네트워크 연결에 문제가 있습니다. 인터넷 연결을 확인해주세요.';
+
+        if (
+          errorMessage.includes('network') ||
+          errorMessage.includes('fetch')
+        ) {
+          userErrorMessage =
+            '네트워크 연결에 문제가 있습니다. 인터넷 연결을 확인해주세요.';
         } else if (errorMessage.includes('timeout')) {
-          userErrorMessage = '분석 시간이 초과되었습니다. 파일 크기가 클 수 있습니다.';
-        } else if (errorMessage.includes('format') || errorMessage.includes('codec')) {
-          userErrorMessage = '비디오 형식이 지원되지 않습니다. 다른 형식으로 변환 후 시도해주세요.';
-        } else if (errorMessage.includes('server') || errorMessage.includes('500')) {
-          userErrorMessage = '서버에 일시적인 문제가 있습니다. 잠시 후 다시 시도해주세요.';
+          userErrorMessage =
+            '분석 시간이 초과되었습니다. 파일 크기가 클 수 있습니다.';
+        } else if (
+          errorMessage.includes('format') ||
+          errorMessage.includes('codec')
+        ) {
+          userErrorMessage =
+            '비디오 형식이 지원되지 않습니다. 다른 형식으로 변환 후 시도해주세요.';
+        } else if (
+          errorMessage.includes('server') ||
+          errorMessage.includes('500')
+        ) {
+          userErrorMessage =
+            '서버에 일시적인 문제가 있습니다. 잠시 후 다시 시도해주세요.';
         } else {
           userErrorMessage = analysisError.message;
         }
       }
-      
+
       setMessages([
         {
           role: 'assistant',
@@ -311,40 +332,43 @@ export default function CCTVAnalysis() {
   // 진행률 폴링을 시작하는 함수
   const startProgressPolling = (currentVideoId: string) => {
     console.log('📊 [Progress Polling] DB 진행률 폴링 시작:', currentVideoId);
-    
+
     // DB 진행률 폴링으로만 애니메이션 제어
     let progressRetryCount = 0;
     const maxProgressRetries = 10; // 재시도 횟수 증가
     let hasProgressStarted = false; // 분석이 실제로 시작되었는지 추적
     let initialCheckCount = 0; // 초기 체크 횟수
     const maxInitialChecks = 150; // 최대 300초(5분) 동안 분석 시작 대기 (2초 * 150)
-    
+
     // 기존 interval이 남아 있다면 정리
     if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = null;
     }
-    
+
     progressIntervalRef.current = setInterval(async () => {
       if (!currentVideoId) {
         console.log('🛑 [Progress Polling] videoId가 없어 폴링 중단');
         stopProgressPolling();
         return;
       }
-      
+
       try {
-        console.log('🔄 [Progress Polling] 진행률 API 호출 시도:', currentVideoId);
-        
+        console.log(
+          '🔄 [Progress Polling] 진행률 API 호출 시도:',
+          currentVideoId
+        );
+
         const { getAnalysisProgress } = await import('./actions/ai-service');
         console.log('✅ [Progress Polling] ai-service import 성공');
-        
+
         const progressData = await getAnalysisProgress(currentVideoId);
         console.log('✅ [Progress Polling] 진행률 데이터 수신:', progressData);
-        
+
         // 성공적으로 진행률을 가져온 경우 재시도 카운트 리셋
         progressRetryCount = 0;
         initialCheckCount++;
-        
+
         console.log('📊 [Progress Polling] DB 진행률 업데이트:', {
           videoId: currentVideoId,
           progress: progressData.progress,
@@ -354,58 +378,66 @@ export default function CCTVAnalysis() {
           hasProgressStarted,
           initialCheckCount,
           currentAnalysisProgress: analysisProgress,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
-        
+
         // 분석이 시작되었는지 확인 (status가 'processing'이거나 progress가 0보다 크면)
-        if (!hasProgressStarted && (progressData.status === 'processing' || progressData.progress > 0)) {
+        if (
+          !hasProgressStarted &&
+          (progressData.status === 'processing' || progressData.progress > 0)
+        ) {
           hasProgressStarted = true;
           console.log('🎬 [Progress Polling] 분석 시작 감지됨');
         }
-        
+
         // 분석이 시작된 경우에만 진행률 업데이트
         if (hasProgressStarted) {
           setAnalysisProgress(progressData.progress);
         } else {
           // 분석이 아직 시작되지 않았으면 0% 유지
           console.log('⏳ [Progress Polling] 분석 아직 시작 안됨, 0% 유지');
-          
+
           // 너무 오래 기다린 경우 강제로 시작 처리 (AI 서버가 응답하지 않을 수 있음)
           if (initialCheckCount >= maxInitialChecks) {
-            console.warn('⚠️ [Progress Polling] 너무 오래 기다렸음, 강제로 분석 시작 처리');
+            console.warn(
+              '⚠️ [Progress Polling] 너무 오래 기다렸음, 강제로 분석 시작 처리'
+            );
             hasProgressStarted = true;
             setAnalysisProgress(5); // 5%로 시작하여 사용자에게 진행 중임을 표시
           }
         }
-        
+
         // 분석 완료 또는 실패 시 폴링 중단
         if (progressData.is_completed || progressData.is_failed) {
           console.log('🏁 [Progress Polling] 분석 종료 감지, 폴링 중단:', {
             videoId: currentVideoId,
             is_completed: progressData.is_completed,
-            is_failed: progressData.is_failed
+            is_failed: progressData.is_failed,
           });
-          
+
           stopProgressPolling();
-          
+
           if (progressData.is_completed) {
             setAnalysisProgress(100);
-            
+
             // 분석 완료 시 결과 조회 및 메시지 업데이트
             setTimeout(async () => {
               console.log('✨ [Progress Polling] 분석 애니메이션 종료');
               setIsAnalyzing(false);
-              
+
               try {
                 // 분석 결과 조회
-                const { getAnalysisResult } = await import('./actions/ai-service');
+                const { getAnalysisResult } = await import(
+                  './actions/ai-service'
+                );
                 const analysisResult = await getAnalysisResult(currentVideoId);
-                
+
                 const eventsCount = analysisResult?.events?.length || 0;
-                const successMessage = eventsCount > 0 
-                  ? `"${videoFileName}" 영상 분석이 완료되었습니다. ${eventsCount}개의 이벤트가 감지되었습니다. 이제 영상을 재생하고 내용에 대해 질문할 수 있습니다.`
-                  : `"${videoFileName}" 영상 분석이 완료되었습니다. 특별한 이벤트는 감지되지 않았지만 영상 내용에 대해 질문할 수 있습니다.`;
-                
+                const successMessage =
+                  eventsCount > 0
+                    ? `"${videoFileName}" 영상 분석이 완료되었습니다. ${eventsCount}개의 이벤트가 감지되었습니다. 이제 영상을 재생하고 내용에 대해 질문할 수 있습니다.`
+                    : `"${videoFileName}" 영상 분석이 완료되었습니다. 특별한 이벤트는 감지되지 않았지만 영상 내용에 대해 질문할 수 있습니다.`;
+
                 setMessages([
                   {
                     role: 'assistant',
@@ -424,7 +456,9 @@ export default function CCTVAnalysis() {
                 try {
                   const videoResponse = await getUploadedVideos();
                   if (videoResponse.success) {
-                    const currentVideo = videoResponse.data.find((v: UploadedVideo) => v.id === currentVideoId);
+                    const currentVideo = videoResponse.data.find(
+                      (v: UploadedVideo) => v.id === currentVideoId
+                    );
                     if (currentVideo) {
                       setVideo(currentVideo);
                     }
@@ -433,11 +467,15 @@ export default function CCTVAnalysis() {
                   console.error('❌ 비디오 정보 로드 실패:', videoError);
                 }
               } catch (resultError) {
-                console.error('❌ [Progress Polling] 분석 결과 조회 실패:', resultError);
+                console.error(
+                  '❌ [Progress Polling] 분석 결과 조회 실패:',
+                  resultError
+                );
                 setMessages([
                   {
                     role: 'assistant',
-                    content: '영상 분석이 완료되었지만 결과를 가져오는 중 오류가 발생했습니다.',
+                    content:
+                      '영상 분석이 완료되었지만 결과를 가져오는 중 오류가 발생했습니다.',
                   },
                 ]);
               }
@@ -446,11 +484,12 @@ export default function CCTVAnalysis() {
             // 분석 실패 처리
             setIsAnalyzing(false);
             setAnalysisProgress(0);
-            
+
             setMessages([
               {
                 role: 'assistant',
-                content: '영상 분석 중 오류가 발생했습니다. 나중에 다시 시도해주세요.',
+                content:
+                  '영상 분석 중 오류가 발생했습니다. 나중에 다시 시도해주세요.',
               },
             ]);
 
@@ -466,27 +505,36 @@ export default function CCTVAnalysis() {
         progressRetryCount++;
         console.error('⚠️ [Progress Polling] 진행률 조회 실패:', {
           videoId: currentVideoId,
-          error: progressError instanceof Error ? progressError.message : String(progressError),
-          errorStack: progressError instanceof Error ? progressError.stack : undefined,
+          error:
+            progressError instanceof Error
+              ? progressError.message
+              : String(progressError),
+          errorStack:
+            progressError instanceof Error ? progressError.stack : undefined,
           retryCount: progressRetryCount,
           maxRetries: maxProgressRetries,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
-        
+
         // 네트워크 에러인지 확인
-        if (progressError instanceof Error && progressError.message.includes('fetch')) {
+        if (
+          progressError instanceof Error &&
+          progressError.message.includes('fetch')
+        ) {
           console.error('🌐 [Progress Polling] 네트워크 연결 문제 감지');
         }
-        
+
         // 최대 재시도 횟수 초과 시에만 알림
         if (progressRetryCount >= maxProgressRetries) {
-          console.error('💥 [Progress Polling] 진행률 폴링 최대 재시도 초과, 폴링 중단');
+          console.error(
+            '💥 [Progress Polling] 진행률 폴링 최대 재시도 초과, 폴링 중단'
+          );
           stopProgressPolling();
-          
+
           // 실패 시 애니메이션 종료
           setIsAnalyzing(false);
           setAnalysisProgress(0);
-          
+
           addToast({
             type: 'error',
             title: '진행률 조회 실패',
@@ -511,24 +559,24 @@ export default function CCTVAnalysis() {
   const handleCancelProcess = () => {
     // 새로운 stopProgressPolling 함수 사용
     stopProgressPolling();
-    
+
     console.log('🚫 [Cancel] 업로드/분석 프로세스 취소됨:', {
       isUploading,
       isAnalyzing,
       videoId,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-    
+
     // 업로드 관련 상태 초기화
     setIsUploading(false);
     setUploadProgress(0);
     setUploadStage('');
     setUploadStartTime(null);
-    
+
     // 분석 관련 상태 초기화
     setIsAnalyzing(false);
     setAnalysisProgress(0);
-    
+
     // 비디오 관련 상태 초기화
     setVideoLoading(false);
     setVideoError(null);
@@ -538,12 +586,12 @@ export default function CCTVAnalysis() {
     setCurrentTime(0);
     setDuration(0);
     setTimeMarkers([]);
-    
+
     // UI 상태 초기화
     setDragDropVisible(false);
     setIsDuplicateVideo(false);
     setUploadHighlight(false);
-    
+
     // 메시지 초기화
     setMessages([
       {
@@ -554,19 +602,19 @@ export default function CCTVAnalysis() {
     ]);
     setCurrentHistoryId(undefined);
     setCurrentSession(null);
-    
+
     // 비디오 엘리먼트 정리
     if (videoRef.current) {
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
       videoRef.current.src = '';
     }
-    
+
     // Object URL 정리 (메모리 누수 방지)
     if (videoSrc && videoSrc.startsWith('blob:')) {
       URL.revokeObjectURL(videoSrc);
     }
-    
+
     // 취소 토스트 표시
     addToast({
       type: 'info',
@@ -607,8 +655,6 @@ export default function CCTVAnalysis() {
           currentStage++;
         } else {
           clearInterval(progressInterval);
-          
-          
 
           // 3초 후 애니메이션 종료
           setTimeout(() => {
@@ -677,45 +723,48 @@ export default function CCTVAnalysis() {
   // API 헬스 체크 함수
   const checkApiHealth = async () => {
     const checkTime = new Date();
-    
+
     try {
       console.log('🏥 [Health Check] API 상태 확인 시작');
-      
+
       // 백엔드 API 상태 확인
       const backendHealthPromise = fetch('http://localhost:8088/db/videos/', {
         method: 'HEAD',
-        signal: AbortSignal.timeout(5000) // 5초 타임아웃
-      }).then(response => response.ok ? 'healthy' : 'error').catch(() => 'error');
-      
+        signal: AbortSignal.timeout(5000), // 5초 타임아웃
+      })
+        .then((response) => (response.ok ? 'healthy' : 'error'))
+        .catch(() => 'error');
+
       // AI 서비스 상태 확인 (간접적으로 - 실제로는 ping 엔드포인트가 필요)
       const aiServiceHealthPromise = fetch('http://localhost:7500/', {
         method: 'HEAD',
-        signal: AbortSignal.timeout(5000)
-      }).then(response => response.ok ? 'healthy' : 'error').catch(() => 'error');
-      
+        signal: AbortSignal.timeout(5000),
+      })
+        .then((response) => (response.ok ? 'healthy' : 'error'))
+        .catch(() => 'error');
+
       const [backendStatus, aiServiceStatus] = await Promise.all([
         backendHealthPromise,
-        aiServiceHealthPromise
+        aiServiceHealthPromise,
       ]);
-      
+
       setApiHealthStatus({
         backend: backendStatus as 'healthy' | 'error',
         aiService: aiServiceStatus as 'healthy' | 'error',
-        lastCheck: checkTime
+        lastCheck: checkTime,
       });
-      
+
       console.log('🏥 [Health Check] API 상태 확인 완료:', {
         backend: backendStatus,
         aiService: aiServiceStatus,
-        timestamp: checkTime.toISOString()
+        timestamp: checkTime.toISOString(),
       });
-      
     } catch (error) {
       console.error('🏥 [Health Check] API 상태 확인 실패:', error);
       setApiHealthStatus({
         backend: 'error',
-        aiService: 'error', 
-        lastCheck: checkTime
+        aiService: 'error',
+        lastCheck: checkTime,
       });
     }
   };
@@ -723,16 +772,16 @@ export default function CCTVAnalysis() {
   // 앱 시작 시 API 상태 확인
   useEffect(() => {
     checkApiHealth();
-    
+
     // 5분마다 API 상태 재확인
     const healthCheckInterval = setInterval(checkApiHealth, 5 * 60 * 1000);
-    
+
     return () => clearInterval(healthCheckInterval);
   }, []);
 
   useEffect(() => {
-    console.log("🎯 useEffect 실행됨 - 컴포넌트 마운트");
-    
+    console.log('🎯 useEffect 실행됨 - 컴포넌트 마운트');
+
     const checkMobile = () => {
       const userAgent =
         navigator.userAgent || navigator.vendor || (window as any).opera;
@@ -742,23 +791,23 @@ export default function CCTVAnalysis() {
         );
       const isSmallScreen = window.innerWidth <= 768;
       setIsMobile(isMobileDevice || isSmallScreen);
-      console.log("📱 모바일 감지:", { isMobileDevice, isSmallScreen });
+      console.log('📱 모바일 감지:', { isMobileDevice, isSmallScreen });
     };
 
     // 컴포넌트 마운트 후에만 실행
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
+
     // 전역 클릭 이벤트 리스너 추가 (디버그용)
     const globalClickHandler = (e: Event) => {
-      console.log("🖱️ 전역 클릭 이벤트:", e.target);
+      console.log('🖱️ 전역 클릭 이벤트:', e.target);
     };
     document.addEventListener('click', globalClickHandler);
-    
+
     return () => {
       window.removeEventListener('resize', checkMobile);
       document.removeEventListener('click', globalClickHandler);
-      
+
       // 컴포넌트 언마운트 시 분석 진행률 폴링 정리
       if (progressIntervalRef.current) {
         console.log('🧹 [Cleanup] 컴포넌트 언마운트로 인한 진행률 폴링 정리');
@@ -825,14 +874,14 @@ export default function CCTVAnalysis() {
         fileSize: file.size,
         fileType: file.type,
         lastModified: file.lastModified,
-        videoDateTime
+        videoDateTime,
       });
 
       setVideoLoading(true);
       setVideoError(null);
       // 중복 비디오 상태 초기화
       setIsDuplicateVideo(false);
-      
+
       // 업로드 진행률 추적 시작
       setIsUploading(true);
       setUploadProgress(0);
@@ -841,9 +890,9 @@ export default function CCTVAnalysis() {
       // Validate file type (0-10%)
       setUploadStage('파일 형식을 확인하는 중...');
       setUploadProgress(5);
-      
+
       console.log('📋 [File Validation] 파일 형식 검증 중:', file.type);
-      
+
       const validVideoTypes = [
         'video/mp4',
         'video/webm',
@@ -853,9 +902,12 @@ export default function CCTVAnalysis() {
         'video/quicktime',
       ];
       console.log('✅ [File Validation] 지원되는 형식:', validVideoTypes);
-      
+
       if (!validVideoTypes.includes(file.type)) {
-        console.error('❌ [File Validation] 지원하지 않는 파일 형식:', file.type);
+        console.error(
+          '❌ [File Validation] 지원하지 않는 파일 형식:',
+          file.type
+        );
         setIsUploading(false);
         setVideoLoading(false);
         setDragDropVisible(false);
@@ -872,15 +924,20 @@ export default function CCTVAnalysis() {
       // Validate file size (10-20%)
       setUploadStage('파일 크기를 확인하는 중...');
       setUploadProgress(15);
-      
+
       console.log('📏 [Size Validation] 파일 크기 검증 중:', {
         size: file.size,
-        sizeInMB: (file.size / (1024 * 1024)).toFixed(2) + 'MB'
+        sizeInMB: (file.size / (1024 * 1024)).toFixed(2) + 'MB',
       });
-      
+
       const maxSize = 5 * 1024 * 1024 * 1024;
       if (file.size > maxSize) {
-        console.error('❌ [Size Validation] 파일 크기 초과:', file.size, 'max:', maxSize);
+        console.error(
+          '❌ [Size Validation] 파일 크기 초과:',
+          file.size,
+          'max:',
+          maxSize
+        );
         setIsUploading(false);
         setVideoLoading(false);
         setDragDropVisible(false);
@@ -897,7 +954,7 @@ export default function CCTVAnalysis() {
       // HTML5 Video API를 사용하여 비디오 duration 추출 (20-40%)
       setUploadStage('비디오 메타데이터를 추출하는 중...');
       setUploadProgress(25);
-      
+
       console.log('🎞️ [Duration Extraction] 비디오 duration 추출 시작');
       let videoDuration: number | undefined = undefined;
       try {
@@ -909,148 +966,162 @@ export default function CCTVAnalysis() {
         setUploadProgress(40);
       }
 
-      // 썸네일 생성 및 업로드 (40-60%)
-      setUploadStage('썸네일을 생성하는 중...');
+      // 중복 체크 먼저 수행 (40-50%)
+      setUploadStage('중복 파일을 확인하는 중...');
       setUploadProgress(45);
-      
+
+      console.log('� [Duplicate Check] 중복 비디오 확인 중...');
+      let serverSaveResult = null;
+      try {
+        const { checkDuplicateVideo } = await import(
+          '@/app/actions/video-service'
+        );
+        const duplicateCheck = await checkDuplicateVideo(file, videoDuration);
+
+        if (duplicateCheck.isDuplicate && duplicateCheck.duplicateVideo) {
+          console.log(
+            '🔄 [Duplicate] 중복 비디오 발견:',
+            duplicateCheck.duplicateVideo.id
+          );
+
+          // 중복이면 썸네일 생성과 S3 업로드를 건너뛰고 즉시 종료
+          serverSaveResult = {
+            success: false,
+            isDuplicate: true,
+            videoId: duplicateCheck.duplicateVideo.id,
+            duplicateVideoId: duplicateCheck.duplicateVideo.id,
+            error: '이미 업로드된 동영상입니다.',
+          };
+
+          // 중복 비디오의 ID를 videoId로 설정
+          setVideoId(duplicateCheck.duplicateVideo.id);
+          setIsDuplicateVideo(true);
+          console.log(
+            '🆔 [Duplicate] 중복 비디오 ID 설정:',
+            duplicateCheck.duplicateVideo.id
+          );
+
+          // 업로드 완료 처리
+          setUploadProgress(100);
+          setUploadStage('중복 비디오 감지됨');
+          setIsUploading(false);
+          setVideoLoading(false);
+          setDragDropVisible(false);
+
+          // 모바일에서 업로드 영역으로 스크롤
+          if (typeof window !== 'undefined' && window.innerWidth < 768) {
+            setTimeout(() => {
+              const uploadSection = document.getElementById('upload-section');
+              if (uploadSection) {
+                uploadSection.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start',
+                });
+              }
+            }, 100);
+          }
+
+          addToast({
+            type: 'warning',
+            title: '중복 동영상',
+            message: '이미 업로드된 동영상입니다.',
+            duration: 3000,
+          });
+
+          console.log('� [Duplicate] 중복 처리 완료, 업로드 중단');
+          return; // 여기서 함수 종료
+        }
+
+        console.log('✅ [Duplicate Check] 중복 없음, 업로드 진행');
+        setUploadProgress(50);
+      } catch (duplicateError) {
+        console.warn('⚠️ [Duplicate Check] 중복 확인 실패:', duplicateError);
+        // 중복 확인 실패 시에도 업로드는 진행
+        setUploadProgress(50);
+      }
+
+      // 썸네일 생성 및 업로드 (50-70%)
+      setUploadStage('썸네일을 생성하는 중...');
+      setUploadProgress(55);
+
       console.log('🖼️ [Thumbnail] 썸네일 생성 시작');
       let thumbnailPath: string | null = null;
       try {
         const { createAndUploadThumbnailWithFallback } = await import(
           '@/utils/thumbnail-utils'
         );
-        thumbnailPath = await createAndUploadThumbnailWithFallback(file, file.name);
+        thumbnailPath = await createAndUploadThumbnailWithFallback(
+          file,
+          file.name
+        );
         if (thumbnailPath) {
           console.log('✅ [Thumbnail] 생성 및 업로드 성공:', thumbnailPath);
         } else {
           console.warn('⚠️ [Thumbnail] 생성 실패, 썸네일 없이 진행');
         }
-        setUploadProgress(60);
+        setUploadProgress(70);
       } catch (thumbnailError) {
         console.warn('❌ [Thumbnail] 오류 발생:', thumbnailError);
-        setUploadProgress(60);
+        setUploadProgress(70);
       }
 
-      // 서버에 파일 저장 및 중복 체크 (60-80%)
-      setUploadStage('중복 파일을 확인하는 중...');
-      setUploadProgress(65);
-      
-      console.log('💾 [Server Save] 서버 저장 프로세스 시작');
-      let serverSaveResult = null;
+      // S3 업로드 (70-95%)
+      setUploadStage('S3에 업로드 중...');
+      setUploadProgress(75);
+
+      console.log('🚀 [S3 Upload] S3 업로드 시작...');
       try {
-        // 1단계: 중복 체크 (기존 video-service 활용)
-        console.log('🔍 [Duplicate Check] 중복 비디오 확인 중...');
-        setUploadStage('중복 파일을 확인하는 중...');
+        const uploadResult = await uploadVideoToS3(file, {
+          duration: videoDuration,
+          thumbnailUrl: thumbnailPath || undefined,
+          videoDateTime: videoDateTime,
+          onProgress: (stage, progress) => {
+            console.log(`📊 [S3 Progress] ${stage}: ${progress}%`);
+            setUploadStage(stage);
+            // 75-95% 구간을 S3 업로드에 할당
+            setUploadProgress(75 + progress * 0.2);
+          },
+        });
 
-        const { checkDuplicateVideo } = await import('@/app/actions/video-service');
-        const duplicateCheck = await checkDuplicateVideo(file, videoDuration);
+        console.log('✅ [S3 Upload] S3 업로드 완료:', uploadResult);
 
-        if (duplicateCheck.isDuplicate && duplicateCheck.duplicateVideo) {
-          console.log('🔄 [Duplicate] 중복 비디오 발견:', duplicateCheck.duplicateVideo.id);
-
-          serverSaveResult = {
-            success: false,
-            isDuplicate: true,
-            videoId: duplicateCheck.duplicateVideo.id,
-            duplicateVideoId: duplicateCheck.duplicateVideo.id,
-            error: '이미 업로드된 동영상입니다.'
-          };
-        } else {
-          // 2단계: S3 업로드 (중복이 아닌 경우만)
-          console.log('🚀 [S3 Upload] S3 업로드 시작...');
-          setUploadStage('S3에 업로드 중...');
-
-          const uploadResult = await uploadVideoToS3(file, {
-            duration: videoDuration,
-            thumbnailUrl: thumbnailPath || undefined,
-            videoDateTime: videoDateTime,
-            onProgress: (stage, progress) => {
-              console.log(`📊 [S3 Progress] ${stage}: ${progress}%`);
-              setUploadStage(stage);
-              // 70-95% 구간을 S3 업로드에 할당
-              setUploadProgress(70 + (progress * 0.25));
-            }
-          });
-
-          console.log('✅ [S3 Upload] S3 업로드 완료:', uploadResult);
-
-          // uploadVideoToS3의 응답을 saveVideoFile 형식으로 변환
-          serverSaveResult = {
-            success: true,
-            videoId: uploadResult.video_id.toString(),
-            video: uploadResult.video
-          };
-        }
+        // uploadVideoToS3의 응답을 saveVideoFile 형식으로 변환
+        serverSaveResult = {
+          success: true,
+          videoId: uploadResult.video_id.toString(),
+          video: uploadResult.video,
+        };
 
         setUploadProgress(95);
 
-        // 중복 비디오 처리 - success가 false이고 isDuplicate가 true인 경우
-        if (serverSaveResult.isDuplicate && !serverSaveResult.success) {
-          console.log('🔄 [Duplicate] 중복 비디오 감지:', serverSaveResult.duplicateVideoId);
-          
-          // 중복 비디오의 ID를 videoId로 설정 (AI 분석에 필요)
-          if (serverSaveResult.duplicateVideoId) {
-            setVideoId(serverSaveResult.duplicateVideoId);
-            console.log('🆔 [Duplicate] 중복 비디오 ID 설정:', serverSaveResult.duplicateVideoId);
-          }
-          
-          // 중복 비디오 표시를 위한 UI 상태 업데이트
-          setIsDuplicateVideo(true);
-
-          // 모바일에서 업로드 영역으로 스크롤
-          if (isMobile && uploadAreaRef.current) {
-            uploadAreaRef.current.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center',
-            });
-          }
-
-          // 1초 후 애니메이션 종료
-          setTimeout(() => {
-            setIsDuplicateVideo(false);
-          }, 1000);
-
-          addToast({
-            type: 'warning',
-            title: '중복된 비디오',
-            message: '동일한 비디오가 이미 업로드되어 있습니다. 기존 분석 결과를 활용합니다.',
-            duration: 4000,
-          });
-          // 중복 비디오의 경우에도 AI 분석을 진행하므로 return 제거
-        }
-
-        // 서버 저장 실패 시 처리
-        if (!serverSaveResult.success && !serverSaveResult.isDuplicate) {
-          console.error('❌ [Server Save] 저장 실패:', serverSaveResult.error);
-          setIsUploading(false);
-          setVideoLoading(false);
-          setDragDropVisible(false);
-          addToast({
-            type: 'error',
-            title: '업로드 실패',
-            message:
-              serverSaveResult.error || '파일 저장 중 오류가 발생했습니다.',
-            duration: 4000,
-          });
-          return;
-        }
-        
         // 새로운 비디오 업로드 성공 시 videoId 설정
         if (serverSaveResult.success && serverSaveResult.videoId) {
           setVideoId(serverSaveResult.videoId);
-          console.log('🆔 [New Video] 새 비디오 ID 설정:', serverSaveResult.videoId);
+          console.log(
+            '🆔 [New Video] 새 비디오 ID 설정:',
+            serverSaveResult.videoId
+          );
         }
-        
+
         console.log('✅ [Server Save] 저장 성공:', serverSaveResult.videoId);
       } catch (serverError) {
-        console.error('❌ [Server Save] 예외 발생:', serverError);
-        setUploadProgress(80);
+        console.error('❌ [S3 Upload] 예외 발생:', serverError);
+        setIsUploading(false);
+        setVideoLoading(false);
+        setDragDropVisible(false);
+        addToast({
+          type: 'error',
+          title: '업로드 실패',
+          message: '파일 업로드 중 오류가 발생했습니다.',
+          duration: 4000,
+        });
+        return;
       }
 
       // 즉시 Object URL 생성하여 클라이언트에서 사용 (80-90%)
       setUploadStage('비디오를 준비하는 중...');
       setUploadProgress(85);
-      
+
       const objectUrl = URL.createObjectURL(file);
 
       // 모바일에서 비디오 검증을 더 관대하게 처리
@@ -1091,7 +1162,7 @@ export default function CCTVAnalysis() {
 
       try {
         const validUrl = await loadPromise;
-        
+
         // 업로드 완료 (90-100%)
         setUploadStage('업로드를 완료하는 중...');
         setUploadProgress(95);
@@ -1102,52 +1173,42 @@ export default function CCTVAnalysis() {
         setCurrentHistoryId(undefined);
         setCurrentSession(null);
         setTimeMarkers([]);
-        
+
         // 서버에서 받은 videoId 저장 (AI 채팅에서 사용)
+        // 중복 비디오는 이미 위에서 return 되었으므로 여기서는 새 비디오만 처리
         let currentVideoId = null;
-        
+
         console.log('🔍 [Debug] serverSaveResult 상세 분석:', {
           serverSaveResult,
           success: serverSaveResult?.success,
           videoId: serverSaveResult?.videoId,
-          isDuplicate: serverSaveResult?.isDuplicate,
-          duplicateVideoId: serverSaveResult?.duplicateVideoId,
-          error: serverSaveResult?.error,
-          // 추가 디버깅 정보
           allKeys: serverSaveResult ? Object.keys(serverSaveResult) : [],
-          stringifiedResult: JSON.stringify(serverSaveResult, null, 2)
+          stringifiedResult: JSON.stringify(serverSaveResult, null, 2),
         });
-        
+
         if (serverSaveResult?.success && serverSaveResult.videoId) {
           currentVideoId = serverSaveResult.videoId;
           setVideoId(currentVideoId);
           console.log('✅ [New Video] Video ID captured for AI chat:', {
             currentVideoId,
             type: typeof currentVideoId,
-            stringValue: String(currentVideoId)
-          });
-        } else if (serverSaveResult?.isDuplicate && serverSaveResult.duplicateVideoId) {
-          // 중복 비디오의 경우 duplicateVideoId 사용
-          currentVideoId = serverSaveResult.duplicateVideoId;
-          setVideoId(currentVideoId);
-          console.log('✅ [Duplicate Video] Video ID captured for AI chat:', {
-            currentVideoId,
-            type: typeof currentVideoId,
-            stringValue: String(currentVideoId)
+            stringValue: String(currentVideoId),
           });
         } else {
           console.error('❌ [Critical] Video ID를 찾을 수 없음:', {
             serverSaveResult,
             serverSaveResultType: typeof serverSaveResult,
-            serverSaveResultKeys: serverSaveResult ? Object.keys(serverSaveResult) : null
+            serverSaveResultKeys: serverSaveResult
+              ? Object.keys(serverSaveResult)
+              : null,
           });
         }
-        
+
         console.log('🆔 [Final] currentVideoId 최종 확인:', currentVideoId);
-        
+
         // 업로드 진행률 완료
         setUploadProgress(100);
-        
+
         // 업로드 완료 후 상태 정리 (분석 시작보다 먼저 실행)
         setTimeout(() => {
           setIsUploading(false);
@@ -1156,20 +1217,25 @@ export default function CCTVAnalysis() {
           setVideoLoading(false);
           // 업로드 완료 후 DragDrop 모달 닫기
           setDragDropVisible(false);
-          
+
           // 분석 애니메이션을 확실히 보이도록 더 긴 지연 후 시작
           setTimeout(() => {
             // 업로드 상태가 완전히 정리된 후 분석 시작
-            console.log('🚀 [Main Page] 분석 애니메이션과 API 호출 동시 시작:', {
-              videoId: currentVideoId,
-              fileName: file.name,
-              isDuplicate: isDuplicateVideo,
-              hasVideoSrc: !!videoSrc,
-              timestamp: new Date().toISOString()
-            });
-            
+            console.log(
+              '🚀 [Main Page] 분석 애니메이션과 API 호출 동시 시작:',
+              {
+                videoId: currentVideoId,
+                fileName: file.name,
+                isDuplicate: isDuplicateVideo,
+                hasVideoSrc: !!videoSrc,
+                timestamp: new Date().toISOString(),
+              }
+            );
+
             if (!currentVideoId) {
-              console.error('❌ [Critical Error] currentVideoId가 null이므로 분석을 시작할 수 없습니다');
+              console.error(
+                '❌ [Critical Error] currentVideoId가 null이므로 분석을 시작할 수 없습니다'
+              );
               addToast({
                 type: 'error',
                 title: '분석 시작 실패',
@@ -1178,15 +1244,15 @@ export default function CCTVAnalysis() {
               });
               return;
             }
-            
+
             // 🎯 분석 애니메이션 시작 - 0%에서 시작하여 유지
             console.log('✨ [Animation] 분석 애니메이션 시작');
             setIsAnalyzing(true);
             setAnalysisProgress(0); // 0%에서 시작
-            
+
             // 진행률 폴링 시작 (DB의 실제 진행률로 업데이트)
             startProgressPolling(currentVideoId);
-            
+
             // 🎯 동시에 실제 AI 분석 API 호출 시작
             console.log('🤖 [API] AI 분석 API 호출 시작');
             startActualAIAnalysis(currentVideoId, file);
@@ -1195,7 +1261,9 @@ export default function CCTVAnalysis() {
 
         // 업로드 시간 계산
         const uploadEndTime = Date.now();
-        const uploadDuration = uploadStartTime ? (uploadEndTime - uploadStartTime) / 1000 : 0;
+        const uploadDuration = uploadStartTime
+          ? (uploadEndTime - uploadStartTime) / 1000
+          : 0;
         console.log(`Upload completed in ${uploadDuration.toFixed(1)} seconds`);
 
         // 성공 토스트
@@ -1207,7 +1275,6 @@ export default function CCTVAnalysis() {
             : `${file.name} 파일이 성공적으로 업로드되었습니다.`,
           duration: 3000,
         });
-
       } catch (validationError) {
         URL.revokeObjectURL(objectUrl);
         throw new Error('비디오 파일이 손상되었거나 지원되지 않는 형식입니다.');
@@ -1276,8 +1343,9 @@ export default function CCTVAnalysis() {
       const video = videoRef.current;
 
       // 비디오 준비 상태 검사 (모바일에서는 더 관대하게)
-      const isVideoReady = video.readyState >= 2 || (isMobile && video.readyState >= 1);
-      
+      const isVideoReady =
+        video.readyState >= 2 || (isMobile && video.readyState >= 1);
+
       if (!isVideoReady && !isMobile) {
         console.warn('Video not ready to play, readyState:', video.readyState);
         addToast({
@@ -1318,14 +1386,16 @@ export default function CCTVAnalysis() {
                 addToast({
                   type: 'info',
                   title: '재생 안내',
-                  message: '모바일에서는 화면을 직접 터치하여 비디오를 재생해주세요.',
+                  message:
+                    '모바일에서는 화면을 직접 터치하여 비디오를 재생해주세요.',
                   duration: 4000,
                 });
               } else {
                 addToast({
                   type: 'error',
                   title: '재생 실패',
-                  message: '비디오 재생에 실패했습니다. 브라우저 설정을 확인해주세요.',
+                  message:
+                    '비디오 재생에 실패했습니다. 브라우저 설정을 확인해주세요.',
                   duration: 3000,
                 });
               }
@@ -1373,12 +1443,15 @@ export default function CCTVAnalysis() {
       }
 
       const video = videoRef.current;
-      
+
       // 비디오 준비 상태 검사
       const isVideoReady = video.readyState >= 1 || isMobile;
-      
+
       if (!isVideoReady) {
-        console.warn('Video not ready for skip forward, readyState:', video.readyState);
+        console.warn(
+          'Video not ready for skip forward, readyState:',
+          video.readyState
+        );
         addToast({
           type: 'info',
           title: '비디오 로딩 중',
@@ -1402,7 +1475,7 @@ export default function CCTVAnalysis() {
 
       const currentTime = video.currentTime;
       const newTime = Math.min(currentTime + 10, videoDuration);
-      
+
       // 이미 끝에 도달한 경우
       if (currentTime >= videoDuration - 1) {
         addToast({
@@ -1416,7 +1489,6 @@ export default function CCTVAnalysis() {
 
       video.currentTime = newTime;
       console.log(`Skipped forward to: ${newTime.toFixed(2)}s`);
-
     } catch (error) {
       console.error('Skip forward error:', error);
       addToast({
@@ -1454,12 +1526,15 @@ export default function CCTVAnalysis() {
       }
 
       const video = videoRef.current;
-      
+
       // 비디오 준비 상태 검사
       const isVideoReady = video.readyState >= 1 || isMobile;
-      
+
       if (!isVideoReady) {
-        console.warn('Video not ready for skip backward, readyState:', video.readyState);
+        console.warn(
+          'Video not ready for skip backward, readyState:',
+          video.readyState
+        );
         addToast({
           type: 'info',
           title: '비디오 로딩 중',
@@ -1471,7 +1546,7 @@ export default function CCTVAnalysis() {
 
       const currentTime = video.currentTime;
       const newTime = Math.max(currentTime - 10, 0);
-      
+
       // 이미 시작 부분에 있는 경우
       if (currentTime <= 1) {
         addToast({
@@ -1486,7 +1561,6 @@ export default function CCTVAnalysis() {
 
       video.currentTime = newTime;
       console.log(`Skipped backward to: ${newTime.toFixed(2)}s`);
-
     } catch (error) {
       console.error('Skip backward error:', error);
       addToast({
@@ -1502,7 +1576,7 @@ export default function CCTVAnalysis() {
     console.log(`[SeekToTime] 함수 호출됨 - time: ${time}`);
     console.log(`[SeekToTime] videoRef.current:`, videoRef.current);
     console.log(`[SeekToTime] videoSrc:`, videoSrc);
-    
+
     try {
       // 입력값 유효성 검사
       if (typeof time !== 'number' || isNaN(time) || time < 0) {
@@ -1540,10 +1614,10 @@ export default function CCTVAnalysis() {
       }
 
       const video = videoRef.current;
-      
+
       // 비디오 준비 상태 검사
       const isVideoReady = video.readyState >= 1 || isMobile;
-      
+
       if (!isVideoReady) {
         console.warn('Video not ready for seek, readyState:', video.readyState);
         addToast({
@@ -1569,9 +1643,11 @@ export default function CCTVAnalysis() {
 
       // 유효한 시간 범위로 제한
       const targetTime = Math.min(Math.max(time, 0), videoDuration);
-      
+
       if (time > videoDuration) {
-        console.warn(`Seek time ${time} exceeds video duration ${videoDuration}`);
+        console.warn(
+          `Seek time ${time} exceeds video duration ${videoDuration}`
+        );
         addToast({
           type: 'warning',
           title: '탐색 범위 초과',
@@ -1607,7 +1683,6 @@ export default function CCTVAnalysis() {
           console.warn('Scroll to video failed:', scrollError);
         }
       }
-
     } catch (error) {
       console.error('Seek error:', error);
       addToast({
@@ -1641,10 +1716,14 @@ export default function CCTVAnalysis() {
 
     const updateTime = () => {
       try {
-        if (video && video.currentTime !== undefined && !isNaN(video.currentTime)) {
+        if (
+          video &&
+          video.currentTime !== undefined &&
+          !isNaN(video.currentTime)
+        ) {
           const newCurrentTime = video.currentTime;
           // 성능 최적화: 시간이 실제로 변경된 경우에만 상태 업데이트
-          setCurrentTime(prevTime => {
+          setCurrentTime((prevTime) => {
             // 0.1초 이상 차이가 날 때만 업데이트 (과도한 렌더링 방지)
             if (Math.abs(newCurrentTime - prevTime) >= 0.1) {
               return newCurrentTime;
@@ -1723,7 +1802,7 @@ export default function CCTVAnalysis() {
       video.addEventListener('progress', handleTimeUpdate); // 추가: 버퍼링 진행 시에도 시간 업데이트
       video.addEventListener('seeking', handleTimeUpdate); // 추가: 탐색 중에도 시간 업데이트
       video.addEventListener('seeked', handleTimeUpdate); // 추가: 탐색 완료 시에도 시간 업데이트
-      
+
       // 기존 이벤트들
       video.addEventListener('loadedmetadata', handleLoadedMetadata);
       video.addEventListener('loadeddata', handleLoadedData);
@@ -1773,7 +1852,7 @@ export default function CCTVAnalysis() {
     const interval = setInterval(() => {
       try {
         if (video.currentTime !== undefined && !isNaN(video.currentTime)) {
-          setCurrentTime(prevTime => {
+          setCurrentTime((prevTime) => {
             const newTime = video.currentTime;
             // 시간이 실제로 변경된 경우에만 상태 업데이트
             if (Math.abs(newTime - prevTime) >= 0.1) {
@@ -1793,20 +1872,20 @@ export default function CCTVAnalysis() {
     };
   }, [videoSrc, isPlaying]);
 
-  console.log("📝 handleSendMessage 함수가 정의됨");
-  
+  console.log('📝 handleSendMessage 함수가 정의됨');
+
   const handleSendMessage = async (e: React.FormEvent) => {
-    console.log("🚀🚀🚀 handleSendMessage 함수 호출됨!!!");
+    console.log('🚀🚀🚀 handleSendMessage 함수 호출됨!!!');
     e.preventDefault();
-    console.log("🚀 handleSendMessage 시작:", {
+    console.log('🚀 handleSendMessage 시작:', {
       inputMessage: inputMessage.trim(),
       videoSrc: !!videoSrc,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-    
+
     if (inputMessage.trim()) {
       const userMessage = inputMessage;
-      console.log("✅ 메시지 전송 조건 만족, 사용자 메시지:", userMessage);
+      console.log('✅ 메시지 전송 조건 만족, 사용자 메시지:', userMessage);
 
       // 사용자 메시지 추가
       setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
@@ -1821,23 +1900,27 @@ export default function CCTVAnalysis() {
 
       // 실제 AI 응답 호출
       setTimeout(async () => {
-        console.log("⏰ setTimeout 실행됨, AI 서비스 호출 시작");
+        console.log('⏰ setTimeout 실행됨, AI 서비스 호출 시작');
         try {
           let assistantMessage;
           let timestamp: number | undefined = undefined;
-          
+
           if (videoSrc && videoId) {
-            console.log("📹 비디오 있음, AI 서비스 호출 진행", { videoId, videoFileName, currentSessionId: currentSession?.id });
+            console.log('📹 비디오 있음, AI 서비스 호출 진행', {
+              videoId,
+              videoFileName,
+              currentSessionId: currentSession?.id,
+            });
             // AI 서비스 호출 - sendMessage 함수 사용
             const { sendMessage } = await import('./actions/ai-service');
-            console.log("📦 sendMessage 함수 로드됨");
-            
+            console.log('📦 sendMessage 함수 로드됨');
+
             const result = await sendMessage(
               userMessage,
               videoId,
               currentSession?.id || null // 기존 세션 ID 전달
             );
-            console.log("🎯 sendMessage 결과:", result);
+            console.log('🎯 sendMessage 결과:', result);
 
             if (result.success && result.reply) {
               // 타임스탬프가 있으면 추가
@@ -1845,7 +1928,7 @@ export default function CCTVAnalysis() {
                 timestamp = result.timestamp;
                 setTimeMarkers((prev) => [...prev, result.timestamp!]);
               }
-              
+
               assistantMessage = {
                 role: 'assistant' as const,
                 content: result.reply,
@@ -1855,24 +1938,28 @@ export default function CCTVAnalysis() {
               // 새 세션이 생성된 경우 현재 세션 업데이트
               if (result.session) {
                 setCurrentSession(result.session);
-                console.log("🔄 새 세션 생성됨:", result.session);
+                console.log('🔄 새 세션 생성됨:', result.session);
               }
             } else {
               // 에러 응답 처리
               assistantMessage = {
                 role: 'assistant' as const,
-                content: result.error || '응답을 생성하는 중 오류가 발생했습니다.',
+                content:
+                  result.error || '응답을 생성하는 중 오류가 발생했습니다.',
               };
             }
           } else {
-            console.log("❌ 비디오 없음 또는 videoId 없음, 업로드 안내 메시지", { videoSrc: !!videoSrc, videoId });
+            console.log(
+              '❌ 비디오 없음 또는 videoId 없음, 업로드 안내 메시지',
+              { videoSrc: !!videoSrc, videoId }
+            );
             assistantMessage = {
               role: 'assistant' as const,
               content: '분석을 위해 먼저 영상을 업로드해 주세요.',
             };
           }
 
-          console.log("💬 최종 assistant 메시지:", assistantMessage);
+          console.log('💬 최종 assistant 메시지:', assistantMessage);
           setMessages((prev) => [...prev, assistantMessage]);
 
           // 툴팁 표시
@@ -1924,7 +2011,7 @@ export default function CCTVAnalysis() {
           console.error('🔍 Error details:', {
             name: error instanceof Error ? error.name : 'Unknown',
             message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined
+            stack: error instanceof Error ? error.stack : undefined,
           });
           addToast({
             type: 'error',
@@ -1936,9 +2023,9 @@ export default function CCTVAnalysis() {
       }, 1000);
 
       setInputMessage('');
-      console.log("🔄 입력 메시지 초기화됨");
+      console.log('🔄 입력 메시지 초기화됨');
     } else {
-      console.log("⚠️ 입력 메시지가 비어있음");
+      console.log('⚠️ 입력 메시지가 비어있음');
     }
   };
 
@@ -2027,8 +2114,8 @@ export default function CCTVAnalysis() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    console.log("⌨️ Key pressed:", e.key, "shiftKey:", e.shiftKey);
-    
+    console.log('⌨️ Key pressed:', e.key, 'shiftKey:', e.shiftKey);
+
     // 영상이 없을 때도 입력 감지하여 강조 효과 실행
     if (!videoSrc) {
       handleInputClickWithoutVideo(e as any);
@@ -2036,18 +2123,23 @@ export default function CCTVAnalysis() {
 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      console.log("✅ Enter 키 감지, 전송 조건 확인:", {
+      console.log('✅ Enter 키 감지, 전송 조건 확인:', {
         hasVideo: !!videoSrc,
         hasMessage: !!inputMessage.trim(),
-        canSend: !!inputMessage.trim() && !!videoSrc
+        canSend: !!inputMessage.trim() && !!videoSrc,
       });
-      
+
       // 메시지가 있고 비디오가 있을 때만 전송
       if (inputMessage.trim() && videoSrc) {
-        console.log("🚀 Enter 키로 메시지 전송 시작");
+        console.log('🚀 Enter 키로 메시지 전송 시작');
         handleSendMessage(e);
       } else {
-        console.log("⚠️ 메시지나 비디오가 없어서 전송하지 않음 - 메시지:", !!inputMessage.trim(), "비디오:", !!videoSrc);
+        console.log(
+          '⚠️ 메시지나 비디오가 없어서 전송하지 않음 - 메시지:',
+          !!inputMessage.trim(),
+          '비디오:',
+          !!videoSrc
+        );
       }
     }
   };
@@ -2207,8 +2299,13 @@ export default function CCTVAnalysis() {
                     <div className="relative">
                       {isUploading ? (
                         // 업로드 중일 때 보라색 프로그레스 오버레이
-                        <div className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10"
-                             style={{ animation: 'borderGlowPurple 2s ease-in-out infinite' }}>
+                        <div
+                          className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10"
+                          style={{
+                            animation:
+                              'borderGlowPurple 2s ease-in-out infinite',
+                          }}
+                        >
                           <div className="relative w-24 h-24 md:w-32 md:h-32 mb-4">
                             {/* 배경 원 */}
                             <svg
@@ -2234,10 +2331,7 @@ export default function CCTVAnalysis() {
                                 strokeLinecap="round"
                                 strokeDasharray={`${2 * Math.PI * 45}`}
                                 strokeDashoffset={`${
-                                  2 *
-                                  Math.PI *
-                                  45 *
-                                  (1 - uploadProgress / 100)
+                                  2 * Math.PI * 45 * (1 - uploadProgress / 100)
                                 }`}
                                 className="transition-all duration-300 ease-out"
                                 style={{
@@ -2269,10 +2363,10 @@ export default function CCTVAnalysis() {
                         </div>
                       ) : isAnalyzing ? (
                         // 분석 중일 때 프로그레스 오버레이
-                        <div 
+                        <div
                           className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10"
                           style={{
-                            animation: 'borderGlow 2s ease-in-out infinite'
+                            animation: 'borderGlow 2s ease-in-out infinite',
                           }}
                         >
                           <div className="relative w-24 h-24 md:w-32 md:h-32 mb-4">
@@ -2320,28 +2414,26 @@ export default function CCTVAnalysis() {
                             </div>
                           </div>
                           <p className="text-white text-sm md:text-base font-medium mb-2">
-                            {analysisProgress === 0 
-                              ? '영상 분석 준비 중...' 
-                              : analysisProgress < 10 
-                                ? '영상 분석 시작 중...'
-                                : analysisProgress < 50
-                                  ? '영상 분석 중...'
-                                  : analysisProgress < 90
-                                    ? '영상 분석 중...'
-                                    : '영상 분석 완료 중...'
-                            }
+                            {analysisProgress === 0
+                              ? '영상 분석 준비 중...'
+                              : analysisProgress < 10
+                              ? '영상 분석 시작 중...'
+                              : analysisProgress < 50
+                              ? '영상 분석 중...'
+                              : analysisProgress < 90
+                              ? '영상 분석 중...'
+                              : '영상 분석 완료 중...'}
                           </p>
                           <p className="text-gray-300 text-xs md:text-sm text-center px-4 mb-4">
-                            {analysisProgress === 0 
+                            {analysisProgress === 0
                               ? 'AI 서버에 분석을 요청하고 있습니다. 잠시만 기다려주세요.'
                               : analysisProgress < 10
-                                ? 'AI가 영상 분석을 시작했습니다.'
-                                : analysisProgress < 50
-                                  ? 'AI가 영상의 객체와 동작을 분석하고 있습니다.'
-                                  : analysisProgress < 90
-                                    ? 'AI가 이벤트를 감지하고 분류하고 있습니다.'
-                                    : 'AI가 분석 결과를 정리하고 있습니다.'
-                            }
+                              ? 'AI가 영상 분석을 시작했습니다.'
+                              : analysisProgress < 50
+                              ? 'AI가 영상의 객체와 동작을 분석하고 있습니다.'
+                              : analysisProgress < 90
+                              ? 'AI가 이벤트를 감지하고 분류하고 있습니다.'
+                              : 'AI가 분석 결과를 정리하고 있습니다.'}
                           </p>
                           {/* 취소 버튼 */}
                           <button
@@ -2396,7 +2488,10 @@ export default function CCTVAnalysis() {
                               video.duration > 0
                             ) {
                               setDuration(video.duration);
-                              console.log('Video duration set:', video.duration);
+                              console.log(
+                                'Video duration set:',
+                                video.duration
+                              );
                             }
                           }}
                           onCanPlay={() => {
@@ -2415,41 +2510,46 @@ export default function CCTVAnalysis() {
                           onError={(e) => {
                             const target = e.target as HTMLVideoElement;
                             const error = target.error;
-                            
+
                             // 에러 코드별 메시지 매핑
                             const errorMessages = {
                               1: 'MEDIA_ERR_ABORTED: 미디어 재생이 중단됨',
                               2: 'MEDIA_ERR_NETWORK: 네트워크 오류',
                               3: 'MEDIA_ERR_DECODE: 미디어 디코딩 오류 (지원되지 않는 형식)',
-                              4: 'MEDIA_ERR_SRC_NOT_SUPPORTED: 지원되지 않는 미디어 형식'
+                              4: 'MEDIA_ERR_SRC_NOT_SUPPORTED: 지원되지 않는 미디어 형식',
                             };
-                            
-                            const errorMessage = error?.code 
-                              ? errorMessages[error.code as keyof typeof errorMessages] || `에러 코드: ${error.code}`
+
+                            const errorMessage = error?.code
+                              ? errorMessages[
+                                  error.code as keyof typeof errorMessages
+                                ] || `에러 코드: ${error.code}`
                               : '알 수 없는 오류';
-                            
-                            console.error('❌ [Video Error] 비디오 재생 오류:', {
-                              code: error?.code,
-                              message: error?.message,
-                              networkState: target.networkState,
-                              readyState: target.readyState,
-                              src: target.src,
-                              currentSrc: target.currentSrc,
-                              canPlayType: {
-                                mp4: target.canPlayType('video/mp4'),
-                                webm: target.canPlayType('video/webm'),
-                                ogg: target.canPlayType('video/ogg')
+
+                            console.error(
+                              '❌ [Video Error] 비디오 재생 오류:',
+                              {
+                                code: error?.code,
+                                message: error?.message,
+                                networkState: target.networkState,
+                                readyState: target.readyState,
+                                src: target.src,
+                                currentSrc: target.currentSrc,
+                                canPlayType: {
+                                  mp4: target.canPlayType('video/mp4'),
+                                  webm: target.canPlayType('video/webm'),
+                                  ogg: target.canPlayType('video/ogg'),
+                                },
                               }
-                            });
+                            );
 
                             // 대용량 파일 또는 코덱 문제 감지
                             if (error?.code === 3 || error?.code === 4) {
-                              console.warn('⚠️ [Video] 코덱/포맷 문제 감지됨. 파일 재처리가 필요할 수 있습니다.');
+                              console.warn(
+                                '⚠️ [Video] 코덱/포맷 문제 감지됨. 파일 재처리가 필요할 수 있습니다.'
+                              );
                             }
 
-                            setVideoError(
-                              `비디오 오류: ${errorMessage}`
-                            );
+                            setVideoError(`비디오 오류: ${errorMessage}`);
                             setIsPlaying(false);
                             setVideoLoading(false);
                           }}
@@ -2464,25 +2564,33 @@ export default function CCTVAnalysis() {
                           <div className="text-center text-white p-4 max-w-md">
                             <div className="mb-3">
                               <AlertTriangle className="h-8 w-8 text-red-400 mx-auto mb-2" />
-                              <h3 className="text-lg font-medium mb-2">비디오 재생 오류</h3>
+                              <h3 className="text-lg font-medium mb-2">
+                                비디오 재생 오류
+                              </h3>
                             </div>
-                            
+
                             <p className="text-sm text-gray-300 mb-3">
                               {videoError}
                             </p>
-                            
+
                             {/* 코덱/포맷 문제인 경우 추가 안내 */}
-                            {(videoError.includes('DECODE') || videoError.includes('SUPPORTED')) && (
+                            {(videoError.includes('DECODE') ||
+                              videoError.includes('SUPPORTED')) && (
                               <div className="bg-yellow-900 bg-opacity-50 border border-yellow-600 rounded-md p-3 mb-3">
                                 <p className="text-xs text-yellow-200">
-                                  <strong>대용량 파일 또는 특수 코덱 문제:</strong><br/>
-                                  • 파일이 손상되었거나 지원되지 않는 형식입니다<br/>
-                                  • Chrome/Edge 브라우저 사용을 권장합니다<br/>
-                                  • MP4 (H.264) 형식으로 변환하여 다시 시도해보세요
+                                  <strong>
+                                    대용량 파일 또는 특수 코덱 문제:
+                                  </strong>
+                                  <br />
+                                  • 파일이 손상되었거나 지원되지 않는 형식입니다
+                                  <br />
+                                  • Chrome/Edge 브라우저 사용을 권장합니다
+                                  <br />• MP4 (H.264) 형식으로 변환하여 다시
+                                  시도해보세요
                                 </p>
                               </div>
                             )}
-                            
+
                             <div className="flex gap-2 justify-center">
                               <Button
                                 size="sm"
@@ -2594,10 +2702,7 @@ export default function CCTVAnalysis() {
                                 strokeLinecap="round"
                                 strokeDasharray={`${2 * Math.PI * 45}`}
                                 strokeDashoffset={`${
-                                  2 *
-                                  Math.PI *
-                                  45 *
-                                  (1 - uploadProgress / 100)
+                                  2 * Math.PI * 45 * (1 - uploadProgress / 100)
                                 }`}
                                 className="transition-all duration-300 ease-out"
                                 style={{
@@ -2765,7 +2870,9 @@ export default function CCTVAnalysis() {
                           try {
                             // 비디오 참조와 소스 유효성 검사
                             if (!videoRef.current) {
-                              console.warn('Video reference not available for timeline click');
+                              console.warn(
+                                'Video reference not available for timeline click'
+                              );
                               addToast({
                                 type: 'warning',
                                 title: '비디오 컨트롤',
@@ -2776,7 +2883,9 @@ export default function CCTVAnalysis() {
                             }
 
                             if (!videoSrc) {
-                              console.warn('Video source not available for timeline click');
+                              console.warn(
+                                'Video source not available for timeline click'
+                              );
                               addToast({
                                 type: 'warning',
                                 title: '비디오 컨트롤',
@@ -2787,51 +2896,70 @@ export default function CCTVAnalysis() {
                             }
 
                             if (!duration || duration <= 0) {
-                              console.warn('Video duration not available for timeline click');
+                              console.warn(
+                                'Video duration not available for timeline click'
+                              );
                               addToast({
                                 type: 'warning',
                                 title: '비디오 정보',
-                                message: '비디오 길이 정보를 가져올 수 없습니다.',
+                                message:
+                                  '비디오 길이 정보를 가져올 수 없습니다.',
                                 duration: 2000,
                               });
                               return;
                             }
 
                             const video = videoRef.current;
-                            
+
                             // 비디오 준비 상태 검사
-                            const isVideoReady = video.readyState >= 1 || isMobile;
-                            
+                            const isVideoReady =
+                              video.readyState >= 1 || isMobile;
+
                             if (!isVideoReady) {
-                              console.warn('Video not ready for timeline click, readyState:', video.readyState);
+                              console.warn(
+                                'Video not ready for timeline click, readyState:',
+                                video.readyState
+                              );
                               addToast({
                                 type: 'info',
                                 title: '비디오 로딩 중',
-                                message: '비디오가 로드될 때까지 잠시 기다려주세요.',
+                                message:
+                                  '비디오가 로드될 때까지 잠시 기다려주세요.',
                                 duration: 2000,
                               });
                               return;
                             }
 
                             // 타임라인 클릭 위치 계산
-                            const rect = e.currentTarget.getBoundingClientRect();
+                            const rect =
+                              e.currentTarget.getBoundingClientRect();
                             if (rect.width === 0) {
                               console.warn('Timeline width is zero');
                               return;
                             }
 
                             const clickX = e.clientX - rect.left;
-                            const pos = Math.max(0, Math.min(1, clickX / rect.width));
+                            const pos = Math.max(
+                              0,
+                              Math.min(1, clickX / rect.width)
+                            );
                             const newTime = pos * duration;
 
                             // 유효한 시간 범위 확인
                             if (newTime < 0 || newTime > duration) {
-                              console.warn('Calculated time is out of bounds:', newTime);
+                              console.warn(
+                                'Calculated time is out of bounds:',
+                                newTime
+                              );
                               return;
                             }
 
                             video.currentTime = newTime;
-                            console.log(`Timeline clicked: seeked to ${newTime.toFixed(2)}s (${(pos * 100).toFixed(1)}%)`);
+                            console.log(
+                              `Timeline clicked: seeked to ${newTime.toFixed(
+                                2
+                              )}s (${(pos * 100).toFixed(1)}%)`
+                            );
 
                             // 모바일에서 타임라인 클릭 시 추가 처리
                             if (isMobile && videoSectionRef.current) {
@@ -2842,16 +2970,19 @@ export default function CCTVAnalysis() {
                                   inline: 'nearest',
                                 });
                               } catch (scrollError) {
-                                console.warn('Scroll to video after timeline click failed:', scrollError);
+                                console.warn(
+                                  'Scroll to video after timeline click failed:',
+                                  scrollError
+                                );
                               }
                             }
-
                           } catch (error) {
                             console.error('Timeline click error:', error);
                             addToast({
                               type: 'error',
                               title: '타임라인 오류',
-                              message: '타임라인 클릭 처리 중 오류가 발생했습니다.',
+                              message:
+                                '타임라인 클릭 처리 중 오류가 발생했습니다.',
                               duration: 3000,
                             });
                           }
@@ -2874,7 +3005,7 @@ export default function CCTVAnalysis() {
                         실시간 이벤트 감지
                       </span>
                     </div>
-                    <EventTimeline 
+                    <EventTimeline
                       video={video}
                       currentTime={currentTime}
                       onSeekToEvent={seekToTime}
@@ -2963,10 +3094,13 @@ export default function CCTVAnalysis() {
 
                   <Separator className="my-3 md:my-4 bg-[#2a3142]" />
 
-                  <form onSubmit={(e) => {
-                    console.log("📝 Form onSubmit 이벤트 발생");
-                    handleSendMessage(e);
-                  }} className="flex gap-2">
+                  <form
+                    onSubmit={(e) => {
+                      console.log('📝 Form onSubmit 이벤트 발생');
+                      handleSendMessage(e);
+                    }}
+                    className="flex gap-2"
+                  >
                     <Textarea
                       placeholder={
                         isAnalyzing
@@ -2977,7 +3111,7 @@ export default function CCTVAnalysis() {
                       }
                       value={inputMessage}
                       onChange={(e) => {
-                        console.log("✏️ Input change:", e.target.value);
+                        console.log('✏️ Input change:', e.target.value);
                         setInputMessage(e.target.value);
                       }}
                       onKeyDown={handleKeyDown}
@@ -2993,16 +3127,36 @@ export default function CCTVAnalysis() {
                     />
                     <Button
                       type="submit"
-                      disabled={!inputMessage.trim() || isAnalyzing || !videoSrc || !videoId}
+                      disabled={
+                        !inputMessage.trim() ||
+                        isAnalyzing ||
+                        !videoSrc ||
+                        !videoId
+                      }
                       onClick={(e) => {
-                        console.log("🔘 Button click 이벤트 발생, disabled:", !inputMessage.trim() || isAnalyzing || !videoSrc || !videoId);
-                        console.log("🔘 Button click - inputMessage:", inputMessage);
-                        console.log("🔘 Button click - isAnalyzing:", isAnalyzing);
-                        console.log("🔘 Button click - videoSrc:", !!videoSrc);
-                        console.log("🔘 Button click - videoId:", videoId);
+                        console.log(
+                          '🔘 Button click 이벤트 발생, disabled:',
+                          !inputMessage.trim() ||
+                            isAnalyzing ||
+                            !videoSrc ||
+                            !videoId
+                        );
+                        console.log(
+                          '🔘 Button click - inputMessage:',
+                          inputMessage
+                        );
+                        console.log(
+                          '🔘 Button click - isAnalyzing:',
+                          isAnalyzing
+                        );
+                        console.log('🔘 Button click - videoSrc:', !!videoSrc);
+                        console.log('🔘 Button click - videoId:', videoId);
                       }}
                       className={`px-3 md:px-4 transition-all duration-200 ${
-                        !inputMessage.trim() || isAnalyzing || !videoSrc || !videoId
+                        !inputMessage.trim() ||
+                        isAnalyzing ||
+                        !videoSrc ||
+                        !videoId
                           ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
                           : 'bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]'
                       }`}
@@ -3051,7 +3205,11 @@ export default function CCTVAnalysis() {
 
             {/* 히스토리 콘텐츠 - 나머지 화면 전체 사용 */}
             <div className="flex-1 h-[calc(100vh-80px)] overflow-hidden">
-              <Suspense fallback={<div className="p-4 text-white">히스토리 로딩 중...</div>}>
+              <Suspense
+                fallback={
+                  <div className="p-4 text-white">히스토리 로딩 중...</div>
+                }
+              >
                 <DynamicHistorySidebar
                   onSelectHistory={handleSelectHistory}
                   currentHistoryId={currentHistoryId}
@@ -3076,7 +3234,11 @@ export default function CCTVAnalysis() {
               minWidth: '400px',
             }}
           >
-            <Suspense fallback={<div className="p-4 text-white">히스토리 로딩 중...</div>}>
+            <Suspense
+              fallback={
+                <div className="p-4 text-white">히스토리 로딩 중...</div>
+              }
+            >
               <DynamicHistorySidebar
                 onSelectHistory={handleSelectHistory}
                 currentHistoryId={currentHistoryId}

@@ -14,7 +14,10 @@ const getApiBaseUrl = () => {
   // 클라이언트 사이드에서는 현재 호스트 기반으로 동적 설정
   const hostname = window.location.hostname;
   if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `http://${hostname}:8088`;
+    // HTTPS로 접속한 경우 HTTPS 사용, 아니면 HTTP 사용
+    const protocol = window.location.protocol; // 'https:' 또는 'http:'
+    // deepsentinel.cloud는 포트 없이 사용 (HTTPS는 443, HTTP는 80이 기본)
+    return `${protocol}//${hostname}`;
   }
 
   return config.api.baseUrl;

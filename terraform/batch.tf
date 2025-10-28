@@ -62,6 +62,26 @@ resource "aws_iam_role_policy_attachment" "batch_execution_role" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Batch Execution Role에 Secrets Manager 접근 권한 추가
+resource "aws_iam_role_policy" "batch_execution_secrets" {
+  name = "capstone-${var.environment}-batch-execution-secrets"
+  role = aws_iam_role.batch_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SecretsManagerAccess"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = aws_secretsmanager_secret.db_password.arn
+      }
+    ]
+  })
+}
+
 # IAM Role for Batch Job Tasks (Container Runtime)
 resource "aws_iam_role" "batch_task_role" {
   name = "capstone-${var.environment}-batch-task-role"
@@ -128,7 +148,8 @@ resource "aws_iam_role_policy" "batch_task_policy" {
           "s3:PutObjectAcl"
         ]
         Resource = [
-          "${aws_s3_bucket.thumbnails.arn}/*"
+          "${aws_s3_bucket.thumbnails.arn}/*",
+          "${aws_s3_bucket.highlights.arn}/*"
         ]
       },
       {

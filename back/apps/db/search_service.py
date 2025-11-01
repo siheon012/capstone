@@ -16,7 +16,7 @@ class RAGSearchService:
     def __init__(self):
         self.bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
         self.embedding_model = 'amazon.titan-embed-text-v1'
-        self.llm_model = 'anthropic.claude-3-sonnet-20240229-v1:0'
+        self.llm_model = 'anthropic.claude-3-5-sonnet-20241022-v2:0'  # Claude 3.5 Sonnet v2
     
     def create_embedding(self, text: str) -> List[float]:
         """텍스트를 Bedrock으로 임베딩 벡터로 변환"""

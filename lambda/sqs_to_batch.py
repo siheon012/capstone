@@ -73,25 +73,45 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.info(f"Submitting Batch job: {job_name}")
             logger.info(f"S3 Object: s3://{bucket}/{key}")
             
+            # S3 키에서 video_id 추출 시도 (예: uploads/36/video.mp4 → video_id=36)
+            # 또는 메시지에 video_id가 포함되어 있을 수 있음
+            video_id = None
+            try:
+                # body에서 video_id 추출 시도
+                if 'video' in body and 'id' in body['video']:
+                    video_id = str(body['video']['id'])
+                    logger.info(f"Extracted video_id from message: {video_id}")
+            except Exception as e:
+                logger.warning(f"Failed to extract video_id: {e}")
+            
+            container_env = [
+                {
+                    'name': 'S3_BUCKET',
+                    'value': bucket
+                },
+                {
+                    'name': 'S3_KEY',
+                    'value': key
+                },
+                {
+                    'name': 'MESSAGE_ID',
+                    'value': message_id
+                }
+            ]
+            
+            # video_id가 있으면 환경 변수에 추가
+            if video_id:
+                container_env.append({
+                    'name': 'VIDEO_ID',
+                    'value': video_id
+                })
+            
             response = batch_client.submit_job(
                 jobName=job_name,
                 jobQueue=JOB_QUEUE,
                 jobDefinition=JOB_DEFINITION,
                 containerOverrides={
-                    'environment': [
-                        {
-                            'name': 'S3_BUCKET',
-                            'value': bucket
-                        },
-                        {
-                            'name': 'S3_KEY',
-                            'value': key
-                        },
-                        {
-                            'name': 'MESSAGE_ID',
-                            'value': message_id
-                        }
-                    ]
+                    'environment': container_env
                 },
                 tags={
                     'Source': 'Lambda-SQS-Trigger',

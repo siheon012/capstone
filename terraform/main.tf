@@ -37,5 +37,5 @@ variable "environment" {
 variable "domain_name" {
   description = "도메인 이름 (예: capstone-project.com). 도메인이 없으면 빈 문자열로 설정"
   type        = string
-  default     = ""  # 도메인 없으면 Route 53 설정 건너뜀
+  default     = "deepsentinel.cloud"
 }

@@ -582,16 +582,18 @@ export async function queryChatbot(
       video_id: videoId, // video_id 추가
     };
 
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+
     console.log('🔄 API 호출 시작:', {
       videoId,
       question,
-      url: 'http://localhost:8088/api/prompt/',
+      url: `${API_URL}/api/prompt/`,
       timestamp: new Date().toISOString(),
       requestData,
     });
 
     // Django 백엔드의 process_prompt API 호출
-    const response = await fetch(`http://localhost:8088/api/prompt/`, {
+    const response = await fetch(`${API_URL}/api/prompt/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -673,25 +675,36 @@ export type MessageResponse = {
   error?: string;
   timestamp?: number;
   session?: ChatSession;
+  analysis_type?: string;
+  event_count?: number;
+  events?: Array<{
+    id: number;
+    timestamp: number;
+    event_type: string;
+    action_detected: string;
+    location: string;
+  }>;
 };
 
-// 세션 기반 메시지 전송 함수
+// 세션 기반 메시지 전송 함수 (기존 Text2SQL 방식)
 export async function sendMessage(
   message: string,
   videoId: string,
   sessionId?: string | null
 ): Promise<MessageResponse> {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+
   try {
     console.log('🔄 sendMessage API 호출 시작:', {
       message,
       videoId,
       sessionId,
-      url: 'http://localhost:8088/api/prompt/',
+      url: `${API_URL}/api/prompt/`,
       timestamp: new Date().toISOString(),
     });
 
     // Django 백엔드의 process_prompt API 호출
-    const response = await fetch(`http://localhost:8088/api/prompt/`, {
+    const response = await fetch(`${API_URL}/api/prompt/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -753,6 +766,89 @@ export async function sendMessage(
   }
 }
 
+// VLM 기반 메시지 전송 함수 (새로 추가)
+export async function sendVlmMessage(
+  message: string,
+  videoId: string,
+  sessionId?: string | null
+): Promise<MessageResponse> {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+
+  try {
+    console.log('🎥 sendVlmMessage API 호출 시작:', {
+      message,
+      videoId,
+      sessionId,
+      url: `${API_URL}/api/vlm-chat/`,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Django 백엔드의 VLM 채팅 API 호출
+    const response = await fetch(`${API_URL}/api/vlm-chat/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: message,
+        video_id: videoId,
+        session_id: sessionId,
+      }),
+    });
+
+    console.log('📡 sendVlmMessage API 응답 상태:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries()),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ sendVlmMessage API 에러 응답:', errorText);
+      return {
+        success: false,
+        error: `VLM API error: ${response.status} - ${errorText}`,
+      };
+    }
+
+    const result = await response.json();
+    console.log('✅ sendVlmMessage API 성공 응답:', result);
+
+    // 백엔드 응답을 MessageResponse 형식으로 변환
+    return {
+      success: true,
+      reply: result.response,
+      timestamp: result.events?.[0]?.timestamp,
+      analysis_type: result.analysis_type,
+      event_count: result.event_count,
+      events: result.events,
+      session: result.session_id
+        ? {
+            id: result.session_id,
+            title: `VLM 분석 - ${videoId}`,
+            videoId: videoId,
+            createdAt: new Date(),
+            messages: [],
+            eventType: result.events?.[0]?.event_type || null,
+          }
+        : undefined,
+    };
+  } catch (error) {
+    console.error('❌ sendVlmMessage error:', error);
+    console.error('🔍 Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
+    return {
+      success: false,
+      error: 'VLM 메시지 전송 중 오류가 발생했습니다.',
+    };
+  }
+}
+
 // 실제 분석 진행률 조회 함수
 export async function getAnalysisProgress(videoId: string): Promise<{
   progress: number;
@@ -760,22 +856,21 @@ export async function getAnalysisProgress(videoId: string): Promise<{
   is_completed: boolean;
   is_failed: boolean;
 }> {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+
   try {
     console.log('🔍 [AI Service] 진행률 조회 시작:', {
       videoId,
-      url: `http://localhost:8088/db/videos/${videoId}/progress/`,
+      url: `${API_URL}/db/videos/${videoId}/progress/`,
       timestamp: new Date().toISOString(),
     });
 
-    const response = await fetch(
-      `http://localhost:8088/db/videos/${videoId}/progress/`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const response = await fetch(`${API_URL}/db/videos/${videoId}/progress/`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
     console.log('📡 [AI Service] 진행률 API 응답 상태:', {
       videoId,

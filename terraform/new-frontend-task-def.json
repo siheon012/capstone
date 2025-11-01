@@ -1,0 +1,75 @@
+{
+    "containerDefinitions":  [
+                                 {
+                                     "name":  "frontend",
+                                     "image":  "287709190208.dkr.ecr.ap-northeast-2.amazonaws.com/capstone-frontend:vlm-latest",
+                                     "cpu":  0,
+                                     "portMappings":  [
+                                                          {
+                                                              "containerPort":  3000,
+                                                              "hostPort":  3000,
+                                                              "protocol":  "tcp"
+                                                          }
+                                                      ],
+                                     "essential":  true,
+                                     "environment":  [
+                                                         {
+                                                             "name":  "NEXT_PUBLIC_S3_REGION",
+                                                             "value":  "ap-northeast-2"
+                                                         },
+                                                         {
+                                                             "name":  "NEXT_PUBLIC_ENABLE_AUTO_TIER_MANAGEMENT",
+                                                             "value":  "true"
+                                                         },
+                                                         {
+                                                             "name":  "NEXT_PUBLIC_ENABLE_VECTOR_SEARCH",
+                                                             "value":  "true"
+                                                         },
+                                                         {
+                                                             "name":  "NEXT_PUBLIC_S3_BUCKET",
+                                                             "value":  "capstone-dev-raw"
+                                                         },
+                                                         {
+                                                             "name":  "USE_S3",
+                                                             "value":  "true"
+                                                         },
+                                                         {
+                                                             "name":  "NEXT_PUBLIC_API_URL",
+                                                             "value":  "https://api.deepsentinel.cloud"
+                                                         }
+                                                     ],
+                                     "mountPoints":  [
+
+                                                     ],
+                                     "volumesFrom":  [
+
+                                                     ],
+                                     "logConfiguration":  {
+                                                              "logDriver":  "awslogs",
+                                                              "options":  {
+                                                                              "awslogs-group":  "/ecs/capstone-frontend",
+                                                                              "awslogs-region":  "ap-northeast-2",
+                                                                              "awslogs-stream-prefix":  "ecs"
+                                                                          }
+                                                          },
+                                     "systemControls":  [
+
+                                                        ]
+                                 }
+                             ],
+    "family":  "capstone-frontend",
+    "taskRoleArn":  "arn:aws:iam::287709190208:role/capstone-ecs-task-role",
+    "executionRoleArn":  "arn:aws:iam::287709190208:role/capstone-ecs-task-execution-role",
+    "networkMode":  "awsvpc",
+    "volumes":  [
+
+                ],
+    "placementConstraints":  [
+
+                             ],
+    "requiresCompatibilities":  [
+                                    "FARGATE"
+                                ],
+    "cpu":  "512",
+    "memory":  "1024"
+}

@@ -200,14 +200,46 @@ resource "aws_security_group" "batch_compute" {
 # AWS Batch Compute Environment
 # ========================================
 
-resource "aws_batch_compute_environment" "video_processing" {
-  compute_environment_name = "capstone-${var.environment}-video-processing"
+# GPU Compute Environment for EC2 instances
+# Launch Template for GPU instances with larger EBS volume
+resource "aws_launch_template" "gpu_batch" {
+  name_prefix = "capstone-${var.environment}-gpu-batch-"
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = 50  # 50GB (기본 30GB에서 증가)
+      volume_type           = "gp3"
+      delete_on_termination = true
+      encrypted             = true
+    }
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name        = "capstone-gpu-batch-instance"
+      Environment = var.environment
+      Project     = "Unmanned"
+    }
+  }
+}
+
+resource "aws_batch_compute_environment" "gpu_video_processing" {
+  compute_environment_name = "capstone-${var.environment}-gpu-video-processing"
   type                     = "MANAGED"
   service_role             = aws_iam_role.batch_service_role.arn
 
   compute_resources {
-    type      = "FARGATE"
-    max_vcpus = 16  # 동시 처리 가능한 최대 vCPU
+    type               = "EC2"
+    allocation_strategy = "BEST_FIT_PROGRESSIVE"
+    min_vcpus          = 0
+    max_vcpus          = 8  # g5.xlarge는 4 vCPU이므로 2개 인스턴스 가능
+    
+    instance_type = ["g5.xlarge"]  # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
+    
+    instance_role = aws_iam_instance_profile.ecs_instance.arn
 
     subnets = [
       aws_subnet.private_1.id,
@@ -217,10 +249,22 @@ resource "aws_batch_compute_environment" "video_processing" {
     security_group_ids = [
       aws_security_group.batch_compute.id
     ]
+
+    # Launch Template with larger EBS volume
+    launch_template {
+      launch_template_id = aws_launch_template.gpu_batch.id
+      version            = "$Latest"
+    }
+
+    # EC2 Key Pair (optional, for debugging)
+    # ec2_key_pair = "your-key-pair-name"
+    
+    # Image ID for ECS GPU-optimized AMI
+    image_id = data.aws_ami.ecs_gpu.id
   }
 
   tags = {
-    Name        = "capstone-video-processing-compute"
+    Name        = "capstone-gpu-video-processing-compute"
     Environment = var.environment
     Project     = "Unmanned"
   }
@@ -229,9 +273,62 @@ resource "aws_batch_compute_environment" "video_processing" {
 }
 
 # ========================================
+# EC2 Instance Profile for Batch GPU
+# ========================================
+
+resource "aws_iam_role" "ecs_instance_role" {
+  name = "capstone-${var.environment}-ecs-instance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "capstone-ecs-instance-role"
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_instance_role" {
+  role       = aws_iam_role.ecs_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+}
+
+resource "aws_iam_instance_profile" "ecs_instance" {
+  name = "capstone-${var.environment}-ecs-instance-profile"
+  role = aws_iam_role.ecs_instance_role.name
+}
+
+# ECS GPU-optimized AMI
+data "aws_ami" "ecs_gpu" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-ecs-gpu-hvm-*-x86_64-ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# ========================================
 # AWS Batch Job Queue
 # ========================================
 
+# GPU Job Queue (EC2)
 resource "aws_batch_job_queue" "video_processing" {
   name     = "capstone-${var.environment}-video-processing-queue"
   state    = "ENABLED"
@@ -239,33 +336,29 @@ resource "aws_batch_job_queue" "video_processing" {
 
   compute_environment_order {
     order               = 1
-    compute_environment = aws_batch_compute_environment.video_processing.arn
+    compute_environment = aws_batch_compute_environment.gpu_video_processing.arn
   }
 
   tags = {
-    Name        = "capstone-video-processing-queue"
+    Name        = "capstone-gpu-video-processing-queue"
     Environment = var.environment
     Project     = "Unmanned"
   }
 }
 
 # ========================================
-# AWS Batch Job Definition
+# AWS Batch Job Definition - GPU
 # ========================================
 
-resource "aws_batch_job_definition" "video_processor" {
-  name = "capstone-${var.environment}-video-processor"
+resource "aws_batch_job_definition" "gpu_video_processor" {
+  name = "capstone-${var.environment}-gpu-video-processor"
   type = "container"
 
-  platform_capabilities = ["FARGATE"]
+  platform_capabilities = ["EC2"]
 
   container_properties = jsonencode({
     image = "${aws_ecr_repository.batch_processor.repository_url}:latest"
     
-    fargatePlatformConfiguration = {
-      platformVersion = "LATEST"
-    }
-
     resourceRequirements = [
       {
         type  = "VCPU"
@@ -273,7 +366,11 @@ resource "aws_batch_job_definition" "video_processor" {
       },
       {
         type  = "MEMORY"
-        value = "4096"  # 4GB
+        value = "8192"  # 8GB
+      },
+      {
+        type  = "GPU"
+        value = "1"
       }
     ]
 
@@ -285,7 +382,7 @@ resource "aws_batch_job_definition" "video_processor" {
       options = {
         "awslogs-group"         = "/aws/batch/capstone-video-processor"
         "awslogs-region"        = var.region
-        "awslogs-stream-prefix" = "batch"
+        "awslogs-stream-prefix" = "batch-gpu"
       }
     }
 
@@ -295,50 +392,41 @@ resource "aws_batch_job_definition" "video_processor" {
         value = var.region
       },
       {
+        name  = "S3_BUCKET_RAW"
+        value = aws_s3_bucket.raw_videos.id
+      },
+      {
         name  = "SQS_QUEUE_URL"
         value = aws_sqs_queue.video_processing.url
-      },
-      {
-        name  = "S3_BUCKET_RAW"
-        value = aws_s3_bucket.raw_videos.bucket
-      },
-      {
-        name  = "S3_BUCKET_THUMBNAILS"
-        value = aws_s3_bucket.thumbnails.bucket
       },
       {
         name  = "FASTAPI_ENDPOINT"
         value = "http://${aws_lb.main.dns_name}:8087"  # FastAPI 서비스 엔드포인트
       },
       {
-        name  = "DB_SECRET_ARN"
-        value = aws_secretsmanager_secret.db_password.arn
-      },
-      {
         name  = "ENVIRONMENT"
         value = var.environment
+      }
+    ]
+
+    secrets = [
+      {
+        name      = "POSTGRES_PASSWORD"
+        valueFrom = aws_secretsmanager_secret.db_password.arn
       }
     ]
   })
 
   retry_strategy {
     attempts = 3
-    evaluate_on_exit {
-      action          = "RETRY"
-      on_exit_code    = "1"
-    }
-    evaluate_on_exit {
-      action          = "EXIT"
-      on_exit_code    = "0"
-    }
   }
 
   timeout {
-    attempt_duration_seconds = 1800  # 30분
+    attempt_duration_seconds = 3600  # 1시간
   }
 
   tags = {
-    Name        = "capstone-video-processor"
+    Name        = "capstone-gpu-video-processor"
     Environment = var.environment
     Project     = "Unmanned"
   }
@@ -417,7 +505,7 @@ resource "aws_ecr_lifecycle_policy" "batch_processor" {
 
 output "batch_compute_environment_arn" {
   description = "Batch Compute Environment ARN"
-  value       = aws_batch_compute_environment.video_processing.arn
+  value       = aws_batch_compute_environment.gpu_video_processing.arn
 }
 
 output "batch_job_queue_arn" {
@@ -427,7 +515,7 @@ output "batch_job_queue_arn" {
 
 output "batch_job_definition_arn" {
   description = "Batch Job Definition ARN"
-  value       = aws_batch_job_definition.video_processor.arn
+  value       = aws_batch_job_definition.gpu_video_processor.arn
 }
 
 output "batch_processor_ecr_url" {

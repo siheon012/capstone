@@ -1,0 +1,40 @@
+{
+  "family": "capstone-backend",
+  "executionRoleArn": "arn:aws:iam::287709190208:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::287709190208:role/ecsTaskRole",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "287709190208.dkr.ecr.ap-northeast-2.amazonaws.com/capstone-backend:vlm-fix",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "DJANGO_SETTINGS_MODULE",
+          "value": "core.settings"
+        },
+        {
+          "name": "AWS_BEDROCK_MODEL_ID",
+          "value": "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/capstone-backend",
+          "awslogs-region": "ap-northeast-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

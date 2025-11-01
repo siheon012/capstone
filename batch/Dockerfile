@@ -1,27 +1,53 @@
-FROM python:3.11-slim
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
-# 작업 디렉토리 설정
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 python3-pip python3-dev \
+    ffmpeg libsm6 libxext6 libgl1-mesa-glx git wget curl \
+    build-essential ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# 시스템 패키지 업데이트 및 필수 도구 설치
-RUN apt-get update && apt-get install -y \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Python 패키지 설치
+# Copy memi requirements and install
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# 애플리케이션 코드 복사
-COPY process_video.py .
-COPY entrypoint.sh .
+# Install Cython first (required for cocoapi)
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install Cython numpy
 
-# 실행 권한 부여
-RUN chmod +x entrypoint.sh
+# Install PyTorch with CUDA
+RUN pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 
-# 헬스체크
+# Install cocoapi with Cython available
+RUN PIP_NO_BUILD_ISOLATION=false pip3 install "git+https://github.com/philferriere/cocoapi.git#subdirectory=PythonAPI"
+
+# Install memi requirements (excluding cocoapi which is already installed)
+RUN grep -v "philferriere/cocoapi" requirements.txt > requirements_filtered.txt && \
+    pip3 install -r requirements_filtered.txt
+
+# Install additional dependencies
+RUN pip3 install boto3 psycopg2-binary requests awscli
+
+# Copy memi code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/output /app/videos /app/result /tmp
+
+# Environment variables (will be overridden by Batch Job Definition)
+ENV DETECTOR_WEIGHTS=/app/models/yolov8x_person_face.pt
+ENV MIVOLO_CHECKPOINT=/app/models/model_imdb_cross_person_4.24_99.46.pth.tar
+ENV MEBOW_CFG=/app/config/mebow.yaml
+ENV VLM_PATH=/app/checkpoints/llava-fastvithd_0.5b_stage2
+ENV CUDA_VISIBLE_DEVICES=0
+
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)"
+    CMD python3 -c "import sys; sys.exit(0)"
 
-# 엔트리포인트 설정
-ENTRYPOINT ["./entrypoint.sh"]
+# Entrypoint will download video from S3 and run memi
+ENTRYPOINT ["/app/entrypoint.sh"]

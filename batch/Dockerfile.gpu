@@ -1,0 +1,50 @@
+# GPU-enabled Batch processor with memi
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    python3-dev \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libgl1-mesa-glx \
+    git \
+    wget \
+    curl \
+    build-essential \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symbolic links for python
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
+    ln -sf /usr/bin/pip3 /usr/bin/pip
+
+WORKDIR /app
+
+# Install Python packages for batch processor
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy batch processor script
+COPY process_video_memi.py /app/process_video.py
+COPY entrypoint.sh /app/
+
+# Create necessary directories
+RUN mkdir -p /app/output /app/videos /app/result /tmp
+
+# Set permissions
+RUN chmod +x /app/entrypoint.sh
+
+# Environment variables for memi paths (will be overridden by Job Definition)
+ENV DETECTOR_WEIGHTS=/app/models/yolov8x_person_face.pt
+ENV MIVOLO_CHECKPOINT=/app/models/model_imdb_cross_person_4.24_99.46.pth.tar
+ENV MEBOW_CFG=/app/config/mebow.yaml
+ENV VLM_PATH=/app/checkpoints/llava-fastvithd_0.5b_stage2
+
+ENTRYPOINT ["/app/entrypoint.sh"]

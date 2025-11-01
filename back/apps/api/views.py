@@ -8,6 +8,7 @@ from apps.db.models import Video, Event, PromptSession, PromptInteraction
 from apps.db.serializers import VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer
 from apps.api.bedrock_service import get_bedrock_service
 from apps.api.hybrid_search_service import get_hybrid_search_service
+from apps.api.vlm_service import get_vlm_service
 import json
 import requests
 import re
@@ -115,9 +116,12 @@ def process_prompt(request):
             return Response({"error": "프롬프트가 비어있습니다."}, status=status.HTTP_400_BAD_REQUEST)
         
         # 1. 세션 생성 또는 조회
+        video = None  # video 변수 초기화
         if session_id:
             try:
                 history = PromptSession.objects.get(session_id=session_id)
+                # 세션의 첫 번째 관련 비디오 가져오기
+                video = history.related_videos.first()
             except PromptSession.DoesNotExist:
                 return Response({"error": "존재하지 않는 세션입니다."}, status=status.HTTP_404_NOT_FOUND)
         else:
@@ -132,38 +136,46 @@ def process_prompt(request):
             
             # PromptSession 생성 - main_event는 초기에 None으로 설정
             history = PromptSession.objects.create(
-                video=video,
-                main_event=None,  # 초기에는 None, 나중에 relevant_event로 설정
-                first_prompt=prompt_text[:200] if prompt_text else ""
+                session_name=prompt_text[:50] if prompt_text else "New Session",
+                user_id=request.user.id if hasattr(request, 'user') and request.user.is_authenticated else ""
             )
+            # ManyToMany 필드는 create 후에 추가
+            history.related_videos.add(video)
         
         # 2. 프롬프트 처리 및 관련 이벤트 검색 (해당 비디오의 이벤트만)
-        response_text, relevant_event = process_prompt_logic(prompt_text, history.video)
+        response_text, relevant_event = process_prompt_logic(prompt_text, video)
         
         # 3. 세션의 main_event 설정 (첫 프롬프트인 경우)
         if not session_id and relevant_event and not history.main_event:
             # 해당 비디오의 이벤트인지 다시 한 번 확인
-            if relevant_event.video == history.video:
+            if video and relevant_event.video == video:
                 history.main_event = relevant_event
                 history.save()
             else:
-                print(f"⚠️ 경고: 다른 비디오의 이벤트가 반환됨. 세션 비디오: {history.video.name}, 이벤트 비디오: {relevant_event.video.name}")
+                print(f"⚠️ 경고: 다른 비디오의 이벤트가 반환됨. 세션 비디오: {video.name if video else 'None'}, 이벤트 비디오: {relevant_event.video.name}")
                 relevant_event = None  # 잘못된 이벤트는 무시
         
         # 4. 상호작용 저장 (찾은 이벤트 포함)
         interaction = PromptInteraction.objects.create(
             session=history,
-            video=history.video,  # video 필드 추가
-            input_prompt=prompt_text,
-            output_response=response_text,
-            detected_event=relevant_event  # 찾은 이벤트 저장
+            interaction_id=f"{history.session_id}_{history.total_interactions + 1}",
+            sequence_number=history.total_interactions + 1,
+            user_prompt=prompt_text,
+            ai_response=response_text
         )
+        
+        # ManyToMany 관계는 create 후에 추가
+        if relevant_event:
+            interaction.related_events.add(relevant_event)
+        
+        # 세션 통계 업데이트
+        history.add_interaction(prompt_text)
         
         # 5. 응답 반환
         result = {
             "session_id": history.session_id,
             "response": response_text,
-            "timestamp": interaction.timestamp.isoformat()
+            "timestamp": interaction.created_at.isoformat()
         }
         
         if relevant_event:
@@ -253,6 +265,354 @@ def get_session_detail(request, session_id):
         
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def process_vlm_chat(request):
+    """
+    VLM(Vision Language Model) 기반 채팅 처리
+    - 영상 프레임 분석
+    - 장면 묘사
+    - 특정 타임라인 추출
+    - 위치별 행동 분석 (왼쪽/중간/오른쪽)
+    """
+    print(f"🎥 VLM 채팅 API 호출: {request.method}")
+    
+    try:
+        prompt_text = request.data.get('prompt')
+        session_id = request.data.get('session_id')
+        video_id = request.data.get('video_id')
+        
+        print(f"💭 프롬프트: {prompt_text}")
+        print(f"🆔 세션 ID: {session_id}")
+        print(f"🎥 비디오 ID: {video_id}")
+        
+        if not prompt_text:
+            return Response({"error": "프롬프트가 비어있습니다."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not video_id:
+            return Response({"error": "비디오 ID가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 1. 비디오 조회
+        try:
+            video = Video.objects.get(video_id=video_id)
+        except Video.DoesNotExist:
+            return Response({"error": "존재하지 않는 비디오입니다."}, status=status.HTTP_404_NOT_FOUND)
+        
+        # 2. 세션 생성 또는 조회
+        if session_id:
+            try:
+                session = PromptSession.objects.get(session_id=session_id)
+            except PromptSession.DoesNotExist:
+                return Response({"error": "존재하지 않는 세션입니다."}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            # 새 세션 생성
+            session = PromptSession.objects.create(
+                session_name=prompt_text[:50] if prompt_text else "VLM Chat",
+                user_id=request.user.id if hasattr(request, 'user') and request.user.is_authenticated else ""
+            )
+            # ManyToMany 필드는 create 후에 추가
+            session.related_videos.add(video)
+        
+        # 3. 해당 비디오의 이벤트 조회
+        events = Event.objects.filter(video=video).order_by('timestamp')
+        
+        # 4. VLM 서비스로 프롬프트 분석
+        vlm_service = get_vlm_service()
+        
+        # 5. 프롬프트 유형 분석 및 처리
+        response_text = ""
+        analysis_type = "general"
+        frame_data = None
+        
+        # 시간 범위 추출 (예: "10분에서 15분", "1분 30초부터 2분")
+        time_pattern = r'(\d+)\s*분(?:\s*(\d+)\s*초)?'
+        time_matches = re.findall(time_pattern, prompt_text)
+        
+        start_seconds = None
+        end_seconds = None
+        
+        if len(time_matches) >= 2:
+            # 시작 시간
+            start_min = int(time_matches[0][0])
+            start_sec = int(time_matches[0][1]) if time_matches[0][1] else 0
+            start_seconds = start_min * 60 + start_sec
+            
+            # 종료 시간
+            end_min = int(time_matches[1][0])
+            end_sec = int(time_matches[1][1]) if time_matches[1][1] else 0
+            end_seconds = end_min * 60 + end_sec
+            
+            print(f"⏰ 시간 범위 감지: {start_seconds}초 ~ {end_seconds}초")
+        
+        # 장면 묘사 요청
+        if any(keyword in prompt_text.lower() for keyword in ['장면', '묘사', '무슨 일', '설명', '상황']):
+            print("📸 장면 묘사 요청 감지")
+            analysis_type = "scene_description"
+            
+            if start_seconds is not None and end_seconds is not None:
+                # 특정 시간 범위 분석
+                response_text = vlm_service.analyze_time_range(
+                    video=video,
+                    start_seconds=start_seconds,
+                    end_seconds=end_seconds,
+                    analysis_type="scene",
+                    interval=2.0
+                )
+            else:
+                # 전체 이벤트 기반 요약
+                response_text = vlm_service.generate_video_summary(
+                    video=video,
+                    events=list(events),
+                    summary_type="events"
+                )
+        
+        # 타임라인 추출 요청
+        elif any(keyword in prompt_text.lower() for keyword in ['타임라인', '시간', '언제', '몇 분', '몇 초']):
+            print("⏰ 타임라인 추출 요청 감지")
+            analysis_type = "timeline"
+            response_text = _generate_timeline_response(prompt_text, events, video)
+        
+        # 위치별 분석 요청
+        elif any(keyword in prompt_text.lower() for keyword in ['위치', '어디', '왼쪽', '중간', '오른쪽', '장소']):
+            print("📍 위치별 분석 요청 감지")
+            analysis_type = "location_analysis"
+            
+            if start_seconds is not None and end_seconds is not None:
+                # 특정 시간 범위의 위치 분석
+                response_text = vlm_service.analyze_time_range(
+                    video=video,
+                    start_seconds=start_seconds,
+                    end_seconds=end_seconds,
+                    analysis_type="location",
+                    interval=1.5
+                )
+            else:
+                # 전체 위치 패턴 분석
+                response_text = _analyze_location_patterns(events, video)
+        
+        # 행동 분석 요청
+        elif any(keyword in prompt_text.lower() for keyword in ['행동', '무엇을', '어떤', '활동']):
+            print("🏃 행동 분석 요청 감지")
+            analysis_type = "behavior_analysis"
+            
+            if start_seconds is not None and end_seconds is not None:
+                # 특정 시간 범위의 행동 분석
+                response_text = vlm_service.analyze_time_range(
+                    video=video,
+                    start_seconds=start_seconds,
+                    end_seconds=end_seconds,
+                    analysis_type="behavior",
+                    interval=1.5
+                )
+            else:
+                # 전체 행동 패턴 분석
+                response_text = _analyze_behaviors(events, video)
+        
+        # 일반 질문 - 하이브리드 RAG 사용
+        else:
+            print("💬 일반 질문 처리")
+            analysis_type = "general"
+            hybrid_search = get_hybrid_search_service()
+            response_text = hybrid_search.search_and_generate(
+                query=prompt_text,
+                video_id=video_id
+            )
+        
+        # 6. 상호작용 저장
+        interaction = PromptInteraction.objects.create(
+            session=session,
+            video=video,
+            input_prompt=prompt_text,
+            output_response=response_text,
+            detected_event=events.first() if events.exists() else None,
+            analysis_type=analysis_type
+        )
+        
+        # 7. 응답 반환
+        result = {
+            "session_id": session.session_id,
+            "response": response_text,
+            "timestamp": interaction.timestamp.isoformat(),
+            "analysis_type": analysis_type,
+            "event_count": events.count()
+        }
+        
+        # 관련 이벤트 정보 추가
+        if events.exists():
+            result["events"] = [
+                {
+                    "id": event.id,
+                    "timestamp": event.timestamp,
+                    "event_type": event.event_type,
+                    "action_detected": event.action_detected,
+                    "location": event.location
+                }
+                for event in events[:5]  # 최대 5개
+            ]
+        
+        print(f"✅ VLM 채팅 처리 완료: {analysis_type}")
+        return Response(result)
+        
+    except Exception as e:
+        print(f"❌ VLM 채팅 오류: {str(e)}")
+        import traceback
+        print(f"🔍 오류 스택: {traceback.format_exc()}")
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def _generate_timeline_response(prompt: str, events, video: Video) -> str:
+    """타임라인 추출 및 응답 생성"""
+    if not events:
+        return "해당 영상에서 감지된 이벤트가 없습니다."
+    
+    # 시간 관련 키워드 추출
+    time_keywords = re.findall(r'(\d+)\s*분', prompt)
+    
+    response_parts = [f"📹 {video.name} 영상의 타임라인:\n"]
+    
+    if time_keywords:
+        # 특정 시간대 필터링
+        target_minutes = [int(m) for m in time_keywords]
+        filtered_events = [
+            e for e in events 
+            if int(e.timestamp // 60) in target_minutes
+        ]
+        
+        if filtered_events:
+            for event in filtered_events:
+                minutes = int(event.timestamp // 60)
+                seconds = int(event.timestamp % 60)
+                event_type_kr = {
+                    'theft': '도난',
+                    'collapse': '쓰러짐',
+                    'sitting': '점거',
+                    'violence': '폭력'
+                }.get(event.event_type, event.event_type)
+                
+                response_parts.append(
+                    f"⏰ {minutes}분 {seconds}초: {event_type_kr} - {event.action_detected or '행동 감지'} ({event.location or '위치 미상'})"
+                )
+        else:
+            response_parts.append(f"해당 시간대({', '.join([f'{m}분' for m in target_minutes])})에는 이벤트가 감지되지 않았습니다.")
+    else:
+        # 전체 타임라인
+        for event in events[:10]:  # 최대 10개
+            minutes = int(event.timestamp // 60)
+            seconds = int(event.timestamp % 60)
+            event_type_kr = {
+                'theft': '도난',
+                'collapse': '쓰러짐',
+                'sitting': '점거',
+                'violence': '폭력'
+            }.get(event.event_type, event.event_type)
+            
+            response_parts.append(
+                f"⏰ {minutes}분 {seconds}초: {event_type_kr} - {event.action_detected or '행동 감지'}"
+            )
+    
+    return "\n".join(response_parts)
+
+
+def _analyze_location_patterns(events, video: Video) -> str:
+    """위치별 행동 패턴 분석"""
+    if not events:
+        return "분석할 이벤트가 없습니다."
+    
+    # 위치별 집계
+    location_counts = {
+        'left': 0,
+        'center': 0,
+        'right': 0,
+        'unknown': 0
+    }
+    
+    location_events = {
+        'left': [],
+        'center': [],
+        'right': [],
+        'unknown': []
+    }
+    
+    for event in events:
+        location = event.location or ''
+        location_lower = location.lower()
+        
+        if 'left' in location_lower or '왼쪽' in location_lower:
+            location_counts['left'] += 1
+            location_events['left'].append(event)
+        elif 'center' in location_lower or '중앙' in location_lower or '중간' in location_lower:
+            location_counts['center'] += 1
+            location_events['center'].append(event)
+        elif 'right' in location_lower or '오른쪽' in location_lower:
+            location_counts['right'] += 1
+            location_events['right'].append(event)
+        else:
+            location_counts['unknown'] += 1
+            location_events['unknown'].append(event)
+    
+    # 응답 생성
+    response_parts = [f"📍 {video.name} 영상의 위치별 분석:\n"]
+    
+    total = sum(location_counts.values())
+    if total == 0:
+        return "위치 정보가 없는 이벤트입니다."
+    
+    # 위치별 통계
+    response_parts.append("📊 위치별 이벤트 분포:")
+    response_parts.append(f"- 왼쪽: {location_counts['left']}건 ({location_counts['left']/total*100:.1f}%)")
+    response_parts.append(f"- 중앙: {location_counts['center']}건 ({location_counts['center']/total*100:.1f}%)")
+    response_parts.append(f"- 오른쪽: {location_counts['right']}건 ({location_counts['right']/total*100:.1f}%)")
+    
+    # 가장 많이 발생한 위치
+    max_location = max(location_counts.items(), key=lambda x: x[1])
+    location_kr = {
+        'left': '왼쪽',
+        'center': '중앙',
+        'right': '오른쪽',
+        'unknown': '미상'
+    }.get(max_location[0], max_location[0])
+    
+    response_parts.append(f"\n✅ 가장 많은 활동: {location_kr} ({max_location[1]}건)")
+    
+    return "\n".join(response_parts)
+
+
+def _analyze_behaviors(events, video: Video) -> str:
+    """행동 패턴 분석"""
+    if not events:
+        return "분석할 이벤트가 없습니다."
+    
+    # 행동 타입별 집계
+    behavior_counts = {}
+    for event in events:
+        event_type = event.event_type
+        behavior_counts[event_type] = behavior_counts.get(event_type, 0) + 1
+    
+    # 응답 생성
+    response_parts = [f"🏃 {video.name} 영상의 행동 분석:\n"]
+    
+    for event_type, count in behavior_counts.items():
+        event_type_kr = {
+            'theft': '도난',
+            'collapse': '쓰러짐',
+            'sitting': '점거',
+            'violence': '폭력'
+        }.get(event_type, event_type)
+        
+        response_parts.append(f"- {event_type_kr}: {count}건")
+    
+    # 대표 행동 예시
+    response_parts.append("\n📝 주요 행동 예시:")
+    for event in events[:3]:
+        minutes = int(event.timestamp // 60)
+        seconds = int(event.timestamp % 60)
+        response_parts.append(
+            f"- {minutes}분 {seconds}초: {event.action_detected or '행동 감지'}"
+        )
+    
+    return "\n".join(response_parts)
+
 
 # Video API Views
 @api_view(['GET', 'POST'])

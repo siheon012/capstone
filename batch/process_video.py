@@ -130,26 +130,35 @@ class VideoProcessor:
     def call_fastapi_analysis(self, s3_event: Dict[str, str]) -> Dict[str, Any]:
         """
         FastAPI 분석 서비스 호출
-        FastAPI가 분석 후 결과를 PostgreSQL + pgvector에 직접 저장함
+        FastAPI가 S3에서 비디오를 다운로드하고 분석 후 결과를 PostgreSQL + pgvector에 직접 저장함
         """
         try:
+            # VIDEO_ID 가져오기
+            video_id = os.environ.get('VIDEO_ID')
+            if not video_id:
+                logger.warning("VIDEO_ID not found in environment variables, using default: 1")
+                video_id = 1
+            
             # FastAPI 엔드포인트 구성
-            # 기존 FastAPI는 /analyze 또는 /process 엔드포인트를 가정
             analysis_url = f"{self.fastapi_endpoint.rstrip('/')}/analyze"
             
-            # 요청 페이로드
+            # 요청 페이로드 - memi FastAPI가 기대하는 형식으로 변경
             payload = {
+                'video_id': int(video_id),
                 's3_bucket': s3_event['bucket'],
                 's3_key': s3_event['key'],
-                'event_time': s3_event['event_time'],
-                'environment': self.environment
+                'output': '/app/output',
+                'detector_weights': os.getenv('DETECTOR_WEIGHTS', '/app/models/yolov8x_person_face.pt'),
+                'checkpoint': os.getenv('MIVOLO_CHECKPOINT', '/app/models/model_imdb_cross_person_4.24_99.46.pth.tar'),
+                'mebow_cfg': os.getenv('MEBOW_CFG', '/app/config/mebow.yaml'),
+                'vlm_path': os.getenv('VLM_PATH', '/app/checkpoints/llava-fastvithd_0.5b_stage2')
             }
             
             logger.info(f"Calling FastAPI: {analysis_url}")
             logger.info(f"Payload: {json.dumps(payload, indent=2)}")
             
             # FastAPI 호출 (타임아웃 25분)
-            # FastAPI는 분석 후 결과를 PostgreSQL + pgvector에 저장
+            # FastAPI는 S3에서 다운로드 → 분석 → PostgreSQL + pgvector에 저장
             response = requests.post(
                 analysis_url,
                 json=payload,
@@ -161,7 +170,7 @@ class VideoProcessor:
             
             result = response.json()
             logger.info(f"✅ FastAPI response: {json.dumps(result, indent=2)}")
-            logger.info("📊 Analysis results saved to PostgreSQL + pgvector by FastAPI")
+            logger.info("📊 Analysis started. Check job status via FastAPI.")
             
             return result
             
@@ -245,23 +254,47 @@ class VideoProcessor:
         logger.info("🚀 Video Processor started")
         
         try:
-            # Batch Job은 단일 메시지만 처리
-            # (여러 메시지는 별도의 Batch Job으로 병렬 처리됨)
+            # Lambda가 환경 변수로 S3 정보를 전달했는지 확인
+            s3_bucket = os.environ.get('S3_BUCKET')
+            s3_key = os.environ.get('S3_KEY')
             
-            message = self.receive_message()
-            
-            if message:
-                success = self.process_message(message)
+            if s3_bucket and s3_key:
+                # Lambda에서 전달된 환경 변수 사용
+                logger.info(f"Processing from Lambda env vars: s3://{s3_bucket}/{s3_key}")
                 
-                if success:
+                s3_event = {
+                    'bucket': s3_bucket,
+                    'key': s3_key,
+                    'event_time': datetime.utcnow().isoformat(),
+                    'size': 0
+                }
+                
+                # FastAPI 분석 호출
+                result = self.call_fastapi_analysis(s3_event)
+                
+                if result:
                     logger.info("✅ Job completed successfully")
-                    sys.exit(0)  # 정상 종료
+                    sys.exit(0)
                 else:
                     logger.error("❌ Job failed")
-                    sys.exit(1)  # 실패 종료 (재시도 트리거)
+                    sys.exit(1)
             else:
-                logger.info("📭 No messages to process")
-                sys.exit(0)  # 메시지 없음도 정상 종료
+                # 환경 변수 없으면 SQS에서 폴링 (기존 로직)
+                logger.info("No S3 env vars, polling SQS...")
+                message = self.receive_message()
+                
+                if message:
+                    success = self.process_message(message)
+                    
+                    if success:
+                        logger.info("✅ Job completed successfully")
+                        sys.exit(0)
+                    else:
+                        logger.error("❌ Job failed")
+                        sys.exit(1)
+                else:
+                    logger.info("📭 No messages to process")
+                    sys.exit(0)
                 
         except Exception as e:
             logger.error(f"Fatal error in main loop: {e}")

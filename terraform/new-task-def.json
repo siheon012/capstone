@@ -1,0 +1,119 @@
+﻿{
+    "family": "capstone-backend",
+    "executionRoleArn": "arn:aws:iam::287709190208:role/capstone-ecs-task-execution-role",
+    "taskRoleArn": "arn:aws:iam::287709190208:role/capstone-ecs-task-role",
+    "networkMode": "awsvpc",
+    "containerDefinitions": [
+        {
+            "name": "backend",
+            "image": "287709190208.dkr.ecr.ap-northeast-2.amazonaws.com/capstone-backend:vlm-fix",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "DB_PORT",
+                    "value": "5432"
+                },
+                {
+                    "name": "DB_USER",
+                    "value": "capstone_user"
+                },
+                {
+                    "name": "USE_S3",
+                    "value": "true"
+                },
+                {
+                    "name": "AWS_BEDROCK_MODEL_ID",
+                    "value": "anthropic.claude-3-5-sonnet-20241022-v2:0"
+                },
+                {
+                    "name": "AWS_BEDROCK_EMBEDDING_MODEL_ID",
+                    "value": "amazon.titan-embed-text-v1"
+                },
+                {
+                    "name": "DB_NAME",
+                    "value": "capstone_db"
+                },
+                {
+                    "name": "DB_HOST",
+                    "value": "capstone-postgres.cf6eecwwyypm.ap-northeast-2.rds.amazonaws.com"
+                },
+                {
+                    "name": "AWS_BEDROCK_REGION",
+                    "value": "ap-northeast-2"
+                },
+                {
+                    "name": "AWS_SQS_QUEUE_URL",
+                    "value": "https://sqs.ap-northeast-2.amazonaws.com/287709190208/capstone-dev-video-processing"
+                },
+                {
+                    "name": "USE_BEDROCK",
+                    "value": "true"
+                },
+                {
+                    "name": "DJANGO_SETTINGS_MODULE",
+                    "value": "core.settings"
+                },
+                {
+                    "name": "AWS_S3_REGION_NAME",
+                    "value": "ap-northeast-2"
+                },
+                {
+                    "name": "ALLOWED_HOSTS",
+                    "value": "*"
+                },
+                {
+                    "name": "AWS_S3_THUMBNAILS_BUCKET",
+                    "value": "capstone-dev-thumbnails"
+                },
+                {
+                    "name": "AWS_STORAGE_BUCKET_NAME",
+                    "value": "capstone-dev-raw"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "secrets": [
+                {
+                    "name": "DB_PASSWORD",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:287709190208:secret:capstone/db-password-bnNBe2"
+                },
+                {
+                    "name": "SECRET_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:ap-northeast-2:287709190208:secret:capstone/django-secret-key-hy2NI8"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/capstone-backend",
+                    "awslogs-region": "ap-northeast-2",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+            "healthCheck": {
+                "command": [
+                    "CMD-SHELL",
+                    "curl -f http://localhost:8000/api/health/ || exit 1"
+                ],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 3,
+                "startPeriod": 60
+            },
+            "systemControls": []
+        }
+    ],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "1024",
+    "memory": "2048"
+}

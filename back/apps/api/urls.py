@@ -20,6 +20,9 @@ urlpatterns = [
     path('prompt/history/', views.get_prompt_history, name='get_prompt_history'),
     path('prompt/history/<int:session_id>/', views.get_session_detail, name='get_session_detail'),
     
+    # VLM 채팅 API (새로 추가)
+    path('vlm-chat/', views.process_vlm_chat, name='process_vlm_chat'),
+    
     # 비디오 API
     path('videos/', views.video_list_create, name='video_list_create'),
     path('videos/<str:video_id>/', views.video_detail, name='video_detail'),

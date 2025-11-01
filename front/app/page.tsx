@@ -229,7 +229,7 @@ export default function CCTVAnalysis() {
         '✅ [AI Analysis] S3 업로드 완료 - SQS → Lambda → Batch 자동 실행 대기:',
         {
           videoId: currentVideoId,
-          s3Key: `videos/${uploadedFileName}`,
+          fileName: file.name,
           timestamp: new Date().toISOString(),
         }
       );
@@ -723,12 +723,13 @@ export default function CCTVAnalysis() {
   // API 헬스 체크 함수
   const checkApiHealth = async () => {
     const checkTime = new Date();
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
     try {
       console.log('🏥 [Health Check] API 상태 확인 시작');
 
       // 백엔드 API 상태 확인
-      const backendHealthPromise = fetch('http://localhost:8088/db/videos/', {
+      const backendHealthPromise = fetch(`${API_URL}/db/videos/`, {
         method: 'HEAD',
         signal: AbortSignal.timeout(5000), // 5초 타임아웃
       })
@@ -1911,16 +1912,62 @@ export default function CCTVAnalysis() {
               videoFileName,
               currentSessionId: currentSession?.id,
             });
-            // AI 서비스 호출 - sendMessage 함수 사용
-            const { sendMessage } = await import('./actions/ai-service');
-            console.log('📦 sendMessage 함수 로드됨');
-
-            const result = await sendMessage(
-              userMessage,
-              videoId,
-              currentSession?.id || null // 기존 세션 ID 전달
+            // AI 서비스 호출 - VLM 우선, 실패시 일반 sendMessage
+            const { sendVlmMessage, sendMessage } = await import(
+              './actions/ai-service'
             );
-            console.log('🎯 sendMessage 결과:', result);
+            console.log('📦 sendVlmMessage, sendMessage 함수 로드됨');
+
+            // VLM 키워드 감지 (영상 분석 관련 질문)
+            const vlmKeywords = [
+              '장면',
+              '묘사',
+              '설명',
+              '상황',
+              '타임라인',
+              '시간',
+              '언제',
+              '위치',
+              '어디',
+              '왼쪽',
+              '중간',
+              '오른쪽',
+              '행동',
+              '무엇을',
+              '어떤',
+            ];
+            const useVlm = vlmKeywords.some((keyword) =>
+              userMessage.toLowerCase().includes(keyword)
+            );
+
+            let result;
+            if (useVlm) {
+              console.log('🎥 VLM 채팅 사용 (영상 분석 질문 감지)');
+              result = await sendVlmMessage(
+                userMessage,
+                videoId,
+                currentSession?.id || null
+              );
+
+              // VLM 실패 시 일반 메시지로 폴백
+              if (!result.success) {
+                console.log('⚠️ VLM 실패, 일반 채팅으로 폴백');
+                result = await sendMessage(
+                  userMessage,
+                  videoId,
+                  currentSession?.id || null
+                );
+              }
+            } else {
+              console.log('💬 일반 채팅 사용');
+              result = await sendMessage(
+                userMessage,
+                videoId,
+                currentSession?.id || null
+              );
+            }
+
+            console.log('🎯 AI 서비스 결과:', result);
 
             if (result.success && result.reply) {
               // 타임스탬프가 있으면 추가

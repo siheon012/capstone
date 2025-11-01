@@ -227,7 +227,7 @@ OPENAI_EMBEDDING_MODEL = env('OPENAI_EMBEDDING_MODEL', default='text-embedding-a
 
 # AWS Bedrock 설정
 AWS_BEDROCK_REGION = env('AWS_BEDROCK_REGION', default='ap-northeast-2')
-AWS_BEDROCK_MODEL_ID = env('AWS_BEDROCK_MODEL_ID', default='anthropic.claude-3-sonnet-20240229-v1:0')
+AWS_BEDROCK_MODEL_ID = env('AWS_BEDROCK_MODEL_ID', default='anthropic.claude-3-5-sonnet-20241022-v2:0')  # Claude 3.5 Sonnet v2 (Vision)
 AWS_BEDROCK_EMBEDDING_MODEL_ID = env('AWS_BEDROCK_EMBEDDING_MODEL_ID', default='amazon.titan-embed-text-v1')
 AWS_BEDROCK_KNOWLEDGE_BASE_ID = env('AWS_BEDROCK_KNOWLEDGE_BASE_ID', default=None)
 USE_BEDROCK = env('USE_BEDROCK', default='true').lower() == 'true'

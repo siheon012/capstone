@@ -2,11 +2,11 @@
 set -e
 
 echo "=================================="
-echo "🚀 Django Application Starting..."
+echo "?? Django Application Starting..."
 echo "=================================="
 
-# 환경변수 출력 (디버깅용, 민감정보 제외)
-echo "📋 Environment Configuration:"
+# ?섍꼍蹂??異쒕젰 (?붾쾭源낆슜, 誘쇨컧?뺣낫 ?쒖쇅)
+echo "?뱥 Environment Configuration:"
 echo "  - DB_HOST: ${DB_HOST}"
 echo "  - DB_PORT: ${DB_PORT}"
 echo "  - DB_NAME: ${DB_NAME}"
@@ -16,9 +16,9 @@ echo "  - AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME}"
 echo ""
 
 # ===========================================
-# 1. 데이터베이스 연결 대기
+# 1. ?곗씠?곕쿋?댁뒪 ?곌껐 ?湲?
 # ===========================================
-echo "⏳ Waiting for PostgreSQL database..."
+echo "??Waiting for PostgreSQL database..."
 
 MAX_RETRIES=30
 RETRY_COUNT=0
@@ -39,32 +39,32 @@ try:
         connect_timeout=5
     )
     conn.close()
-    print("✅ Database connection successful!")
+    print("??Database connection successful!")
     sys.exit(0)
 except psycopg2.OperationalError as e:
-    print(f"❌ Database connection failed: {e}")
+    print(f"??Database connection failed: {e}")
     sys.exit(1)
 END
     then
-        echo "✅ PostgreSQL is ready!"
+        echo "??PostgreSQL is ready!"
         break
     else
         RETRY_COUNT=$((RETRY_COUNT + 1))
-        echo "⏳ Waiting for database... ($RETRY_COUNT/$MAX_RETRIES)"
+        echo "??Waiting for database... ($RETRY_COUNT/$MAX_RETRIES)"
         sleep 2
     fi
 done
 
 if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-    echo "❌ Failed to connect to database after $MAX_RETRIES attempts"
+    echo "??Failed to connect to database after $MAX_RETRIES attempts"
     exit 1
 fi
 
 # ===========================================
-# 2. pgvector 확장 활성화
+# 2. pgvector ?뺤옣 ?쒖꽦??
 # ===========================================
 echo ""
-echo "🔧 Enabling pgvector extension..."
+echo "?뵩 Enabling pgvector extension..."
 
 python << END
 import os
@@ -82,65 +82,65 @@ try:
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     
     with conn.cursor() as cursor:
-        # pgvector 확장 생성
+        # pgvector ?뺤옣 ?앹꽦
         cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-        print("✅ pgvector extension enabled")
+        print("??pgvector extension enabled")
         
-        # 확인
+        # ?뺤씤
         cursor.execute("SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';")
         result = cursor.fetchone()
         if result:
-            print(f"✅ pgvector version: {result[1]}")
+            print(f"??pgvector version: {result[1]}")
         else:
-            print("⚠️  pgvector extension not found")
+            print("?좑툘  pgvector extension not found")
     
     conn.close()
 except Exception as e:
-    print(f"⚠️  Could not enable pgvector: {e}")
+    print(f"?좑툘  Could not enable pgvector: {e}")
     print("   (This is OK if using standard PostgreSQL without pgvector)")
 END
 
 # ===========================================
-# 3. Django Migrations 실행
+# 3. Django Migrations ?ㅽ뻾
 # ===========================================
 echo ""
-echo "📦 Running Django migrations..."
+echo "?벀 Running Django migrations..."
 
-# makemigrations (개발 환경에서만)
+# makemigrations (媛쒕컻 ?섍꼍?먯꽌留?
 if [ "${DJANGO_ENV}" = "development" ]; then
-    echo "🔧 Creating new migrations..."
+    echo "?뵩 Creating new migrations..."
     python manage.py makemigrations --noinput || {
-        echo "⚠️  makemigrations failed, continuing..."
+        echo "?좑툘  makemigrations failed, continuing..."
     }
 fi
 
 # migrate
-echo "🔧 Applying migrations..."
+echo "?뵩 Applying migrations..."
 python manage.py migrate --noinput || {
-    echo "❌ Migration failed!"
+    echo "??Migration failed!"
     exit 1
 }
 
-echo "✅ Migrations completed successfully"
+echo "??Migrations completed successfully"
 
 # ===========================================
-# 4. Static Files 수집 (프로덕션 환경)
+# 4. Static Files ?섏쭛 (?꾨줈?뺤뀡 ?섍꼍)
 # ===========================================
 if [ "${COLLECT_STATIC}" = "true" ]; then
     echo ""
-    echo "📁 Collecting static files..."
+    echo "?뱚 Collecting static files..."
     python manage.py collectstatic --noinput || {
-        echo "⚠️  Static files collection failed, continuing..."
+        echo "?좑툘  Static files collection failed, continuing..."
     }
-    echo "✅ Static files collected"
+    echo "??Static files collected"
 fi
 
 # ===========================================
-# 5. Superuser 생성 (선택사항)
+# 5. Superuser ?앹꽦 (?좏깮?ы빆)
 # ===========================================
 if [ "${CREATE_SUPERUSER}" = "true" ]; then
     echo ""
-    echo "👤 Creating superuser..."
+    echo "?뫀 Creating superuser..."
     python manage.py shell << END
 from django.contrib.auth import get_user_model
 
@@ -151,18 +151,18 @@ password = '${DJANGO_SUPERUSER_PASSWORD:-admin}'
 
 if not User.objects.filter(username=username).exists():
     User.objects.create_superuser(username, email, password)
-    print(f"✅ Superuser '{username}' created")
+    print(f"??Superuser '{username}' created")
 else:
-    print(f"ℹ️  Superuser '{username}' already exists")
+    print(f"?뱄툘  Superuser '{username}' already exists")
 END
 fi
 
 # ===========================================
-# 6. S3 연결 확인 (선택사항)
+# 6. S3 ?곌껐 ?뺤씤 (?좏깮?ы빆)
 # ===========================================
 if [ "${USE_S3}" = "true" ]; then
     echo ""
-    echo "☁️  Checking S3 connection..."
+    echo "?곻툘  Checking S3 connection..."
     python << END
 import os
 import boto3
@@ -174,21 +174,21 @@ try:
     
     if bucket_name:
         s3_client.head_bucket(Bucket=bucket_name)
-        print(f"✅ S3 bucket '{bucket_name}' is accessible")
+        print(f"??S3 bucket '{bucket_name}' is accessible")
     else:
-        print("⚠️  AWS_STORAGE_BUCKET_NAME not set")
+        print("?좑툘  AWS_STORAGE_BUCKET_NAME not set")
 except ClientError as e:
-    print(f"⚠️  S3 connection error: {e}")
+    print(f"?좑툘  S3 connection error: {e}")
 except Exception as e:
-    print(f"⚠️  S3 check failed: {e}")
+    print(f"?좑툘  S3 check failed: {e}")
 END
 fi
 
 # ===========================================
-# 7. 최종 Health Check
+# 7. 理쒖쥌 Health Check
 # ===========================================
 echo ""
-echo "🏥 Running final health check..."
+echo "?룯 Running final health check..."
 python << END
 from django.db import connection
 
@@ -197,19 +197,19 @@ try:
         cursor.execute("SELECT 1")
         cursor.execute("SELECT COUNT(*) FROM django_migrations")
         count = cursor.fetchone()[0]
-        print(f"✅ Database health check passed")
-        print(f"✅ Applied migrations: {count}")
+        print(f"??Database health check passed")
+        print(f"??Applied migrations: {count}")
 except Exception as e:
-    print(f"❌ Health check failed: {e}")
+    print(f"??Health check failed: {e}")
     exit(1)
 END
 
 # ===========================================
-# 8. Django 서버 시작
+# 8. Django ?쒕쾭 ?쒖옉
 # ===========================================
 echo ""
 echo "=================================="
-echo "🎉 Starting Gunicorn server..."
+echo "?럦 Starting Gunicorn server..."
 echo "=================================="
 echo "  - Workers: ${GUNICORN_WORKERS:-4}"
 echo "  - Threads: ${GUNICORN_THREADS:-2}"
@@ -217,7 +217,7 @@ echo "  - Timeout: ${GUNICORN_TIMEOUT:-120}s"
 echo "  - Bind: 0.0.0.0:${PORT:-8000}"
 echo ""
 
-# Gunicorn 실행
+# Gunicorn ?ㅽ뻾
 exec gunicorn core.wsgi:application \
     --bind 0.0.0.0:${PORT:-8000} \
     --workers ${GUNICORN_WORKERS:-4} \

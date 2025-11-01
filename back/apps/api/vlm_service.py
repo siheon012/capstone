@@ -15,10 +15,67 @@ import os
 class BedrockVLMService:
     """Bedrock Claude 3 Vision을 활용한 영상 분석 서비스"""
     
+    # 편의점 CCTV 분석용 프롬프트 템플릿
+    CONVENIENCE_STORE_PROMPTS = {
+        "scene_description": """
+당신은 편의점 CCTV 영상을 분석하는 보안 전문가입니다.
+다음 편의점 CCTV 영상의 장면들을 분석하여 상황을 설명해주세요.
+
+분석 항목:
+1. 시간 순서대로 무슨 일이 일어났는지
+2. 등장 인물의 행동과 특징
+3. 매장 내 위치 (입구/중앙/계산대 등)
+4. 주목할 만한 행동이나 이상 징후
+
+요구사항:
+- 3-5문장으로 간결하게
+- 시간 정보 포함 (X분 Y초)
+- 존댓말 사용
+- 객관적인 관찰만 기술
+
+장면 설명:""",
+        
+        "location_analysis": """
+당신은 편의점 CCTV 영상을 분석하는 보안 전문가입니다.
+다음 영상에서 손님의 매장 내 위치와 동선을 분석해주세요.
+
+분석 항목:
+1. 왼쪽/중앙/오른쪽 구역별 활동 빈도
+2. 주로 머문 위치와 시간
+3. 이동 패턴 및 특이사항
+4. 특정 진열대나 상품에 집중한 시간
+
+위치 분석 결과:""",
+        
+        "behavior_analysis": """
+당신은 편의점 CCTV 영상을 분석하는 보안 전문가입니다.
+다음 영상에서 손님의 행동 패턴을 분석해주세요.
+
+분석 항목:
+1. 주요 행동 (물건 집기, 살펴보기, 계산 등)
+2. 행동의 순서와 소요 시간
+3. 비정상적이거나 주의가 필요한 행동
+4. 전체적인 방문 목적 추정
+
+행동 분석 결과:""",
+        
+        "timeline_extraction": """
+당신은 편의점 CCTV 영상을 분석하는 보안 전문가입니다.
+다음 영상의 주요 이벤트를 타임라인 형식으로 정리해주세요.
+
+각 이벤트마다:
+- 정확한 시간 (X분 Y초)
+- 발생한 행동
+- 위치 정보
+- 중요도 (높음/보통/낮음)
+
+타임라인:"""
+    }
+    
     def __init__(self):
         """Bedrock VLM 클라이언트 초기화"""
         self.region = settings.AWS_BEDROCK_REGION
-        self.model_id = "anthropic.claude-3-sonnet-20240229-v1:0"  # Vision 지원
+        self.model_id = settings.AWS_BEDROCK_MODEL_ID  # settings에서 가져오기
         
         # Bedrock Runtime 클라이언트
         aws_access_key = getattr(settings, 'AWS_ACCESS_KEY_ID', None)
@@ -99,6 +156,189 @@ class BedrockVLMService:
         
         cap.release()
         return frames
+    
+    def extract_frames_by_seconds(
+        self,
+        video: Video,
+        start_seconds: float,
+        end_seconds: float,
+        interval: float = 1.0
+    ) -> List[Dict]:
+        """
+        특정 시간 범위의 프레임을 초 단위로 추출
+        
+        Args:
+            video: Video 객체
+            start_seconds: 시작 시간 (초)
+            end_seconds: 종료 시간 (초)
+            interval: 프레임 추출 간격 (초, 기본 1초)
+            
+        Returns:
+            [{'timestamp': 12.5, 'frame': base64_image}, ...]
+        """
+        frames = []
+        
+        # 비디오 경로 가져오기
+        video_path = self._get_video_path(video)
+        
+        if not video_path or not os.path.exists(video_path):
+            print(f"⚠️ 비디오 파일을 찾을 수 없음: {video_path}")
+            return frames
+        
+        # OpenCV로 비디오 열기
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        video_duration = total_frames / fps
+        
+        print(f"📹 비디오 정보: FPS={fps}, 총 프레임={total_frames}, 길이={video_duration:.2f}초")
+        
+        # 유효한 범위 확인
+        end_seconds = min(end_seconds, video_duration)
+        start_seconds = max(0, start_seconds)
+        
+        if start_seconds >= end_seconds:
+            print(f"⚠️ 유효하지 않은 시간 범위: {start_seconds}~{end_seconds}초")
+            cap.release()
+            return frames
+        
+        # 지정된 간격으로 프레임 추출
+        current_time = start_seconds
+        while current_time <= end_seconds:
+            frame_number = int(current_time * fps)
+            
+            # 프레임 범위 확인
+            if frame_number >= total_frames:
+                break
+            
+            # 해당 프레임으로 이동
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+            ret, frame = cap.read()
+            
+            if ret:
+                # 프레임을 JPEG로 인코딩
+                _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                frame_base64 = base64.b64encode(buffer).decode('utf-8')
+                
+                frames.append({
+                    'timestamp': current_time,
+                    'frame': frame_base64,
+                    'frame_number': frame_number
+                })
+                
+                print(f"✅ 프레임 추출: {current_time:.1f}초 (프레임 #{frame_number})")
+            
+            current_time += interval
+        
+        cap.release()
+        print(f"✅ 총 {len(frames)}개 프레임 추출 완료 ({start_seconds}~{end_seconds}초)")
+        
+        return frames
+    
+    def analyze_time_range(
+        self,
+        video: Video,
+        start_seconds: float,
+        end_seconds: float,
+        analysis_type: str = "behavior",
+        interval: float = 2.0
+    ) -> str:
+        """
+        특정 시간 범위를 분석하여 요약 생성
+        
+        Args:
+            video: Video 객체
+            start_seconds: 시작 시간 (초)
+            end_seconds: 종료 시간 (초)
+            analysis_type: 분석 유형 (behavior, location, scene)
+            interval: 프레임 추출 간격 (초)
+            
+        Returns:
+            분석 결과 텍스트
+        """
+        print(f"🎬 시간 범위 분석 시작: {start_seconds}~{end_seconds}초 ({analysis_type})")
+        
+        # 프레임 추출
+        frames = self.extract_frames_by_seconds(
+            video=video,
+            start_seconds=start_seconds,
+            end_seconds=end_seconds,
+            interval=interval
+        )
+        
+        if not frames:
+            return f"{start_seconds}~{end_seconds}초 범위에서 프레임을 추출할 수 없습니다."
+        
+        # 프롬프트 선택
+        prompt_template = self.CONVENIENCE_STORE_PROMPTS.get(
+            f"{analysis_type}_analysis",
+            self.CONVENIENCE_STORE_PROMPTS["scene_description"]
+        )
+        
+        # 시간 정보 추가
+        time_info = f"\n\n분석 대상 시간: {int(start_seconds//60)}분 {int(start_seconds%60)}초 ~ {int(end_seconds//60)}분 {int(end_seconds%60)}초\n"
+        time_info += f"총 {len(frames)}개 프레임 ({interval}초 간격)\n\n"
+        
+        # Claude 3 Vision 컨텐츠 구성
+        content = [
+            {
+                "type": "text",
+                "text": prompt_template + time_info
+            }
+        ]
+        
+        # 이미지 추가 (최대 10개)
+        for frame_data in frames[:10]:
+            minutes = int(frame_data['timestamp'] // 60)
+            seconds = int(frame_data['timestamp'] % 60)
+            
+            content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": frame_data['frame']
+                }
+            })
+            content.append({
+                "type": "text",
+                "text": f"[{minutes}분 {seconds}초]"
+            })
+        
+        # Bedrock API 호출
+        try:
+            body = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1000,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": content
+                    }
+                ],
+                "temperature": 0.5
+            }
+            
+            print(f"🤖 Bedrock VLM 호출 중... (이미지 {min(len(frames), 10)}개)")
+            
+            response = self.bedrock_runtime.invoke_model(
+                modelId=self.model_id,
+                body=json.dumps(body)
+            )
+            
+            response_body = json.loads(response['body'].read())
+            analysis_result = response_body['content'][0]['text']
+            
+            print(f"✅ Bedrock VLM 분석 완료")
+            return analysis_result
+            
+        except Exception as e:
+            print(f"❌ VLM 분석 오류: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            # 폴백: 기본 정보 반환
+            return self._generate_fallback_time_range_summary(frames, start_seconds, end_seconds)
     
     def generate_video_summary(
         self,
@@ -259,6 +499,27 @@ class BedrockVLMService:
         )
         
         return "\n".join(summary_parts)
+    
+    def _generate_fallback_time_range_summary(
+        self,
+        frames: List[Dict],
+        start_seconds: float,
+        end_seconds: float
+    ) -> str:
+        """
+        VLM 실패 시 시간 범위 폴백 요약
+        """
+        start_min = int(start_seconds // 60)
+        start_sec = int(start_seconds % 60)
+        end_min = int(end_seconds // 60)
+        end_sec = int(end_seconds % 60)
+        
+        summary = f"📹 {start_min}분 {start_sec}초 ~ {end_min}분 {end_sec}초 구간 분석\n\n"
+        summary += f"총 {len(frames)}개 프레임이 추출되었습니다.\n"
+        summary += "VLM 분석을 사용할 수 없어 기본 정보만 제공됩니다.\n\n"
+        summary += "상세 분석을 위해서는 AWS Bedrock 설정을 확인해주세요."
+        
+        return summary
     
     def _get_video_path(self, video: Video) -> Optional[str]:
         """

@@ -1,0 +1,85 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+memi/.venv/
+memi/venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local test data
+memi/videos/*
+!memi/videos/.gitkeep
+memi/result/*
+!memi/result/.gitkeep
+memi/mivolo_output/*
+memi/depth_json/*
+memi/db_data/*
+memi/images/*
+
+# Memi large directories (must exclude for batch build)
+memi/0.26.0/
+memi/build/
+memi/__pycache__/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+
+# Documentation
+*.md
+LICENSE
+.pre-commit-config.yaml
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform
+terraform/
+*.tf
+*.tfstate*
+*.tfvars
+
+# Frontend/Backend (다른 서비스들)
+front/
+back/
+nginx/
+localstack/
+
+# 기타 불필요한 파일
+*.zip
+.env.*.template
+start.txt
+payload.json
+demo.py
+measure_time.py
+eval_*.py
+tew.py

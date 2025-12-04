@@ -1,3 +1,5 @@
+#영상 분석 api
+
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -10,10 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /workspace
 
 # Copy memi requirements and install
-COPY requirements.txt .
+COPY memi/requirements.txt .
 
 # Install Cython first (required for cocoapi)
 RUN pip3 install --no-cache-dir --upgrade pip && \
@@ -32,17 +34,26 @@ RUN grep -v "philferriere/cocoapi" requirements.txt > requirements_filtered.txt 
 # Install additional dependencies
 RUN pip3 install boto3 psycopg2-binary requests awscli
 
-# Copy memi code
-COPY . .
+# Copy batch scripts
+COPY batch/entrypoint.sh /workspace/entrypoint.sh
+COPY batch/run_memi_analysis.py /workspace/run_memi_analysis.py
+
+# Copy memi directory (core AI code)
+COPY memi /workspace/memi
+
+# Copy models, experiments, checkpoints
+COPY memi/models /workspace/models
+COPY memi/experiments /workspace/experiments
+COPY memi/checkpoints /workspace/checkpoints
 
 # Create necessary directories
-RUN mkdir -p /app/output /app/videos /app/result /tmp
+RUN mkdir -p /workspace/output /workspace/videos /workspace/results /tmp
 
 # Environment variables (will be overridden by Batch Job Definition)
-ENV DETECTOR_WEIGHTS=/app/models/yolov8x_person_face.pt
-ENV MIVOLO_CHECKPOINT=/app/models/model_imdb_cross_person_4.24_99.46.pth.tar
-ENV MEBOW_CFG=/app/config/mebow.yaml
-ENV VLM_PATH=/app/checkpoints/llava-fastvithd_0.5b_stage2
+ENV DETECTOR_WEIGHTS=/workspace/models/yolov8x_person_face.pt
+ENV MIVOLO_CHECKPOINT=/workspace/models/model_imdb_cross_person_4.22_99.46.pth.tar
+ENV MEBOW_CFG=/workspace/experiments/coco/segm-4_lr1e-3.yaml
+ENV VLM_PATH=/workspace/checkpoints/llava-fastvithd_0.5b_stage2
 ENV CUDA_VISIBLE_DEVICES=0
 
 # Healthcheck
@@ -50,4 +61,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python3 -c "import sys; sys.exit(0)"
 
 # Entrypoint will download video from S3 and run memi
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/workspace/entrypoint.sh"]

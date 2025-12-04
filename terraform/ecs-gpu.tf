@@ -308,9 +308,9 @@ resource "aws_service_discovery_service" "memi_gpu" {
     routing_policy = "MULTIVALUE"
   }
 
-  health_check_custom_config {
-    failure_threshold = 1
-  }
+  # health_check_custom_config {
+  #   failure_threshold = 1  # deprecated 속성 제거
+  # }
 
   tags = {
     Name        = "capstone-memi-gpu-discovery"

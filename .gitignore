@@ -114,3 +114,12 @@ ISSUE.md
 
 # memi 폴더 전체 제외
 memi/
+
+# Bedrock 테스트 파일들 (임시 테스트용)
+test_bedrock.py
+Dockerfile.bedrock-test
+backend_logs.txt
+batch_log.json
+temp_log.txt
+memi.zip
+back/apps/api/test_bedrock_views.py

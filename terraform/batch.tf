@@ -227,9 +227,9 @@ resource "aws_launch_template" "gpu_batch" {
 }
 
 resource "aws_batch_compute_environment" "gpu_video_processing" {
-  compute_environment_name = "capstone-${var.environment}-gpu-video-processing"
-  type                     = "MANAGED"
-  service_role             = aws_iam_role.batch_service_role.arn
+  compute_environment_name_prefix = "capstone-${var.environment}-gpu-video-processing-"
+  type                           = "MANAGED"
+  service_role                   = aws_iam_role.batch_service_role.arn
 
   compute_resources {
     type               = "EC2"
@@ -402,6 +402,22 @@ resource "aws_batch_job_definition" "gpu_video_processor" {
       {
         name  = "FASTAPI_ENDPOINT"
         value = "http://${aws_lb.main.dns_name}:8087"  # FastAPI 서비스 엔드포인트
+      },
+      {
+        name  = "POSTGRES_HOST"
+        value = aws_db_instance.postgres.address
+      },
+      {
+        name  = "POSTGRES_PORT"
+        value = tostring(aws_db_instance.postgres.port)
+      },
+      {
+        name  = "POSTGRES_DB"
+        value = aws_db_instance.postgres.db_name
+      },
+      {
+        name  = "POSTGRES_USER"
+        value = aws_db_instance.postgres.username
       },
       {
         name  = "ENVIRONMENT"

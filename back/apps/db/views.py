@@ -78,7 +78,7 @@ class VideoViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='upload')
     def upload_video(self, request):
         """비디오 파일 업로드 - S3 지원 + 메타데이터 추출 + 분석 트리거"""
-        from .utils import extract_video_metadata, trigger_video_analysis
+        from .utils import extract_video_metadata
         
         try:
             video_file = request.FILES.get('video')
@@ -110,16 +110,39 @@ class VideoViewSet(viewsets.ModelViewSet):
             
             print(f"✅ [Video Upload] 메타데이터 추출 완료: duration={metadata['duration']}s, fps={metadata['fps']}")
             
-            # ✨ 2단계: S3 업로드
+            # ✨ 2단계: 임시 Video 객체 생성 (video_id 획득용)
+            temp_video = Video.objects.create(
+                name=video_file.name,
+                filename=video_file.name,
+                original_filename=video_file.name,
+                file_size=video_file.size,
+                duration=metadata['duration'],
+                fps=metadata['fps'],
+                frame_rate=metadata['fps'],
+                width=metadata['width'],
+                height=metadata['height'],
+                resolution_width=metadata['width'],
+                resolution_height=metadata['height'],
+                data_tier='hot',
+                hotness_score=100.0,
+                metadata_extracted=True,
+                analysis_status='pending',
+                analysis_progress=0,
+            )
+            
+            print(f"✅ [Video Upload] 임시 Video 객체 생성: video_id={temp_video.video_id}")
+            
+            # ✨ 3단계: S3 업로드 (video_id를 경로에 포함)
             s3_key = None
             s3_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-video-bucket')
             
             if getattr(settings, 'USE_S3', False):
                 try:
-                    print(f"☁️ [Video Upload] 2단계: S3 업로드 시작 - {s3_bucket}")
+                    print(f"☁️ [Video Upload] S3 업로드 시작 - {s3_bucket}")
                     
                     s3_client = boto3.client('s3')
-                    s3_key = f"videos/{datetime.now().strftime('%Y/%m/%d')}/{video_file.name}"
+                    # video_id를 경로에 포함: videos/{video_id}/{filename}
+                    s3_key = f"videos/{temp_video.video_id}/{video_file.name}"
                     
                     s3_client.upload_fileobj(
                         video_file,
@@ -133,63 +156,27 @@ class VideoViewSet(viewsets.ModelViewSet):
                     # S3 실패시 로컬 저장으로 폴백
                     s3_key = None
             
-            # ✨ 3단계: Video 객체 생성 (실제 메타데이터 포함)
-            print(f"💾 [Video Upload] 3단계: DB에 Video 객체 생성")
-            
-            video_data = {
-                'name': video_file.name,
-                'filename': video_file.name,
-                'original_filename': video_file.name,
-                'file_size': video_file.size,
-                
-                # ✅ 실제 메타데이터 저장
-                'duration': metadata['duration'],
-                'fps': metadata['fps'],
-                'frame_rate': metadata['fps'],
-                'width': metadata['width'],
-                'height': metadata['height'],
-                'resolution_width': metadata['width'],
-                'resolution_height': metadata['height'],
-                
-                # 클라우드 필드
-                'data_tier': 'hot',
-                'hotness_score': 100.0,
-                'metadata_extracted': True,
-                'analysis_status': 'pending',
-                'analysis_progress': 0,
-            }
+            # ✨ 4단계: S3 키로 Video 객체 업데이트
+            print(f"💾 [Video Upload] Video 객체 업데이트: S3 경로 설정")
             
             # S3 또는 로컬 경로 설정
             if s3_key:
-                video_data.update({
-                    's3_key': s3_key,
-                    's3_raw_key': s3_key,
-                    's3_bucket': s3_bucket,
-                })
+                temp_video.s3_key = s3_key
+                temp_video.s3_raw_key = s3_key
+                temp_video.s3_bucket = s3_bucket
+                temp_video.save(update_fields=['s3_key', 's3_raw_key', 's3_bucket'])
             else:
                 # 로컬 저장
-                video_data['video_file'] = video_file
+                temp_video.video_file = video_file
+                temp_video.save(update_fields=['video_file'])
             
-            video = Video.objects.create(**video_data)
+            video = temp_video
+            print(f"✅ [Video Upload] Video 객체 업데이트 완료: video_id={video.video_id}")
             
-            print(f"✅ [Video Upload] Video 객체 생성 완료: video_id={video.video_id}")
-            
-            # ✨ 4단계: Video Analysis FastAPI 트리거 (비동기)
+            # ✨ 5단계: S3 Event Notification이 자동으로 SQS → Lambda → Batch 트리거
+            # S3 업로드 완료 후 자동으로 분석이 시작됨 (추가 API 호출 불필요)
             if s3_key:
-                print(f"🚀 [Video Upload] 4단계: Video Analysis 트리거 - video_id={video.video_id}")
-                
-                analysis_triggered = trigger_video_analysis(
-                    video_id=video.video_id,
-                    s3_key=s3_key,
-                    s3_bucket=s3_bucket
-                )
-                
-                if analysis_triggered:
-                    video.analysis_status = 'processing'
-                    video.save(update_fields=['analysis_status'])
-                    print(f"✅ [Video Upload] 분석 요청 성공")
-                else:
-                    print(f"⚠️ [Video Upload] 분석 요청 실패 (수동으로 분석 시작 필요)")
+                print(f"✅ [Video Upload] S3 업로드 완료. S3 Event Notification이 자동으로 분석을 시작합니다.")
             
             # 시리얼라이저로 응답 데이터 생성
             serializer = self.get_serializer(video)
@@ -200,7 +187,7 @@ class VideoViewSet(viewsets.ModelViewSet):
                 'message': '비디오가 성공적으로 업로드되었습니다.',
                 'video': serializer.data,
                 'metadata': metadata,
-                'analysis_triggered': s3_key is not None,
+                's3_key': s3_key,
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:

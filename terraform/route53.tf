@@ -16,46 +16,47 @@ resource "aws_route53_zone" "main" {
 }
 
 # ALIAS Record - ALB를 가리킴 (Frontend용)
-resource "aws_route53_record" "frontend" {
-  count   = var.domain_name != "" ? 1 : 0
-  zone_id = aws_route53_zone.main[0].zone_id
-  name    = var.domain_name  # 예: "deepsentinel.cloud"
-  type    = "A"
-
-  alias {
-    name                   = aws_lb.main.dns_name
-    zone_id                = aws_lb.main.zone_id
-    evaluate_target_health = true
-  }
-}
+# ALB 비활성화로 인한 주석 처리
+# resource "aws_route53_record" "frontend" {
+#   count   = var.domain_name != "" ? 1 : 0
+#   zone_id = aws_route53_zone.main[0].zone_id
+#   name    = var.domain_name  # 예: "deepsentinel.cloud"
+#   type    = "A"
+#
+#   alias {
+#     name                   = aws_lb.main.dns_name
+#     zone_id                = aws_lb.main.zone_id
+#     evaluate_target_health = true
+#   }
+# }
 
 # ALIAS Record - www 서브도메인
-resource "aws_route53_record" "www" {
-  count   = var.domain_name != "" ? 1 : 0
-  zone_id = aws_route53_zone.main[0].zone_id
-  name    = "www.${var.domain_name}"  # 예: "www.deepsentinel.cloud"
-  type    = "A"
-
-  alias {
-    name                   = aws_lb.main.dns_name
-    zone_id                = aws_lb.main.zone_id
-    evaluate_target_health = true
-  }
-}
+# resource "aws_route53_record" "www" {
+#   count   = var.domain_name != "" ? 1 : 0
+#   zone_id = aws_route53_zone.main[0].zone_id
+#   name    = "www.${var.domain_name}"  # 예: "www.deepsentinel.cloud"
+#   type    = "A"
+#
+#   alias {
+#     name                   = aws_lb.main.dns_name
+#     zone_id                = aws_lb.main.zone_id
+#     evaluate_target_health = true
+#   }
+# }
 
 # ALIAS Record - API 서브도메인 (옵션)
-resource "aws_route53_record" "api" {
-  count   = var.domain_name != "" ? 1 : 0
-  zone_id = aws_route53_zone.main[0].zone_id
-  name    = "api.${var.domain_name}"  # 예: "api.deepsentinel.cloud"
-  type    = "A"
-
-  alias {
-    name                   = aws_lb.main.dns_name
-    zone_id                = aws_lb.main.zone_id
-    evaluate_target_health = true
-  }
-}
+# resource "aws_route53_record" "api" {
+#   count   = var.domain_name != "" ? 1 : 0
+#   zone_id = aws_route53_zone.main[0].zone_id
+#   name    = "api.${var.domain_name}"  # 예: "api.deepsentinel.cloud"
+#   type    = "A"
+#
+#   alias {
+#     name                   = aws_lb.main.dns_name
+#     zone_id                = aws_lb.main.zone_id
+#     evaluate_target_health = true
+#   }
+# }
 
 # ========================================
 # ACM Certificate (HTTPS용)
@@ -109,64 +110,65 @@ resource "aws_acm_certificate_validation" "main" {
 
 # ========================================
 # ALB HTTPS Listener 추가 (선택사항)
+# 💰 ALB 비활성화로 인해 주석 처리
 # ========================================
 
 # HTTPS 리스너 (443 포트)
-resource "aws_lb_listener" "https" {
-  count             = var.domain_name != "" ? 1 : 0
-  load_balancer_arn = aws_lb.main.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = aws_acm_certificate_validation.main[0].certificate_arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend.arn
-  }
-}
+# resource "aws_lb_listener" "https" {
+#   count             = var.domain_name != "" ? 1 : 0
+#   load_balancer_arn = aws_lb.main.arn
+#   port              = "443"
+#   protocol          = "HTTPS"
+#   ssl_policy        = "ELBSecurityPolicy-2016-08"
+#   certificate_arn   = aws_acm_certificate_validation.main[0].certificate_arn
+#
+#   default_action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.frontend.arn
+#   }
+# }
 
 # HTTPS 리스너 규칙 - Backend
-resource "aws_lb_listener_rule" "backend_https" {
-  count        = var.domain_name != "" ? 1 : 0
-  listener_arn = aws_lb_listener.https[0].arn
-  priority     = 100
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.backend.arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/api/*", "/admin/*", "/db/*"]
-    }
-  }
-}
+# resource "aws_lb_listener_rule" "backend_https" {
+#   count        = var.domain_name != "" ? 1 : 0
+#   listener_arn = aws_lb_listener.https[0].arn
+#   priority     = 100
+#
+#   action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.backend.arn
+#   }
+#
+#   condition {
+#     path_pattern {
+#       values = ["/api/*", "/admin/*", "/db/*"]
+#     }
+#   }
+# }
 
 # HTTP 리스너는 vpc.tf에 이미 존재하므로 여기서는 생성하지 않음
 # 대신 기존 HTTP 리스너를 HTTPS로 리다이렉트하도록 수정
-resource "aws_lb_listener_rule" "http_to_https_redirect" {
-  count        = var.domain_name != "" ? 1 : 0
-  listener_arn = aws_lb_listener.http.arn
-  priority     = 1
-
-  action {
-    type = "redirect"
-
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
-    }
-  }
-
-  condition {
-    path_pattern {
-      values = ["/*"]
-    }
-  }
-}
+# resource "aws_lb_listener_rule" "http_to_https_redirect" {
+#   count        = var.domain_name != "" ? 1 : 0
+#   listener_arn = aws_lb_listener.http.arn
+#   priority     = 1
+#
+#   action {
+#     type = "redirect"
+#
+#     redirect {
+#       port        = "443"
+#       protocol    = "HTTPS"
+#       status_code = "HTTP_301"
+#     }
+#   }
+#
+#   condition {
+#     path_pattern {
+#       values = ["/*"]
+#     }
+#   }
+# }
 
 # ========================================
 # Outputs
@@ -184,12 +186,12 @@ output "route53_name_servers" {
 
 output "frontend_url" {
   description = "Frontend URL (도메인)"
-  value       = var.domain_name != "" ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"
+  value       = var.domain_name != "" ? "https://${var.domain_name}" : "ALB disabled for cost savings"
 }
 
 output "api_url" {
   description = "API URL (API 서브도메인)"
-  value       = var.domain_name != "" ? "https://api.${var.domain_name}" : "http://${aws_lb.main.dns_name}"
+  value       = var.domain_name != "" ? "https://api.${var.domain_name}" : "ALB disabled for cost savings"
 }
 
 output "acm_certificate_arn" {

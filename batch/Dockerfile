@@ -21,8 +21,9 @@ COPY memi/requirements.txt .
 RUN pip3 install --no-cache-dir --upgrade pip && \
     pip3 install Cython numpy
 
-# Install PyTorch with CUDA
-RUN pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# Install PyTorch with CUDA (add retries, resume and timeout to handle flaky network)
+RUN pip3 install --no-cache-dir --timeout 120 --retries 10 --resume-retries 10 \
+    torch torchvision --index-url https://download.pytorch.org/whl/cu118
 
 # Install cocoapi with Cython available
 RUN PIP_NO_BUILD_ISOLATION=false pip3 install "git+https://github.com/philferriere/cocoapi.git#subdirectory=PythonAPI"

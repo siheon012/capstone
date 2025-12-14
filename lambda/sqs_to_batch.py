@@ -148,55 +148,43 @@ def lambda_handler(event, context):
             
             logger.info(f"Processing video: s3://{bucket}/{key}")
             
-            # Job 이름 생성: 비디오 파일명을 기준으로 (중복 방지)
-            # 같은 비디오에 대해 여러 Job이 제출되는 것을 방지
-            video_name = key.split('/')[-1].split('.')[0]
-            job_name = f"video-{video_name}"
+            # Job 이름 생성: timestamp 포함하여 중복 방지
+            timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+            video_filename = key.split('/')[-1].split('.')[0]
+            job_name = f"video-process-{timestamp}-{video_filename[:20]}"  # 이름 길이 제한
             
-            logger.info(f"Checking for existing job: {job_name}")
-            
-            # 안전장치: 같은 이름의 Job이 이미 있는지 2번 확인 (경합 조건 방지)
-            def check_existing_job(job_name):
-                for status in ['SUBMITTED', 'PENDING', 'RUNNABLE', 'STARTING', 'RUNNING']:
-                    response = batch_client.list_jobs(
-                        jobQueue=JOB_QUEUE,
-                        jobStatus=status
-                    )
-                    for job in response.get('jobSummaryList', []):
-                        if job['jobName'] == job_name:
-                            return job
-                return None
-            
-            # 첫 번째 체크
-            existing_job = check_existing_job(job_name)
-            if existing_job:
-                logger.warning(f"Job {job_name} already exists (JobId: {existing_job['jobId']}), skipping")
-                successful_count += 1
-                continue
-            
-            logger.info(f"Attempting to submit job: {job_name}")
-            
-            # Job 제출 직전 재확인 (동시성 문제 방지)
-            existing_job = check_existing_job(job_name)
-            if existing_job:
-                logger.warning(f"Job {job_name} was just created by another Lambda (JobId: {existing_job['jobId']}), skipping")
-                successful_count += 1
-                continue
+            logger.info(f"Submitting job: {job_name}")
             
             # AWS Batch Job 제출
             try:
-                # VIDEO_ID는 S3 key에서 추출: videos/{video_id}/filename.mp4 -> video_id
-                # 예: videos/67/sample.mp4 -> video_id = 67
-                try:
-                    parts = key.split('/')
-                    if len(parts) >= 2 and parts[0] == 'videos':
-                        video_id = parts[1]  # videos/{video_id}/filename.mp4
-                    else:
-                        video_id = key.split('/')[-1].split('.')[0]  # fallback
-                except (ValueError, IndexError):
-                    video_id = key.split('/')[-1].split('.')[0]  # fallback
+                # VIDEO_ID 추출: 우선순위
+                # 1. SQS 메시지의 video.id 필드
+                # 2. MessageAttributes의 video_id
+                # 3. S3 key에서 추출 (fallback)
+                video_id = None
                 
-                logger.info(f"Extracted video_id: {video_id} from key: {key}")
+                # 1. 메시지 body에서 video.id 찾기
+                try:
+                    body_dict = json.loads(body) if isinstance(body, str) else body
+                    if 'video' in body_dict and 'id' in body_dict['video']:
+                        video_id = str(body_dict['video']['id'])
+                        logger.info(f"Extracted video_id from message body: {video_id}")
+                except Exception as e:
+                    logger.debug(f"Could not extract video_id from body: {e}")
+                
+                # 2. MessageAttributes에서 찾기
+                if not video_id and 'messageAttributes' in record:
+                    attrs = record['messageAttributes']
+                    if 'video_id' in attrs:
+                        video_id = attrs['video_id'].get('stringValue', attrs['video_id'].get('StringValue'))
+                        logger.info(f"Extracted video_id from MessageAttributes: {video_id}")
+                
+                # 3. Fallback: S3 key에서 파일명 사용
+                if not video_id:
+                    video_id = key.split('/')[-1].split('.')[0]
+                    logger.warning(f"Using filename as video_id (fallback): {video_id}")
+                
+                logger.info(f"Final video_id: {video_id}")
                 
                 # containerOverrides.environment 사용하지 않음
                 # Job Definition의 환경변수를 그대로 사용하고, 동적 값만 command로 전달

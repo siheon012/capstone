@@ -50,9 +50,9 @@ resource "aws_launch_template" "gpu_ecs" {
 resource "aws_autoscaling_group" "gpu_ecs" {
   name                = "capstone-${var.environment}-gpu-ecs-asg"
   vpc_zone_identifier = [aws_subnet.private_1.id, aws_subnet.private_2.id]
-  min_size            = 1
-  max_size            = 1
-  desired_capacity    = 1
+  min_size            = 0  # 비활성화: AWS Batch 사용 중
+  max_size            = 0  # 비활성화: AWS Batch 사용 중
+  desired_capacity    = 0  # 비활성화: AWS Batch 사용 중
 
   launch_template {
     id      = aws_launch_template.gpu_ecs.id
@@ -148,19 +148,19 @@ resource "aws_ecs_task_definition" "memi_gpu" {
       environment = [
         {
           name  = "DETECTOR_WEIGHTS"
-          value = "/app/models/yolov8x_person_face.pt"
+          value = "/workspace/models/yolov8x_person_face.pt"
         },
         {
           name  = "MIVOLO_CHECKPOINT"
-          value = "/app/models/model_imdb_cross_person_4.22_99.46.pth.tar"
+          value = "/workspace/models/model_imdb_cross_person_4.22_99.46.pth.tar"
         },
         {
           name  = "MEBOW_CFG"
-          value = "/app/config/mebow.yaml"
+          value = "/workspace/experiments/coco/segm-4_lr1e-3.yaml"
         },
         {
           name  = "VLM_PATH"
-          value = "/app/checkpoints/llava-fastvithd_0.5b_stage2"
+          value = "/workspace/checkpoints/llava-fastvithd_0.5b_stage2"
         },
         {
           name  = "CUDA_VISIBLE_DEVICES"

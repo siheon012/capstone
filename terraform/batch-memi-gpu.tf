@@ -63,7 +63,7 @@ resource "aws_ecr_lifecycle_policy" "ai_batch" {
 # Launch Template for GPU Instances
 resource "aws_launch_template" "batch_gpu" {
   name_prefix   = "capstone-batch-gpu-"
-  image_id      = data.aws_ami.ecs_gpu_ami.id
+  image_id      = "ami-05a7c7234d12946e9"  # Custom AMI with pre-loaded 17GB Docker image
   instance_type = "g5.xlarge" # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
 
   iam_instance_profile {
@@ -110,23 +110,21 @@ echo ECS_IMAGE_PULL_BEHAVIOR=prefer-cached >> /etc/ecs/ecs.config
   }
 }
 
-# GPU-optimized ECS AMI (Standard AWS AMI - works reliably)
-# Using standard AWS ECS GPU AMI to pull latest batch processor image
-# Will create new custom AMI after verifying latest image works
-data "aws_ami" "ecs_gpu_ami" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-ecs-gpu-hvm-*-x86_64-ebs"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
+# GPU-optimized Custom AMI (ami-05a7c7234d12946e9)
+# This AMI has the 17GB batch processor image pre-loaded to reduce startup time from 20 min to ~3 min
+# Standard AWS ECS GPU AMI (for reference, not used):
+# data "aws_ami" "ecs_gpu_ami" {
+#   most_recent = true
+#   owners      = ["amazon"]
+#   filter {
+#     name   = "name"
+#     values = ["amzn2-ami-ecs-gpu-hvm-*-x86_64-ebs"]
+#   }
+#   filter {
+#     name   = "virtualization-type"
+#     values = ["hvm"]
+#   }
+# }
 
 # IAM Instance Profile for Batch GPU Instances
 resource "aws_iam_instance_profile" "batch_instance" {
@@ -196,10 +194,10 @@ resource "aws_batch_compute_environment" "memi_gpu" {
       version            = "$Latest"
     }
 
-    # EC2 Configuration to use Custom AMI from Launch Template
+    # EC2 Configuration to use Custom AMI with pre-loaded Docker image
     ec2_configuration {
       image_type = "ECS_AL2_NVIDIA"
-      image_id_override = data.aws_ami.ecs_gpu_ami.id
+      image_id_override = "ami-05a7c7234d12946e9"  # Custom AMI with 17GB image pre-loaded
     }
 
     tags = {
@@ -255,7 +253,7 @@ resource "aws_batch_job_definition" "memi_processor" {
   
 //image는 하드코딩으로 해야함
   container_properties = jsonencode({
-      "image": "${data.aws_ecr_repository.ai_batch.repository_url}@sha256:65c64502231f18a92dec87e803d04d23fb6c3915e22019f2faaafd0db6bfb746",
+      "image": "${data.aws_ecr_repository.ai_batch.repository_url}@sha256:f5d065592a8eef7e5c091b11678e1027de47260bdeb58766042a434fcf9a95f4",
 
     resourceRequirements = [
       {

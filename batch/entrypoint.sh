@@ -20,7 +20,7 @@ fi
 
 # Download video from S3
 echo "Downloading video from S3: s3://${S3_BUCKET}/${S3_KEY}"
-INPUT_VIDEO="/app/videos/video_${VIDEO_ID}.mp4"
+INPUT_VIDEO="/workspace/videos/video_${VIDEO_ID}.mp4"
 aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" "${INPUT_VIDEO}"
 
 if [ ! -f "${INPUT_VIDEO}" ]; then
@@ -32,7 +32,7 @@ echo "Video downloaded successfully: ${INPUT_VIDEO}"
 echo "File size: $(du -h ${INPUT_VIDEO} | cut -f1)"
 
 # Create output directory
-OUTPUT_DIR="/app/result/video_${VIDEO_ID}"
+OUTPUT_DIR="/workspace/output/video_${VIDEO_ID}"
 mkdir -p "${OUTPUT_DIR}"
 
 # Check GPU availability
@@ -44,14 +44,14 @@ echo "====================================="
 echo "Starting memi analysis..."
 echo "====================================="
 
-python3 /app/run.py \
+python3 /workspace/run_memi_analysis.py \
     --video-id "${VIDEO_ID}" \
     --input "${INPUT_VIDEO}" \
     --output "${OUTPUT_DIR}" \
-    --detector-weights "${DETECTOR_WEIGHTS:-/app/models/yolov8x_person_face.pt}" \
-    --checkpoint "${MIVOLO_CHECKPOINT:-/app/models/model_imdb_cross_person_4.24_99.46.pth.tar}" \
-    --mebow-cfg "${MEBOW_CFG:-/app/config/mebow.yaml}" \
-    --vlm-path "${VLM_PATH:-/app/checkpoints/llava-fastvithd_0.5b_stage2}" \
+    --detector-weights "${DETECTOR_WEIGHTS:-/workspace/models/yolov8x_person_face.pt}" \
+    --checkpoint "${MIVOLO_CHECKPOINT:-/workspace/models/model_imdb_cross_person_4.24_99.46.pth.tar}" \
+    --mebow-cfg "${MEBOW_CFG:-/workspace/experiments/coco/segm-4_lr1e-3.yaml}" \
+    --vlm-path "${VLM_PATH:-/workspace/checkpoints/llava-fastvithd_0.5b_stage2}" \
     --device "${DEVICE:-cuda:0}" \
     --with-persons \
     --draw

@@ -1,0 +1,12 @@
+{
+  "eventType": "video-uploaded",
+  "timestamp": "2025-12-08T13:00:00Z",
+  "s3": {
+    "bucket": "capstone-dev-raw",
+    "key": "videos/2025/12/08/test-video.mp4"
+  },
+  "video": {
+    "id": "456",
+    "status": "pending"
+  }
+}

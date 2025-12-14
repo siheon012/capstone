@@ -226,51 +226,52 @@ resource "aws_launch_template" "gpu_batch" {
   }
 }
 
-resource "aws_batch_compute_environment" "gpu_video_processing" {
-  compute_environment_name_prefix = "capstone-${var.environment}-gpu-video-processing-"
-  type                           = "MANAGED"
-  service_role                   = aws_iam_role.batch_service_role.arn
+# 🔧 이 Compute Environment는 사용하지 않음 (batch-memi-gpu.tf의 memi_gpu 사용)
+# resource "aws_batch_compute_environment" "gpu_video_processing" {
+#   type                           = "MANAGED"
+#   service_role                   = aws_iam_role.batch_service_role.arn
+#   state                          = "ENABLED"
 
-  compute_resources {
-    type               = "EC2"
-    allocation_strategy = "BEST_FIT_PROGRESSIVE"
-    min_vcpus          = 0
-    max_vcpus          = 8  # g5.xlarge는 4 vCPU이므로 2개 인스턴스 가능
-    
-    instance_type = ["g5.xlarge"]  # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
-    
-    instance_role = aws_iam_instance_profile.ecs_instance.arn
+#   compute_resources {
+#     type               = "EC2"
+#     allocation_strategy = "BEST_FIT_PROGRESSIVE"
+#     min_vcpus          = 0
+#     max_vcpus          = 8  # g5.xlarge는 4 vCPU이므로 2개 인스턴스 가능
+#     
+#     instance_type = ["g5.xlarge"]  # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
+#     
+#     instance_role = aws_iam_instance_profile.ecs_instance.arn
+#
+#     subnets = [
+#       aws_subnet.private_1.id,
+#       aws_subnet.private_2.id
+#     ]
+#
+#     security_group_ids = [
+#       aws_security_group.batch_compute.id
+#     ]
+#
+#     # Launch Template with larger EBS volume
+#     launch_template {
+#       launch_template_id = aws_launch_template.gpu_batch.id
+#       version            = "$Latest"
+#     }
+#
+#     # EC2 Key Pair (optional, for debugging)
+#     # ec2_key_pair = "your-key-pair-name"
+#     
+#     # Image ID for ECS GPU-optimized AMI
+#     image_id = data.aws_ami.ecs_gpu.id
+#   }
 
-    subnets = [
-      aws_subnet.private_1.id,
-      aws_subnet.private_2.id
-    ]
-
-    security_group_ids = [
-      aws_security_group.batch_compute.id
-    ]
-
-    # Launch Template with larger EBS volume
-    launch_template {
-      launch_template_id = aws_launch_template.gpu_batch.id
-      version            = "$Latest"
-    }
-
-    # EC2 Key Pair (optional, for debugging)
-    # ec2_key_pair = "your-key-pair-name"
-    
-    # Image ID for ECS GPU-optimized AMI
-    image_id = data.aws_ami.ecs_gpu.id
-  }
-
-  tags = {
-    Name        = "capstone-gpu-video-processing-compute"
-    Environment = var.environment
-    Project     = "Unmanned"
-  }
-
-  depends_on = [aws_iam_role_policy_attachment.batch_service_role]
-}
+#   tags = {
+#     Name        = "capstone-gpu-video-processing-compute"
+#     Environment = var.environment
+#     Project     = "Unmanned"
+#   }
+#
+#   depends_on = [aws_iam_role_policy_attachment.batch_service_role]
+# }
 
 # ========================================
 # EC2 Instance Profile for Batch GPU
@@ -328,23 +329,23 @@ data "aws_ami" "ecs_gpu" {
 # AWS Batch Job Queue
 # ========================================
 
-# GPU Job Queue (EC2)
-resource "aws_batch_job_queue" "video_processing" {
-  name     = "capstone-${var.environment}-video-processing-queue"
-  state    = "ENABLED"
-  priority = 1
-
-  compute_environment_order {
-    order               = 1
-    compute_environment = aws_batch_compute_environment.gpu_video_processing.arn
-  }
-
-  tags = {
-    Name        = "capstone-gpu-video-processing-queue"
-    Environment = var.environment
-    Project     = "Unmanned"
-  }
-}
+# GPU Job Queue (EC2) - 사용 안함 (batch-memi-gpu.tf의 memi_gpu_queue 사용)
+# resource "aws_batch_job_queue" "video_processing" {
+#   name     = "capstone-${var.environment}-video-processing-queue"
+#   state    = "ENABLED"
+#   priority = 1
+#
+#   compute_environment_order {
+#     order               = 1
+#     compute_environment = aws_batch_compute_environment.gpu_video_processing.arn
+#   }
+#
+#   tags = {
+#     Name        = "capstone-gpu-video-processing-queue"
+#     Environment = var.environment
+#     Project     = "Unmanned"
+#   }
+# }
 
 # ========================================
 # AWS Batch Job Definition - GPU
@@ -399,10 +400,11 @@ resource "aws_batch_job_definition" "gpu_video_processor" {
         name  = "SQS_QUEUE_URL"
         value = aws_sqs_queue.video_processing.url
       },
-      {
-        name  = "FASTAPI_ENDPOINT"
-        value = "http://${aws_lb.main.dns_name}:8087"  # FastAPI 서비스 엔드포인트
-      },
+      # ALB 비활성화로 FASTAPI_ENDPOINT 제거
+      # {
+      #   name  = "FASTAPI_ENDPOINT"
+      #   value = "http://${aws_lb.main.dns_name}:8087"  # FastAPI 서비스 엔드포인트
+      # },
       {
         name  = "POSTGRES_HOST"
         value = aws_db_instance.postgres.address
@@ -519,15 +521,16 @@ resource "aws_ecr_lifecycle_policy" "batch_processor" {
 # Outputs
 # ========================================
 
-output "batch_compute_environment_arn" {
-  description = "Batch Compute Environment ARN"
-  value       = aws_batch_compute_environment.gpu_video_processing.arn
-}
+# 사용 안 함 - MEMI Compute Environment 사용
+# output "batch_compute_environment_arn" {
+#   description = "Batch Compute Environment ARN"
+#   value       = aws_batch_compute_environment.gpu_video_processing.arn
+# }
 
-output "batch_job_queue_arn" {
-  description = "Batch Job Queue ARN"
-  value       = aws_batch_job_queue.video_processing.arn
-}
+# output "batch_job_queue_arn" {
+#   description = "Batch Job Queue ARN"
+#   value       = aws_batch_job_queue.video_processing.arn
+# }
 
 output "batch_job_definition_arn" {
   description = "Batch Job Definition ARN"

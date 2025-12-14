@@ -43,6 +43,11 @@ nvidia-smi || echo "WARNING: nvidia-smi not available"
 echo "====================================="
 echo "Starting memi analysis..."
 echo "====================================="
+echo "Current working directory: $(pwd)"
+echo "Checking if run_memi_analysis.py exists: $(ls -la /workspace/run_memi_analysis.py 2>&1 || echo 'NOT FOUND')"
+
+# Ensure we're in the correct directory
+cd /workspace || { echo "ERROR: Failed to cd to /workspace"; exit 1; }
 
 python3 /workspace/run_memi_analysis.py \
     --video-id "${VIDEO_ID}" \

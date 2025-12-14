@@ -39,6 +39,12 @@ RUN pip3 install boto3 psycopg2-binary requests awscli
 COPY batch/entrypoint.sh /workspace/entrypoint.sh
 COPY batch/run_memi_analysis.py /workspace/run_memi_analysis.py
 
+# Convert line endings, set permissions, and verify
+RUN sed -i 's/\r$//' /workspace/entrypoint.sh && \
+    chmod +x /workspace/entrypoint.sh /workspace/run_memi_analysis.py && \
+    ls -la /workspace/entrypoint.sh && \
+    head -n 1 /workspace/entrypoint.sh | od -c
+
 # Copy memi directory (core AI code)
 COPY memi /workspace/memi
 

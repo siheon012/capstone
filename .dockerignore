@@ -28,6 +28,7 @@ memi/videos/*
 !memi/videos/.gitkeep
 memi/result/*
 !memi/result/.gitkeep
+!memi/result/*.py
 memi/mivolo_output/*
 memi/depth_json/*
 memi/db_data/*

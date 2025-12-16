@@ -43,6 +43,7 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
     pip3 install --no-cache-dir boto3 psycopg2-binary requests && \
     rm -rf /root/.cache/pip /workspace/memi_requirements.txt /workspace/requirements_filtered.txt
 
+<<<<<<< HEAD
 # Copy all necessary files in fewer layers
 COPY memi/*.py /workspace/memi/
 COPY memi/lib /workspace/memi/lib
@@ -50,6 +51,36 @@ COPY memi/llava /workspace/memi/llava
 COPY memi/mivolo /workspace/memi/mivolo
 COPY memi/src /workspace/memi/src
 COPY memi/tools /workspace/memi/tools
+=======
+# Install PyTorch with CUDA (add retries, resume and timeout to handle flaky network)
+RUN pip3 install --no-cache-dir --timeout 120 --retries 10 --resume-retries 10 \
+    torch torchvision --index-url https://download.pytorch.org/whl/cu118
+
+# Install cocoapi with Cython available
+RUN PIP_NO_BUILD_ISOLATION=false pip3 install "git+https://github.com/philferriere/cocoapi.git#subdirectory=PythonAPI"
+
+# Install memi requirements (excluding cocoapi which is already installed)
+RUN grep -v "philferriere/cocoapi" requirements.txt > requirements_filtered.txt && \
+    pip3 install -r requirements_filtered.txt
+
+# Install additional dependencies
+RUN pip3 install boto3 psycopg2-binary requests awscli
+
+# Copy batch scripts
+COPY batch/entrypoint.sh /workspace/entrypoint.sh
+COPY batch/run_memi_analysis.py /workspace/run_memi_analysis.py
+
+# Convert line endings, set permissions, and verify
+RUN sed -i 's/\r$//' /workspace/entrypoint.sh && \
+    chmod +x /workspace/entrypoint.sh /workspace/run_memi_analysis.py && \
+    ls -la /workspace/entrypoint.sh && \
+    head -n 1 /workspace/entrypoint.sh | od -c
+
+# Copy memi directory (core AI code)
+COPY memi /workspace/memi
+
+# Copy models, experiments, checkpoints
+>>>>>>> f69bb82f6a3aef6a9da2245c0c1912459f1dcc05
 COPY memi/models /workspace/models
 COPY memi/experiments /workspace/experiments
 COPY memi/checkpoints /workspace/checkpoints

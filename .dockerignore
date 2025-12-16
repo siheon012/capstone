@@ -33,7 +33,7 @@ memi/depth_json/*
 memi/db_data/*
 memi/images/*
 
-# Memi large directories (must exclude for batch build)
+# Memi large directories (exclude from batch build)
 memi/0.26.0/
 memi/build/
 memi/__pycache__/
@@ -41,13 +41,15 @@ memi/__pycache__/
 # Git
 .git/
 .gitignore
+.github/
 
-# Docker
-Dockerfile*
+# Docker compose (Dockerfile은 제외하지 않음 - -f로 명시하므로)
 docker-compose*.yml
 
 # Documentation
 *.md
+doc/
+docs/
 LICENSE
 .pre-commit-config.yaml
 
@@ -57,29 +59,39 @@ LICENSE
 
 # Logs
 *.log
+*.log.*
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Terraform
+# Terraform (batch 빌드에 불필요)
 terraform/
 *.tf
 *.tfstate*
 *.tfvars
 
-# Frontend/Backend (다른 서비스들)
-front/
+# Other services (batch 빌드에 불필요)
 back/
+front/
 nginx/
 localstack/
+gpu_worker/
+lambda/
 
-# 기타 불필요한 파일
+# Unnecessary files
 *.zip
-.env.*.template
+.env.*
+!.env.example
 start.txt
 payload.json
 demo.py
 measure_time.py
 eval_*.py
 tew.py
+test_video.mp4
+test-message.json
+ec2-console.log
+job-def.json
+lambda-policy.json
+requirements.txt

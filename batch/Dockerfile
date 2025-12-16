@@ -1,4 +1,5 @@
-#영상 분석 api
+# AWS Batch GPU Video Processor with memi
+# Build from project root: docker build -f batch/Dockerfile -t capstone-batch-processor:latest .
 
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
@@ -7,48 +8,58 @@ ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 python3-pip python3-dev \
-    ffmpeg libsm6 libxext6 libgl1-mesa-glx git wget curl \
-    build-essential ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+    python3.10 \
+    python3-pip \
+    python3-dev \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libgl1-mesa-glx \
+    git \
+    wget \
+    curl \
+    build-essential \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 
+# Set Python path
+ENV PYTHONPATH=/workspace/memi:/workspace:${PYTHONPATH}
+
 # Copy memi requirements and install
-COPY memi/requirements.txt .
+COPY memi/requirements.txt /workspace/memi_requirements.txt
 
-# Install Cython first (required for cocoapi)
+# Install Python dependencies in one layer to reduce image size
 RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install Cython numpy
+    pip3 install --no-cache-dir Cython numpy && \
+    pip3 install --no-cache-dir \
+        torch==2.1.0 torchvision==0.16.0 \
+        --index-url https://download.pytorch.org/whl/cu118 && \
+    pip3 install --no-cache-dir --no-build-isolation \
+        "git+https://github.com/philferriere/cocoapi.git#subdirectory=PythonAPI" && \
+    grep -v "philferriere/cocoapi\|^-e git+\|^-f https://\|^torch==\|^torchvision==" /workspace/memi_requirements.txt > /workspace/requirements_filtered.txt && \
+    pip3 install --no-cache-dir -r /workspace/requirements_filtered.txt && \
+    pip3 install --no-cache-dir boto3 psycopg2-binary requests && \
+    rm -rf /root/.cache/pip /workspace/memi_requirements.txt /workspace/requirements_filtered.txt
 
-# Install PyTorch with CUDA (add retries, resume and timeout to handle flaky network)
-RUN pip3 install --no-cache-dir --timeout 120 --retries 10 --resume-retries 10 \
-    torch torchvision --index-url https://download.pytorch.org/whl/cu118
-
-# Install cocoapi with Cython available
-RUN PIP_NO_BUILD_ISOLATION=false pip3 install "git+https://github.com/philferriere/cocoapi.git#subdirectory=PythonAPI"
-
-# Install memi requirements (excluding cocoapi which is already installed)
-RUN grep -v "philferriere/cocoapi" requirements.txt > requirements_filtered.txt && \
-    pip3 install -r requirements_filtered.txt
-
-# Install additional dependencies
-RUN pip3 install boto3 psycopg2-binary requests awscli
-
-# Copy batch scripts
-COPY batch/entrypoint.sh /workspace/entrypoint.sh
-COPY batch/run_memi_analysis.py /workspace/run_memi_analysis.py
-
-# Copy memi directory (core AI code)
-COPY memi /workspace/memi
-
-# Copy models, experiments, checkpoints
+# Copy all necessary files in fewer layers
+COPY memi/*.py /workspace/memi/
+COPY memi/lib /workspace/memi/lib
+COPY memi/llava /workspace/memi/llava
+COPY memi/mivolo /workspace/memi/mivolo
+COPY memi/src /workspace/memi/src
+COPY memi/tools /workspace/memi/tools
 COPY memi/models /workspace/models
 COPY memi/experiments /workspace/experiments
 COPY memi/checkpoints /workspace/checkpoints
+COPY batch/entrypoint.sh /workspace/entrypoint.sh
+COPY batch/run_memi_analysis.py /workspace/run_memi_analysis.py
+COPY batch/process_video_memi.py /workspace/process_video_memi.py
 
-# Create necessary directories
-RUN mkdir -p /workspace/output /workspace/videos /workspace/results /tmp
+# Create necessary directories and set permissions
+RUN mkdir -p /workspace/output /workspace/videos /workspace/results /tmp && \
+    chmod +x /workspace/entrypoint.sh
 
 # Environment variables (will be overridden by Batch Job Definition)
 ENV DETECTOR_WEIGHTS=/workspace/models/yolov8x_person_face.pt

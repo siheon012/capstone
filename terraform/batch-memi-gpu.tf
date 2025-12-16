@@ -250,10 +250,10 @@ resource "aws_batch_job_definition" "memi_processor" {
 
   platform_capabilities = ["EC2"]
 
-  
-//image는 하드코딩으로 해야함
   container_properties = jsonencode({
-      "image": "${data.aws_ecr_repository.ai_batch.repository_url}@sha256:f5d065592a8eef7e5c091b11678e1027de47260bdeb58766042a434fcf9a95f4",
+    # Use specific digest for production stability
+    # Latest pushed: 2025-12-16
+    image = "${data.aws_ecr_repository.ai_batch.repository_url}@sha256:9f4083c6b1a769300ac6ae9d65976c1be5882210417429f52cb5ba8f857d9a8a"
 
     resourceRequirements = [
       {

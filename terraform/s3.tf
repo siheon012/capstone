@@ -194,3 +194,49 @@ output "s3_thumbnails_bucket" {
   value       = aws_s3_bucket.thumbnails.id
 }
 
+# ============================================
+# Terraform State Backup Bucket
+# ============================================
+
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "capstone-${var.environment}-terraform-state-backup"
+
+  tags = {
+    Name        = "capstone-terraform-state-backup"
+    Environment = var.environment
+    Project     = "Unmanned"
+    Purpose     = "Terraform state file backup"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+output "s3_terraform_state_bucket" {
+  description = "Terraform state backup S3 bucket name"
+  value       = aws_s3_bucket.terraform_state.id
+}
+

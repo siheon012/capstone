@@ -1,0 +1,1 @@
+﻿287709190208.dkr.ecr.ap-northeast-2.amazonaws.com/capstone-dev-batch-processor@sha256:e805631c12bc342e570a40d2189e0435e705cb9e2ed77c939707c558157d071a

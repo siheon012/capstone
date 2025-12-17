@@ -39,18 +39,28 @@ mkdir -p "${OUTPUT_DIR}"
 echo "Checking GPU availability..."
 nvidia-smi || echo "WARNING: nvidia-smi not available"
 
-# Run memi video analysis
+# Run memi video analysis directly
 echo "====================================="
 echo "Starting memi analysis..."
 echo "====================================="
 echo "Current working directory: $(pwd)"
-echo "Checking if run_memi_analysis.py exists: $(ls -la /workspace/run_memi_analysis.py 2>&1 || echo 'NOT FOUND')"
 
-# Ensure we're in the correct directory
+# Ensure we're in the memi directory (run.py의 import 경로 때문에)
 cd /workspace || { echo "ERROR: Failed to cd to /workspace"; exit 1; }
 
-python3 /workspace/run_memi_analysis.py \
-    --video-id "${VIDEO_ID}" \
+# run.py에서 --video-id를 integer로 받으므로 VIDEO_ID를 정수로 추출
+# VIDEO_ID 형식: test_20251217213302, video_123 등
+# 숫자만 추출하거나 기본값 사용
+VIDEO_ID_NUM="${VIDEO_ID//[^0-9]/}"  # 숫자만 추출
+if [ -z "$VIDEO_ID_NUM" ]; then
+    # 숫자가 없으면 해시값을 ID로 사용
+    VIDEO_ID_NUM=$(echo -n "${VIDEO_ID}" | md5sum | tr -d -c 0-9 | cut -c1-8)
+fi
+
+echo "Extracted video_id: ${VIDEO_ID_NUM} from VIDEO_ID: ${VIDEO_ID}"
+
+python3 run.py \
+    --video-id "${VIDEO_ID_NUM}" \
     --input "${INPUT_VIDEO}" \
     --output "${OUTPUT_DIR}" \
     --detector-weights "${DETECTOR_WEIGHTS:-/workspace/models/yolov8x_person_face.pt}" \

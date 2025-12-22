@@ -59,7 +59,7 @@ fi
 
 echo "Extracted video_id: ${VIDEO_ID_NUM} from VIDEO_ID: ${VIDEO_ID}"
 
-python3 run.py \
+python3 memi/run.py \
     --video-id "${VIDEO_ID_NUM}" \
     --input "${INPUT_VIDEO}" \
     --output "${OUTPUT_DIR}" \

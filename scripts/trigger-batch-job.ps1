@@ -4,7 +4,7 @@
 param(
     [string]$VideoId = "test_$(Get-Date -Format 'yyyyMMddHHmmss')",
     [string]$S3Bucket = "capstone-dev-raw",
-    [string]$S3Key = "videos/test_video.mp4",  # 이미 업로드된 테스트 영상
+    [string]$S3Key = "videos/20250526_193150.mp4",  # 이미 업로드된 테스트 영상
     [string]$Region = "ap-northeast-2",
     [string]$JobQueue = "capstone-dev-memi-gpu-queue",
     [string]$JobDefinition = "capstone-dev-memi-processor"

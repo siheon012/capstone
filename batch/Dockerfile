@@ -51,6 +51,7 @@ COPY memi/llava /workspace/memi/llava
 COPY memi/mivolo /workspace/memi/mivolo
 COPY memi/src /workspace/memi/src
 COPY memi/tools /workspace/memi/tools
+COPY memi/result /workspace/memi/result
 COPY memi/models /workspace/models
 COPY memi/experiments /workspace/experiments
 COPY memi/checkpoints /workspace/checkpoints

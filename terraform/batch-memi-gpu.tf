@@ -253,7 +253,7 @@ resource "aws_batch_job_definition" "memi_processor" {
   container_properties = jsonencode({
     # Use specific digest for production stability
     # Latest pushed: 2025-12-16
-    image = "${data.aws_ecr_repository.ai_batch.repository_url}@sha256:1f377457dba4419e9fa162fdd1daf57e486b49435f68734486ff9df5bc0e917b"
+    image = "${data.aws_ecr_repository.ai_batch.repository_url}@ha256:8d7fc7b0d8912c4ceab167ceabd3b86cef13e05dab26b001f966c22e91ad662e"
 
     resourceRequirements = [
       {

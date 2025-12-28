@@ -16,47 +16,46 @@ resource "aws_route53_zone" "main" {
 }
 
 # ALIAS Record - ALB를 가리킴 (Frontend용)
-# ALB 비활성화로 인한 주석 처리
-# resource "aws_route53_record" "frontend" {
-#   count   = var.domain_name != "" ? 1 : 0
-#   zone_id = aws_route53_zone.main[0].zone_id
-#   name    = var.domain_name  # 예: "deepsentinel.cloud"
-#   type    = "A"
-#
-#   alias {
-#     name                   = aws_lb.main.dns_name
-#     zone_id                = aws_lb.main.zone_id
-#     evaluate_target_health = true
-#   }
-# }
+resource "aws_route53_record" "frontend" {
+  count   = var.domain_name != "" ? 1 : 0
+  zone_id = aws_route53_zone.main[0].zone_id
+  name    = var.domain_name  # 예: "deepsentinel.cloud"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
+}
 
 # ALIAS Record - www 서브도메인
-# resource "aws_route53_record" "www" {
-#   count   = var.domain_name != "" ? 1 : 0
-#   zone_id = aws_route53_zone.main[0].zone_id
-#   name    = "www.${var.domain_name}"  # 예: "www.deepsentinel.cloud"
-#   type    = "A"
-#
-#   alias {
-#     name                   = aws_lb.main.dns_name
-#     zone_id                = aws_lb.main.zone_id
-#     evaluate_target_health = true
-#   }
-# }
+resource "aws_route53_record" "www" {
+  count   = var.domain_name != "" ? 1 : 0
+  zone_id = aws_route53_zone.main[0].zone_id
+  name    = "www.${var.domain_name}"  # 예: "www.deepsentinel.cloud"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
+}
 
 # ALIAS Record - API 서브도메인 (옵션)
-# resource "aws_route53_record" "api" {
-#   count   = var.domain_name != "" ? 1 : 0
-#   zone_id = aws_route53_zone.main[0].zone_id
-#   name    = "api.${var.domain_name}"  # 예: "api.deepsentinel.cloud"
-#   type    = "A"
-#
-#   alias {
-#     name                   = aws_lb.main.dns_name
-#     zone_id                = aws_lb.main.zone_id
-#     evaluate_target_health = true
-#   }
-# }
+resource "aws_route53_record" "api" {
+  count   = var.domain_name != "" ? 1 : 0
+  zone_id = aws_route53_zone.main[0].zone_id
+  name    = "api.${var.domain_name}"  # 예: "api.deepsentinel.cloud"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
+}
 
 # ========================================
 # ACM Certificate (HTTPS용)

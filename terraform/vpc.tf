@@ -231,94 +231,92 @@ resource "aws_security_group" "rds" {
 }
 
 # Application Load Balancer
-# 💰 비용 절감: ALB 비활성화 (~$18/월 절감)
-# 재활성화하려면 주석을 해제하세요
-# resource "aws_lb" "main" {
-#   name               = "capstone-alb"
-#   internal           = false
-#   load_balancer_type = "application"
-#   security_groups    = [aws_security_group.alb.id]
-#   subnets            = [aws_subnet.public_1.id, aws_subnet.public_2.id]
-#
-#   enable_deletion_protection = false
-#
-#   tags = {
-#     Name = "capstone-alb"
-#   }
-# }
+resource "aws_lb" "main" {
+  name               = "capstone-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name = "capstone-alb"
+  }
+}
 
 # Target Group - Frontend
-# resource "aws_lb_target_group" "frontend" {
-#   name        = "capstone-frontend-tg"
-#   port        = 3000
-#   protocol    = "HTTP"
-#   vpc_id      = aws_vpc.main.id
-#   target_type = "ip"
-#
-#   health_check {
-#     healthy_threshold   = 2
-#     unhealthy_threshold = 2
-#     timeout             = 5
-#     path                = "/"
-#     interval            = 30
-#     matcher             = "200"
-#   }
-#
-#   tags = {
-#     Name = "capstone-frontend-tg"
-#   }
-# }
+resource "aws_lb_target_group" "frontend" {
+  name        = "capstone-frontend-tg"
+  port        = 3000
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    path                = "/"
+    interval            = 30
+    matcher             = "200"
+  }
+
+  tags = {
+    Name = "capstone-frontend-tg"
+  }
+}
 
 # Target Group - Backend
-# resource "aws_lb_target_group" "backend" {
-#   name        = "capstone-backend-tg"
-#   port        = 8000
-#   protocol    = "HTTP"
-#   vpc_id      = aws_vpc.main.id
-#   target_type = "ip"
-#
-#   health_check {
-#     healthy_threshold   = 2
-#     unhealthy_threshold = 2
-#     timeout             = 5
-#     path                = "/api/health/"
-#     interval            = 30
-#     matcher             = "200"
-#   }
-#
-#   tags = {
-#     Name = "capstone-backend-tg"
-#   }
-# }
+resource "aws_lb_target_group" "backend" {
+  name        = "capstone-backend-tg"
+  port        = 8000
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    path                = "/api/health/"
+    interval            = 30
+    matcher             = "200"
+  }
+
+  tags = {
+    Name = "capstone-backend-tg"
+  }
+}
 
 # ALB Listener - HTTP
-# resource "aws_lb_listener" "http" {
-#   load_balancer_arn = aws_lb.main.arn
-#   port              = "80"
-#   protocol          = "HTTP"
-#
-#   default_action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.frontend.arn
-#   }
-# }
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend.arn
+  }
+}
 
 # ALB Listener Rule - Backend
-# resource "aws_lb_listener_rule" "backend" {
-#   listener_arn = aws_lb_listener.http.arn
-#   priority     = 100
-#
-#   action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.backend.arn
-#   }
-#
-#   condition {
-#     path_pattern {
-#       values = ["/api/*", "/admin/*", "/db/*"]
-#     }
-#   }
-# }
+resource "aws_lb_listener_rule" "backend" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/*", "/admin/*", "/db/*"]
+    }
+  }
+}
 
 # Outputs
 output "vpc_id" {
@@ -336,15 +334,15 @@ output "private_subnet_ids" {
   value       = [aws_subnet.private_1.id, aws_subnet.private_2.id]
 }
 
-# output "alb_dns_name" {
-#   description = "Application Load Balancer DNS Name"
-#   value       = aws_lb.main.dns_name
-# }
+output "alb_dns_name" {
+  description = "Application Load Balancer DNS Name"
+  value       = aws_lb.main.dns_name
+}
 
-# output "alb_url" {
-#   description = "Application Load Balancer URL"
-#   value       = "http://${aws_lb.main.dns_name}"
-# }
+output "alb_url" {
+  description = "Application Load Balancer URL"
+  value       = "http://${aws_lb.main.dns_name}"
+}
 
 output "ecs_security_group_id" {
   description = "ECS Tasks Security Group ID"

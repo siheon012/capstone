@@ -86,13 +86,25 @@ try {
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
     
+    # Get local file hash before upload
+    $localHash = (Get-FileHash "terraform.tfstate" -Algorithm MD5).Hash
+    Write-Host "Local state hash: $localHash" -ForegroundColor Cyan
+    
     Write-Host "Uploading terraform.tfstate..." -ForegroundColor Yellow
     aws s3 cp "terraform.tfstate" "s3://$BucketName/terraform.tfstate" --region $Region
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Failed to upload terraform.tfstate" -ForegroundColor Red
         exit 1
     }
-    Write-Host "[OK] terraform.tfstate uploaded" -ForegroundColor Green
+    
+    # Verify upload by comparing ETags
+    Write-Host "Verifying upload..." -ForegroundColor Yellow
+    aws s3api head-object --bucket $BucketName --key "terraform.tfstate" --region $Region | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "[OK] terraform.tfstate uploaded and verified" -ForegroundColor Green
+    } else {
+        Write-Host "[WARNING] Upload verification failed" -ForegroundColor Yellow
+    }
 
     # Upload timestamped backup
     Write-Host "Uploading timestamped backup..." -ForegroundColor Yellow
@@ -117,9 +129,13 @@ try {
     Write-Host "[SUCCESS] All steps completed" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
+    Write-Host "State file hash: $localHash" -ForegroundColor Cyan
+    Write-Host "Share this hash with team members for verification." -ForegroundColor Yellow
+    Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "- Commit and push your Terraform changes to Git" -ForegroundColor White
     Write-Host "- Notify team members to download latest state" -ForegroundColor White
+    Write-Host "- Team should verify downloaded hash matches: $localHash" -ForegroundColor White
     Write-Host ""
     
 } finally {

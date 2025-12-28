@@ -45,7 +45,11 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Make sure the bucket exists and you have access." -ForegroundColor Yellow
     exit 1
 }
+
+# Calculate and display hash
+$downloadedHash = (Get-FileHash $StateFile -Algorithm MD5).Hash
 Write-Host "[OK] terraform.tfstate downloaded" -ForegroundColor Green
+Write-Host "Downloaded state hash: $downloadedHash" -ForegroundColor Cyan
 
 # Download backup file
 Write-Host "Downloading terraform.tfstate.backup..." -ForegroundColor Yellow
@@ -61,8 +65,12 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "[SUCCESS] State downloaded from S3" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "Downloaded state hash: $downloadedHash" -ForegroundColor Cyan
+Write-Host "Verify this matches the hash from upload-state.ps1" -ForegroundColor Yellow
+Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "- Run 'terraform plan' to verify state" -ForegroundColor White
+Write-Host "- If plan shows unexpected changes, state may be out of sync" -ForegroundColor White
 Write-Host "- Make your changes" -ForegroundColor White
 Write-Host "- Run '.\scripts\upload-state.ps1' after terraform apply" -ForegroundColor White
 Write-Host ""

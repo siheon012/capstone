@@ -50,11 +50,12 @@ cd /workspace || { echo "ERROR: Failed to cd to /workspace"; exit 1; }
 
 # run.py에서 --video-id를 integer로 받으므로 VIDEO_ID를 정수로 추출
 # VIDEO_ID 형식: test_20251217213302, video_123 등
-# 숫자만 추출하거나 기본값 사용
-VIDEO_ID_NUM="${VIDEO_ID//[^0-9]/}"  # 숫자만 추출
+# PostgreSQL INTEGER 범위: -2,147,483,648 to 2,147,483,647
+# 숫자만 추출하되 뒷 8자리만 사용 (범위 초과 방지)
+VIDEO_ID_NUM=$(echo -n "${VIDEO_ID}" | tr -d -c 0-9 | tail -c 8)
 if [ -z "$VIDEO_ID_NUM" ]; then
-    # 숫자가 없으면 해시값을 ID로 사용
-    VIDEO_ID_NUM=$(echo -n "${VIDEO_ID}" | md5sum | tr -d -c 0-9 | cut -c1-8)
+    # 숫자가 없으면 현재 타임스탬프 사용
+    VIDEO_ID_NUM=$(date +%s)
 fi
 
 echo "Extracted video_id: ${VIDEO_ID_NUM} from VIDEO_ID: ${VIDEO_ID}"

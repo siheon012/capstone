@@ -355,3 +355,118 @@ output "rds_security_group_id" {
   description = "RDS Security Group ID"
   value       = aws_security_group.rds.id
 }
+
+# ========================================
+# VPC Endpoints (비용 절감)
+# ========================================
+
+# S3 Gateway Endpoint (무료) - NAT Gateway 비용 절감
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id       = aws_vpc.main.id
+  service_name = "com.amazonaws.${var.region}.s3"
+  
+  route_table_ids = [
+    aws_route_table.public.id,
+    aws_route_table.private.id
+  ]
+
+  tags = {
+    Name = "capstone-s3-endpoint"
+  }
+}
+
+# ECR API Endpoint (비용 발생: $0.01/시간 + 데이터 전송)
+# Docker 이미지 pull 트래픽을 NAT Gateway 대신 사용
+resource "aws_vpc_endpoint" "ecr_api" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.region}.ecr.api"
+  vpc_endpoint_type   = "Interface"
+  private_dns_enabled = true
+  
+  subnet_ids = [
+    aws_subnet.private_1.id,
+    aws_subnet.private_2.id
+  ]
+  
+  security_group_ids = [
+    aws_security_group.vpc_endpoints.id
+  ]
+
+  tags = {
+    Name = "capstone-ecr-api-endpoint"
+  }
+}
+
+# ECR DKR Endpoint (비용 발생: $0.01/시간 + 데이터 전송)
+# Docker 이미지 레이어 pull에 사용
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.region}.ecr.dkr"
+  vpc_endpoint_type   = "Interface"
+  private_dns_enabled = true
+  
+  subnet_ids = [
+    aws_subnet.private_1.id,
+    aws_subnet.private_2.id
+  ]
+  
+  security_group_ids = [
+    aws_security_group.vpc_endpoints.id
+  ]
+
+  tags = {
+    Name = "capstone-ecr-dkr-endpoint"
+  }
+}
+
+# CloudWatch Logs Endpoint (비용 발생: $0.01/시간 + 데이터 전송)
+# 로그 전송을 NAT Gateway 대신 사용
+resource "aws_vpc_endpoint" "logs" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.region}.logs"
+  vpc_endpoint_type   = "Interface"
+  private_dns_enabled = true
+  
+  subnet_ids = [
+    aws_subnet.private_1.id,
+    aws_subnet.private_2.id
+  ]
+  
+  security_group_ids = [
+    aws_security_group.vpc_endpoints.id
+  ]
+
+  tags = {
+    Name = "capstone-logs-endpoint"
+  }
+}
+
+# VPC Endpoints용 Security Group
+resource "aws_security_group" "vpc_endpoints" {
+  name        = "capstone-vpc-endpoints-sg"
+  description = "Security group for VPC endpoints"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "capstone-vpc-endpoints-sg"
+  }
+}
+
+output "s3_endpoint_id" {
+  description = "S3 VPC Endpoint ID"
+  value       = aws_vpc_endpoint.s3.id
+}

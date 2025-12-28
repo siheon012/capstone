@@ -160,7 +160,8 @@ def lambda_handler(event, context):
                 # VIDEO_ID 추출: 우선순위
                 # 1. SQS 메시지의 video.id 필드
                 # 2. MessageAttributes의 video_id
-                # 3. S3 key에서 추출 (fallback)
+                # 3. S3 key 경로에서 추출 (videos/{video_id}/{filename})
+                # 4. Fallback: S3 key에서 파일명 사용
                 video_id = None
                 
                 # 1. 메시지 body에서 video.id 찾기
@@ -179,10 +180,34 @@ def lambda_handler(event, context):
                         video_id = attrs['video_id'].get('stringValue', attrs['video_id'].get('StringValue'))
                         logger.info(f"Extracted video_id from MessageAttributes: {video_id}")
                 
-                # 3. Fallback: S3 key에서 파일명 사용
+                # 3. S3 key 경로에서 추출: videos/{video_id}/{filename}
                 if not video_id:
-                    video_id = key.split('/')[-1].split('.')[0]
-                    logger.warning(f"Using filename as video_id (fallback): {video_id}")
+                    try:
+                        # S3 key 형식: videos/123/test.mp4 → video_id = 123
+                        key_parts = key.split('/')
+                        if len(key_parts) >= 2 and key_parts[0] == 'videos':
+                            extracted_id = key_parts[1]
+                            # 숫자인지 확인
+                            if extracted_id.isdigit():
+                                video_id = extracted_id
+                                logger.info(f"Extracted video_id from S3 key path: {video_id}")
+                            else:
+                                logger.warning(f"S3 key path segment is not a number: {extracted_id}")
+                    except Exception as e:
+                        logger.debug(f"Could not extract video_id from S3 key path: {e}")
+                
+                # 4. Fallback: S3 key에서 파일명 사용 (숫자만 추출)
+                if not video_id:
+                    filename = key.split('/')[-1].split('.')[0]
+                    # 파일명에서 숫자만 추출 시도
+                    import re
+                    numbers = re.findall(r'\d+', filename)
+                    if numbers:
+                        video_id = numbers[-1]  # 마지막 숫자 그룹 사용
+                        logger.warning(f"Using extracted number from filename as video_id (fallback): {video_id}")
+                    else:
+                        video_id = filename
+                        logger.warning(f"Using filename as video_id (fallback): {video_id}")
                 
                 logger.info(f"Final video_id: {video_id}")
                 

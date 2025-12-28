@@ -27,7 +27,7 @@ resource "aws_sqs_queue" "video_processing" {
   # DLQ 설정
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.video_processing_dlq.arn
-    maxReceiveCount     = 3  # 3번 실패 시 DLQ로 이동
+    maxReceiveCount     = 1  # 1번만 시도 (중복 실행 방지)
   })
 
   tags = {

@@ -1,9 +1,9 @@
-# Upload Terraform State to S3
+# Apply Terraform Changes and Upload State to S3
 # Usage: .\scripts\upload-state.ps1
-
 param(
     [string]$Region = "ap-northeast-2",
-    [string]$Environment = "dev"
+    [string]$Environment = "dev",
+    [switch]$SkipApply
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,55 +11,118 @@ $ErrorActionPreference = "Stop"
 $BucketName = "capstone-$Environment-terraform-state-backup"
 $StateFile = "terraform\terraform.tfstate"
 $BackupFile = "terraform\terraform.tfstate.backup"
+$TerraformDir = "terraform"
 $Timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "Uploading Terraform State to S3" -ForegroundColor Cyan
+Write-Host "Terraform Apply and Upload to S3" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Bucket: $BucketName" -ForegroundColor Yellow
 Write-Host "Region: $Region" -ForegroundColor Yellow
 Write-Host ""
 
-# Check if state file exists
-if (-not (Test-Path $StateFile)) {
-    Write-Host "[ERROR] terraform.tfstate not found!" -ForegroundColor Red
+# Check if terraform directory exists
+if (-not (Test-Path $TerraformDir)) {
+    Write-Host "[ERROR] Terraform directory not found!" -ForegroundColor Red
     Write-Host "Please run this script from the project root directory." -ForegroundColor Yellow
     exit 1
 }
 
-# Upload current state
-Write-Host "Uploading terraform.tfstate..." -ForegroundColor Yellow
-aws s3 cp $StateFile "s3://$BucketName/terraform.tfstate" --region $Region
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERROR] Failed to upload terraform.tfstate" -ForegroundColor Red
-    exit 1
-}
-Write-Host "[OK] terraform.tfstate uploaded" -ForegroundColor Green
+# Navigate to terraform directory
+Push-Location $TerraformDir
 
-# Upload timestamped backup
-Write-Host "Uploading timestamped backup..." -ForegroundColor Yellow
-aws s3 cp $StateFile "s3://$BucketName/backups/terraform.tfstate.$Timestamp" --region $Region
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[WARNING] Failed to upload timestamped backup" -ForegroundColor Yellow
-} else {
-    Write-Host "[OK] Backup uploaded: terraform.tfstate.$Timestamp" -ForegroundColor Green
-}
-
-# Upload backup file if exists
-if (Test-Path $BackupFile) {
-    Write-Host "Uploading terraform.tfstate.backup..." -ForegroundColor Yellow
-    aws s3 cp $BackupFile "s3://$BucketName/terraform.tfstate.backup" --region $Region
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "[OK] terraform.tfstate.backup uploaded" -ForegroundColor Green
+try {
+    if (-not $SkipApply) {
+        # Run terraform plan
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host "Step 1: Terraform Plan" -ForegroundColor Cyan
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host ""
+        
+        terraform plan
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[ERROR] Terraform plan failed!" -ForegroundColor Red
+            exit 1
+        }
+        
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Cyan
+        $response = Read-Host "Apply these changes? (yes/no)"
+        if ($response -ne "yes") {
+            Write-Host "Aborted." -ForegroundColor Yellow
+            exit 0
+        }
+        
+        # Run terraform apply
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host "Step 2: Terraform Apply" -ForegroundColor Cyan
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host ""
+        
+        terraform apply -auto-approve
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[ERROR] Terraform apply failed!" -ForegroundColor Red
+            exit 1
+        }
+        
+        Write-Host ""
+        Write-Host "[SUCCESS] Terraform apply completed" -ForegroundColor Green
+        Write-Host ""
+    } else {
+        Write-Host "[INFO] Skipping terraform apply (--SkipApply flag used)" -ForegroundColor Yellow
+        Write-Host ""
     }
-}
+    
+    # Check if state file exists
+    if (-not (Test-Path "terraform.tfstate")) {
+        Write-Host "[ERROR] terraform.tfstate not found!" -ForegroundColor Red
+        exit 1
+    }
 
-Write-Host ""
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "[SUCCESS] State uploaded to S3" -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "- Commit and push your Terraform changes to Git" -ForegroundColor White
-Write-Host "- Notify team members to download latest state" -ForegroundColor White
-Write-Host ""
+    # Upload current state
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "Step 3: Upload State to S3" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host ""
+    
+    Write-Host "Uploading terraform.tfstate..." -ForegroundColor Yellow
+    aws s3 cp "terraform.tfstate" "s3://$BucketName/terraform.tfstate" --region $Region
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Failed to upload terraform.tfstate" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "[OK] terraform.tfstate uploaded" -ForegroundColor Green
+
+    # Upload timestamped backup
+    Write-Host "Uploading timestamped backup..." -ForegroundColor Yellow
+    aws s3 cp "terraform.tfstate" "s3://$BucketName/backups/terraform.tfstate.$Timestamp" --region $Region
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[WARNING] Failed to upload timestamped backup" -ForegroundColor Yellow
+    } else {
+        Write-Host "[OK] Backup uploaded: terraform.tfstate.$Timestamp" -ForegroundColor Green
+    }
+
+    # Upload backup file if exists
+    if (Test-Path "terraform.tfstate.backup") {
+        Write-Host "Uploading terraform.tfstate.backup..." -ForegroundColor Yellow
+        aws s3 cp "terraform.tfstate.backup" "s3://$BucketName/terraform.tfstate.backup" --region $Region
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[OK] terraform.tfstate.backup uploaded" -ForegroundColor Green
+        }
+    }
+
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "[SUCCESS] All steps completed" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Next steps:" -ForegroundColor Yellow
+    Write-Host "- Commit and push your Terraform changes to Git" -ForegroundColor White
+    Write-Host "- Notify team members to download latest state" -ForegroundColor White
+    Write-Host ""
+    
+} finally {
+    # Return to original directory
+    Pop-Location
+}

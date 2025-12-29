@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Clock, 
-  Calendar, 
-  MapPin, 
-  User, 
+import {
+  Clock,
+  Calendar,
+  MapPin,
+  User,
   Activity,
   RefreshCw,
   AlertTriangle,
-  Info
+  Info,
 } from 'lucide-react';
 import { Event } from '@/app/types/event';
 import { UploadedVideo } from '@/app/types/video';
@@ -23,10 +23,10 @@ interface EventTimelineProps {
   onSeekToEvent?: (timestamp: number) => void; // 이벤트 시간으로 이동하는 콜백
 }
 
-export default function EventTimeline({ 
-  video, 
-  currentTime = 0, 
-  onSeekToEvent 
+export default function EventTimeline({
+  video,
+  currentTime = 0,
+  onSeekToEvent,
 }: EventTimelineProps) {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,18 +35,20 @@ export default function EventTimeline({
   const loadEvents = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       console.log(`[EventTimeline] Loading events for video ID: ${video.id}`);
       console.log(`[EventTimeline] Video object:`, video);
-      
+
       const response = await getEvents(video.id);
-      
+
       console.log(`[EventTimeline] API response:`, response);
-      
+
       if (response.success) {
         setEvents(response.data);
-        console.log(`[EventTimeline] Loaded ${response.data.length} events for video ${video.id}`);
+        console.log(
+          `[EventTimeline] Loaded ${response.data.length} events for video ${video.id}`
+        );
       } else {
         const errorMsg = response.error || '이벤트를 불러올 수 없습니다.';
         console.error(`[EventTimeline] API error:`, errorMsg);
@@ -54,7 +56,10 @@ export default function EventTimeline({
       }
     } catch (err) {
       console.error('[EventTimeline] Error loading events:', err);
-      const errorMsg = err instanceof Error ? err.message : '이벤트를 불러오는 중 오류가 발생했습니다.';
+      const errorMsg =
+        err instanceof Error
+          ? err.message
+          : '이벤트를 불러오는 중 오류가 발생했습니다.';
       setError(`네트워크 오류: ${errorMsg}`);
     } finally {
       setLoading(false);
@@ -129,7 +134,7 @@ export default function EventTimeline({
             <span className="ml-2 text-red-400">{error}</span>
           </div>
           <div className="flex justify-center mt-4">
-            <Button 
+            <Button
               onClick={loadEvents}
               variant="outline"
               className="border-[#00e6b4] text-[#00e6b4] hover:bg-[#00e6b4] hover:text-[#1a1f2c]"
@@ -151,7 +156,7 @@ export default function EventTimeline({
             <Clock className="h-5 w-5" />
             이벤트 타임라인
           </CardTitle>
-          <Button 
+          <Button
             onClick={loadEvents}
             variant="ghost"
             size="sm"
@@ -168,7 +173,9 @@ export default function EventTimeline({
         {events.length === 0 ? (
           <div className="flex items-center justify-center p-8">
             <Info className="h-6 w-6 text-gray-400" />
-            <span className="ml-2 text-gray-400">감지된 이벤트가 없습니다.</span>
+            <span className="ml-2 text-gray-400">
+              감지된 이벤트가 없습니다.
+            </span>
           </div>
         ) : (
           <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -189,8 +196,13 @@ export default function EventTimeline({
                     {onSeekToEvent && (
                       <Button
                         onClick={() => {
-                          console.log(`[EventTimeline] 이동 버튼 클릭 - timestamp: ${event.timestamp}`);
-                          console.log(`[EventTimeline] onSeekToEvent function:`, onSeekToEvent);
+                          console.log(
+                            `[EventTimeline] 이동 버튼 클릭 - timestamp: ${event.timestamp}`
+                          );
+                          console.log(
+                            `[EventTimeline] onSeekToEvent function:`,
+                            onSeekToEvent
+                          );
                           onSeekToEvent(event.timestamp);
                         }}
                         variant="ghost"
@@ -208,7 +220,9 @@ export default function EventTimeline({
                   <div className="flex items-center gap-2 text-gray-300">
                     <Clock className="h-4 w-4 text-[#6c5ce7]" />
                     <span className="font-medium">영상 시간:</span>
-                    <span className="text-[#00e6b4]">{formatRelativeTime(event.timestamp)}</span>
+                    <span className="text-[#00e6b4]">
+                      {formatRelativeTime(event.timestamp)}
+                    </span>
                   </div>
 
                   {/* 실제 시각 */}
@@ -216,7 +230,13 @@ export default function EventTimeline({
                     <Calendar className="h-4 w-4 text-[#6c5ce7]" />
                     <span className="font-medium">실제 시각:</span>
                     <span className="text-[#00e6b4]">
-                      {event.absolute_time_display || (video.timeInVideo ? formatAbsoluteTime(video.timeInVideo, event.timestamp) : '시간 정보 없음')}
+                      {event.absolute_time_display ||
+                        (video.timeInVideo
+                          ? formatAbsoluteTime(
+                              video.timeInVideo,
+                              event.timestamp
+                            )
+                          : '시간 정보 없음')}
                     </span>
                   </div>
 
@@ -231,7 +251,11 @@ export default function EventTimeline({
                   <div className="flex items-center gap-2 text-gray-300">
                     <User className="h-4 w-4 text-[#6c5ce7]" />
                     <span className="font-medium">인물:</span>
-                    <span>{event.gender} ({event.age}세, {event.gender_score.toFixed(1)}% 신뢰도)</span>
+                    <span>
+                      {event.gender} ({event.age}세,{' '}
+                      {event.gender_score ? event.gender_score.toFixed(1) : '0'}
+                      % 신뢰도)
+                    </span>
                   </div>
 
                   {/* 행동 정보 */}
@@ -245,7 +269,9 @@ export default function EventTimeline({
                   {event.scene_analysis && (
                     <div className="text-gray-300 md:col-span-2">
                       <span className="font-medium">장면 분석:</span>
-                      <p className="mt-1 text-gray-400">{event.scene_analysis}</p>
+                      <p className="mt-1 text-gray-400">
+                        {event.scene_analysis}
+                      </p>
                     </div>
                   )}
                 </div>

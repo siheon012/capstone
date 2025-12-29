@@ -211,6 +211,56 @@ def lambda_handler(event, context):
                 
                 logger.info(f"Final video_id: {video_id}")
                 
+                # 🔄 중복 Job 방지: S3 key를 기반으로 최근 생성된 Job 확인
+                duplicate_found = False
+                try:
+                    # 모든 active 상태의 Job 조회
+                    active_statuses = ['SUBMITTED', 'PENDING', 'RUNNABLE', 'STARTING', 'RUNNING']
+                    all_active_jobs = []
+                    
+                    for status in active_statuses:
+                        response = batch_client.list_jobs(
+                            jobQueue=JOB_QUEUE,
+                            jobStatus=status,
+                            maxResults=100
+                        )
+                        all_active_jobs.extend(response.get('jobSummaryList', []))
+                    
+                    logger.info(f"Total active jobs: {len(all_active_jobs)}")
+                    
+                    # 각 Job의 태그에서 VideoKey 확인 (S3 key와 일치하는지)
+                    current_time = int(datetime.now().timestamp() * 1000)
+                    for job_summary in all_active_jobs:
+                        job_id = job_summary['jobId']
+                        created_at = job_summary.get('createdAt', 0)
+                        time_diff_seconds = (current_time - created_at) / 1000
+                        
+                        # 5분 이내에 생성된 Job만 확인
+                        if time_diff_seconds < 300:
+                            # Job 상세 정보 조회 (태그 확인)
+                            job_detail = batch_client.describe_jobs(jobs=[job_id])
+                            if job_detail.get('jobs'):
+                                job_tags = job_detail['jobs'][0].get('tags', {})
+                                existing_key = job_tags.get('VideoKey', '')
+                                
+                                if existing_key == key:
+                                    logger.warning(
+                                        f"⚠️ Duplicate job detected! "
+                                        f"S3 Key: {key}, "
+                                        f"Existing Job: {job_id} (status: {job_summary['status']}, "
+                                        f"created {time_diff_seconds:.0f}s ago)"
+                                    )
+                                    duplicate_found = True
+                                    successful_count += 1  # 성공으로 처리 (SQS 메시지 삭제)
+                                    break
+                    
+                    if duplicate_found:
+                        logger.info("Skipping job submission due to duplicate.")
+                        continue  # 다음 메시지로
+                        
+                except Exception as check_error:
+                    logger.warning(f"⚠️ Failed to check for duplicate jobs: {check_error}. Proceeding with job submission.")
+                
                 # containerOverrides.environment 사용하지 않음
                 # Job Definition의 환경변수를 그대로 사용하고, 동적 값만 command로 전달
                 response = batch_client.submit_job(

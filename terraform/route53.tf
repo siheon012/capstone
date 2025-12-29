@@ -107,43 +107,40 @@ resource "aws_acm_certificate_validation" "main" {
   validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
 }
 
-# ========================================
-# ALB HTTPS Listener 추가 (선택사항)
-# 💰 ALB 비활성화로 인해 주석 처리
-# ========================================
-
+# ALB HTTPS Listener 추가
 # HTTPS 리스너 (443 포트)
-# resource "aws_lb_listener" "https" {
-#   count             = var.domain_name != "" ? 1 : 0
-#   load_balancer_arn = aws_lb.main.arn
-#   port              = "443"
-#   protocol          = "HTTPS"
-#   ssl_policy        = "ELBSecurityPolicy-2016-08"
-#   certificate_arn   = aws_acm_certificate_validation.main[0].certificate_arn
-#
-#   default_action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.frontend.arn
-#   }
-# }
+
+resource "aws_lb_listener" "https" {
+  count             = var.domain_name != "" ? 1 : 0
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_acm_certificate_validation.main[0].certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend.arn
+  }
+}
 
 # HTTPS 리스너 규칙 - Backend
-# resource "aws_lb_listener_rule" "backend_https" {
-#   count        = var.domain_name != "" ? 1 : 0
-#   listener_arn = aws_lb_listener.https[0].arn
-#   priority     = 100
-#
-#   action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.backend.arn
-#   }
-#
-#   condition {
-#     path_pattern {
-#       values = ["/api/*", "/admin/*", "/db/*"]
-#     }
-#   }
-# }
+resource "aws_lb_listener_rule" "backend_https" {
+  count        = var.domain_name != "" ? 1 : 0
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/*", "/admin/*", "/db/*"]
+    }
+  }
+}
 
 # HTTP 리스너는 vpc.tf에 이미 존재하므로 여기서는 생성하지 않음
 # 대신 기존 HTTP 리스너를 HTTPS로 리다이렉트하도록 수정

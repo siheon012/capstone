@@ -289,17 +289,23 @@ resource "aws_lb_target_group" "backend" {
   }
 }
 
-# ALB Listener - HTTP
+# ALB Listener - HTTP (Redirect to HTTPS)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend.arn
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
+
+# Note: HTTPS Listener는 route53.tf에 정의되어 있음
 
 # ALB Listener Rule - Backend
 resource "aws_lb_listener_rule" "backend" {

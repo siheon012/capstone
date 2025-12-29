@@ -125,9 +125,13 @@ class S3VideoUploadService:
         # 토큰 검증
         payload = self.validate_upload_token(token)
         
-        # S3 키 생성 (년/월/일/UUID_파일명 형태)
-        upload_date = datetime.utcnow()
-        s3_key = f"videos/{upload_date.strftime('%Y/%m/%d')}/{payload['upload_id']}_{payload['file_name']}"
+        # S3 키 생성 (videos/{video_id}/{filename} 형태)
+        # Note: video_id는 토큰 생성 시 포함되어야 함
+        video_id = payload.get('video_id')
+        if not video_id:
+            raise ValueError("video_id is required in upload token")
+        
+        s3_key = f"videos/{video_id}/{payload['file_name']}"
         
         # Pre-signed URL 생성 (15분 유효)
         try:

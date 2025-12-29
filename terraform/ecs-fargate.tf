@@ -358,7 +358,7 @@ resource "aws_ecs_service" "frontend" {
   name            = "capstone-frontend-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.frontend.arn
-  desired_count   = 0  # 필요할 때 꺼
+  desired_count   = 1  # 필요할 때 꺼
   launch_type     = "FARGATE"
 
   network_configuration {

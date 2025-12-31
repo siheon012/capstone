@@ -6,6 +6,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from pgvector.django import VectorField
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,12 @@ class Video(models.Model):
     
     # AI 영상 요약 (VLM으로 생성)
     summary = models.TextField(blank=True, null=True, help_text="AI 영상 분석 요약 (이모지, 특수기호 포함 가능)")
+    summary_status = models.CharField(max_length=20, default='pending', choices=[
+        ('pending', '대기중'),
+        ('generating', '생성중'),
+        ('completed', '완료'),
+        ('failed', '실패')
+    ], help_text="Summary generation status")
     
     # SQS Job 추적
     job_id = models.CharField(max_length=100, null=True, blank=True, help_text="AWS Batch job ID")
@@ -288,6 +295,9 @@ class Event(models.Model):
         ('picking', '물건 집기'),
         ('walking', '걷기'),
         ('standing', '서있기'),
+        ('theft', '도난'),
+        ('collapse', '쓰러짐'),
+        ('sitting', '점거'),
     ])
     
     # 시간 정보
@@ -410,7 +420,7 @@ class Event(models.Model):
 class PromptSession(models.Model):
     """클라우드 네이티브 프롬프트 세션 모델"""
     # 세션 기본 정보
-    session_id = models.CharField(max_length=255, unique=True)
+    session_id = models.CharField(max_length=255, unique=True, blank=True)
     user_id = models.CharField(max_length=255, blank=True)  # 사용자 식별자
     
     # 주요 이벤트 연결 (RAG 검색의 컨텍스트)
@@ -458,6 +468,12 @@ class PromptSession(models.Model):
             models.Index(fields=['data_tier', 'access_count']),
         ]
     
+    def save(self, *args, **kwargs):
+        """session_id가 없으면 UUID로 자동 생성"""
+        if not self.session_id:
+            self.session_id = str(uuid.uuid4())
+        super().save(*args, **kwargs)
+    
     def add_interaction(self, query_text):
         """새로운 상호작용 추가"""
         self.total_interactions += 1
@@ -471,6 +487,42 @@ class PromptSession(models.Model):
         if interactions:
             summaries = [i.response_summary for i in interactions if i.response_summary]
             self.context_summary = " | ".join(summaries[-3:])  # 최근 3개 요약
+    
+    @property
+    def display_title(self):
+        """세션 제목 표시"""
+        return self.session_name or f"세션 {self.session_id[:8]}"
+    
+    @property
+    def timeline_summary(self):
+        """타임라인 요약"""
+        if self.main_event:
+            return f"{self.main_event.timestamp:.1f}초"
+        return "N/A"
+    
+    @property
+    def main_event_display(self):
+        """메인 이벤트 표시"""
+        if self.main_event:
+            return f"{self.main_event.event_type} @ {self.main_event.timestamp:.1f}s"
+        return "No event"
+    
+    @property
+    def first_prompt(self):
+        """첫 번째 프롬프트"""
+        first = self.interactions.first()
+        return first.user_prompt if first else None
+    
+    @property
+    def first_response(self):
+        """첫 번째 응답"""
+        first = self.interactions.first()
+        return first.ai_response if first else None
+    
+    @property
+    def interaction_count(self):
+        """인터랙션 개수"""
+        return self.interactions.count()
     
     def __str__(self):
         return f"Session {self.session_id} - {self.total_interactions} interactions"

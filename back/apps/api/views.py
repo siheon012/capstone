@@ -143,7 +143,13 @@ def process_prompt(request):
             history.related_videos.add(video)
         
         # 2. 프롬프트 처리 및 관련 이벤트 검색 (해당 비디오의 이벤트만)
-        response_text, relevant_event = process_prompt_logic(prompt_text, video)
+        try:
+            response_text, relevant_event = process_prompt_logic(prompt_text, video)
+        except Exception as e:
+            print(f"⚠️ process_prompt_logic 에러: {str(e)}")
+            # Bedrock 실패 시 기본 응답 사용
+            response_text = f"죄송합니다. AI 처리 중 오류가 발생했습니다. 다시 시도해 주세요. (에러: {str(e)})"
+            relevant_event = None
         
         # 3. 세션의 main_event 설정 (첫 프롬프트인 경우)
         if not session_id and relevant_event and not history.main_event:
@@ -211,10 +217,10 @@ def get_prompt_history(request):
                 
                 history_item = {
                     'session_id': history.session_id,
-                    'title': history.title,
+                    'title': history.session_name,
                     'timestamp': event_timestamp.strftime('%H:%M') if event_timestamp else history.created_at.strftime('%H:%M'),
-                    'first_question': first_interaction.input_prompt,
-                    'first_answer': first_interaction.output_response,
+                    'first_question': first_interaction.user_prompt,
+                    'first_answer': first_interaction.ai_response,
                     'interaction_count': history.interactions.count(),
                     'created_at': history.created_at.isoformat(),
                     'updated_at': history.updated_at.isoformat(),
@@ -251,12 +257,11 @@ def get_session_detail(request, session_id):
         for interaction in interactions:
             item = {
                 'id': interaction.id,
-                'input_prompt': interaction.input_prompt,
-                'output_response': interaction.output_response,
-                'timestamp': interaction.timestamp.isoformat(),
-                'timeline_points': interaction.timeline_points,  # 타임라인 포인트 추가
-                'found_events_count': interaction.found_events_count,
-                'processing_status': interaction.processing_status,
+                'input_prompt': interaction.user_prompt,
+                'output_response': interaction.ai_response,
+                'timestamp': interaction.created_at.isoformat(),
+                'sequence_number': interaction.sequence_number,
+                'analysis_type': interaction.analysis_type,
             }
             
             result.append(item)
@@ -422,18 +427,30 @@ def process_vlm_chat(request):
         # 6. 상호작용 저장
         interaction = PromptInteraction.objects.create(
             session=session,
-            video=video,
-            input_prompt=prompt_text,
-            output_response=response_text,
-            detected_event=events.first() if events.exists() else None,
+            interaction_id=f"{session.session_id}_{session.total_interactions + 1}",
+            sequence_number=session.total_interactions + 1,
+            user_prompt=prompt_text,
+            ai_response=response_text,
             analysis_type=analysis_type
         )
+        
+        # ManyToMany 관계는 create 후에 추가
+        if events.exists():
+            # 최대 5개의 관련 이벤트 추가
+            for event in events[:5]:
+                interaction.related_events.add(event)
+        
+        # 비디오 추가
+        interaction.related_videos.add(video)
+        
+        # 세션 통계 업데이트
+        session.add_interaction(prompt_text)
         
         # 7. 응답 반환
         result = {
             "session_id": session.session_id,
             "response": response_text,
-            "timestamp": interaction.timestamp.isoformat(),
+            "timestamp": interaction.created_at.isoformat(),
             "analysis_type": analysis_type,
             "event_count": events.count()
         }
@@ -773,31 +790,37 @@ def process_prompt_logic(prompt_text, video=None):
         # ============================================
         found_events = []
         relevant_event = None
+        query_results_data = []  # 쿼리 결과 저장
+        
+        # 쿼리 결과의 컬럼명 추출
+        column_names = [desc[0] for desc in cursor.description] if cursor.description else []
         
         for result in query_results:
             try:
-                # timestamp 값 추출 (첫 번째 컬럼 가정)
-                timestamp_value = result[0]
+                # 결과를 딕셔너리로 변환
+                result_dict = dict(zip(column_names, result))
+                query_results_data.append(result_dict)
                 
-                # Event 객체 조회
-                if video:
-                    events = Event.objects.filter(timestamp=timestamp_value, video=video)
-                else:
-                    events = Event.objects.filter(timestamp=timestamp_value)
-                    
-                if events.exists():
-                    event = events.first()
-                    found_events.append(event)
-                    
-                    # 첫 번째 이벤트를 relevant_event로 설정
-                    if relevant_event is None:
-                        relevant_event = event
+                # id가 있으면 Event 객체 조회
+                event_id = result_dict.get('id')
+                if event_id:
+                    try:
+                        event = Event.objects.get(id=event_id)
+                        found_events.append(event)
+                        
+                        # 첫 번째 이벤트를 relevant_event로 설정
+                        if relevant_event is None:
+                            relevant_event = event
+                    except Event.DoesNotExist:
+                        print(f"⚠️ Event ID {event_id} not found")
                         
             except Exception as e:
                 print(f"⚠️ 이벤트 매핑 오류: {e}")
         
-        if not found_events:
-            return "이벤트를 찾았으나 상세 정보를 조회할 수 없습니다.", None
+        if not found_events and not query_results_data:
+            return "요청하신 조건에 해당하는 이벤트를 찾을 수 없습니다.", None
+        
+        print(f"✅ Event 객체: {len(found_events)}개, 쿼리 결과: {len(query_results_data)}개")
         
         # ============================================
         # 4. Bedrock RAG: 자연어 응답 생성
@@ -806,18 +829,34 @@ def process_prompt_logic(prompt_text, video=None):
             print(f"🤖 Bedrock RAG를 통해 응답 생성")
             bedrock_service = get_bedrock_service()
             
-            # Event 객체를 딕셔너리로 변환
+            # Event 객체와 쿼리 결과를 결합하여 데이터 구성
             events_data = []
-            for event in found_events:
-                events_data.append({
+            for i, event in enumerate(found_events):
+                # Event 객체 데이터
+                event_dict = {
+                    'id': event.id,
                     'timestamp': event.timestamp,
                     'event_type': event.event_type,
-                    'action_detected': event.action_detected,
-                    'location': event.location,
-                    'age': event.age,
+                    'action': event.action,
                     'gender': event.gender,
-                    'scene_analysis': event.scene_analysis,
-                })
+                    'age_group': event.age_group,
+                    'emotion': event.emotion,
+                    'confidence': event.confidence,
+                    'bbox_x': event.bbox_x,
+                    'bbox_y': event.bbox_y,
+                    'bbox_width': event.bbox_width,
+                    'bbox_height': event.bbox_height,
+                }
+                
+                # 쿼리 결과에서 추가 데이터 병합 (있는 경우)
+                if i < len(query_results_data):
+                    event_dict.update(query_results_data[i])
+                    
+                events_data.append(event_dict)
+            
+            # Event 객체가 없으면 쿼리 결과만 사용
+            if not events_data and query_results_data:
+                events_data = query_results_data
             
             video_name = video.name if video else "알 수 없음"
             
@@ -855,10 +894,10 @@ class PromptSessionViewSet(viewsets.ModelViewSet):
         """쿼리셋 필터링"""
         queryset = super().get_queryset()
         
-        # 비디오 ID로 필터링
+        # 비디오 ID로 필터링 (related_videos ManyToMany)
         video_id = self.request.query_params.get('video', None)
         if video_id:
-            queryset = queryset.filter(video_id=video_id)
+            queryset = queryset.filter(related_videos__video_id=video_id).distinct()
             
         return queryset
 

@@ -148,13 +148,6 @@ def lambda_handler(event, context):
             
             logger.info(f"Processing video: s3://{bucket}/{key}")
             
-            # Job 이름 생성: timestamp 포함하여 중복 방지
-            timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-            video_filename = key.split('/')[-1].split('.')[0]
-            job_name = f"video-process-{timestamp}-{video_filename[:20]}"  # 이름 길이 제한
-            
-            logger.info(f"Submitting job: {job_name}")
-            
             # AWS Batch Job 제출
             try:
                 # VIDEO_ID 추출: 우선순위
@@ -209,9 +202,14 @@ def lambda_handler(event, context):
                         video_id = filename
                         logger.warning(f"Using filename as video_id (fallback): {video_id}")
                 
-                logger.info(f"Final video_id: {video_id}")
+                logger.info(f"✅ Final video_id: {video_id}")
                 
-                # 🔄 중복 Job 방지: S3 key를 기반으로 최근 생성된 Job 확인
+                # 🎯 Job 이름 생성: video_id만 사용 (중복 방지를 위해 deterministic하게)
+                # 타임스탬프나 UUID를 추가하지 않음
+                job_name = f"video-process-{video_id}"
+                logger.info(f"🚀 Submitting job: {job_name}")
+                
+                # 🔄 강화된 중복 Job 방지: job name으로 1차, S3 key로 2차 확인
                 duplicate_found = False
                 try:
                     # 모든 active 상태의 Job 조회
@@ -226,40 +224,57 @@ def lambda_handler(event, context):
                         )
                         all_active_jobs.extend(response.get('jobSummaryList', []))
                     
-                    logger.info(f"Total active jobs: {len(all_active_jobs)}")
+                    logger.info(f"📊 Total active jobs: {len(all_active_jobs)}")
                     
-                    # 각 Job의 태그에서 VideoKey 확인 (S3 key와 일치하는지)
-                    current_time = int(datetime.now().timestamp() * 1000)
+                    # 🎯 1차: job name으로 빠른 체크 (API 호출 불필요)
                     for job_summary in all_active_jobs:
-                        job_id = job_summary['jobId']
-                        created_at = job_summary.get('createdAt', 0)
-                        time_diff_seconds = (current_time - created_at) / 1000
-                        
-                        # 5분 이내에 생성된 Job만 확인
-                        if time_diff_seconds < 300:
-                            # Job 상세 정보 조회 (태그 확인)
-                            job_detail = batch_client.describe_jobs(jobs=[job_id])
-                            if job_detail.get('jobs'):
-                                job_tags = job_detail['jobs'][0].get('tags', {})
-                                existing_key = job_tags.get('VideoKey', '')
-                                
-                                if existing_key == key:
-                                    logger.warning(
-                                        f"⚠️ Duplicate job detected! "
-                                        f"S3 Key: {key}, "
-                                        f"Existing Job: {job_id} (status: {job_summary['status']}, "
-                                        f"created {time_diff_seconds:.0f}s ago)"
-                                    )
-                                    duplicate_found = True
-                                    successful_count += 1  # 성공으로 처리 (SQS 메시지 삭제)
-                                    break
+                        if job_summary.get('jobName') == job_name:
+                            logger.warning(
+                                f"⚠️ DUPLICATE JOB DETECTED by job name! "
+                                f"video_id: {video_id}, "
+                                f"job_name: {job_name}, "
+                                f"Existing Job ID: {job_summary['jobId']} (status: {job_summary['status']})"
+                            )
+                            duplicate_found = True
+                            successful_count += 1  # 성공으로 처리 (SQS 메시지 삭제)
+                            break
+                    
+                    # 🎯 2차: S3 key로 추가 확인 (job name이 다를 경우 대비)
+                    if not duplicate_found:
+                        current_time = int(datetime.now().timestamp() * 1000)
+                        for job_summary in all_active_jobs:
+                            job_id = job_summary['jobId']
+                            created_at = job_summary.get('createdAt', 0)
+                            time_diff_seconds = (current_time - created_at) / 1000
+                            
+                            # 5분 이내에 생성된 Job만 확인
+                            if time_diff_seconds < 300:
+                                try:
+                                    # Job 상세 정보 조회 (태그 확인)
+                                    job_detail = batch_client.describe_jobs(jobs=[job_id])
+                                    if job_detail.get('jobs'):
+                                        job_tags = job_detail['jobs'][0].get('tags', {})
+                                        existing_key = job_tags.get('VideoKey', '')
+                                        
+                                        if existing_key == key:
+                                            logger.warning(
+                                                f"⚠️ DUPLICATE JOB DETECTED by S3 key! "
+                                                f"S3 Key: {key}, "
+                                                f"Existing Job ID: {job_id} (status: {job_summary['status']}, "
+                                                f"created {time_diff_seconds:.0f}s ago)"
+                                            )
+                                            duplicate_found = True
+                                            successful_count += 1  # 성공으로 처리 (SQS 메시지 삭제)
+                                            break
+                                except Exception as detail_error:
+                                    logger.debug(f"Error checking job details: {detail_error}")
                     
                     if duplicate_found:
-                        logger.info("Skipping job submission due to duplicate.")
+                        logger.info("✋ Skipping job submission due to duplicate detection.")
                         continue  # 다음 메시지로
                         
                 except Exception as check_error:
-                    logger.warning(f"⚠️ Failed to check for duplicate jobs: {check_error}. Proceeding with job submission.")
+                    logger.warning(f"⚠️ Failed to check for duplicate jobs: {check_error}. Proceeding with job submission anyway.")
                 
                 # containerOverrides.environment 사용하지 않음
                 # Job Definition의 환경변수를 그대로 사용하고, 동적 값만 command로 전달

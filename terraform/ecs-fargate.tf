@@ -307,7 +307,7 @@ resource "aws_ecs_task_definition" "backend" {
         },
         {
           name  = "AWS_BEDROCK_MODEL_ID"
-          value = "anthropic.claude-3-sonnet-20240229-v1:0"
+          value = "anthropic.claude-3-5-sonnet-20240620-v1:0"
         },
         {
           name  = "AWS_BEDROCK_EMBEDDING_MODEL_ID"

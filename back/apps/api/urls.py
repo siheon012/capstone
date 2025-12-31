@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
-from .summary_views import generate_video_summary
+from .summary_views import generate_video_summary, check_summary_status
 from . import views_s3
 
 # DRF Router 설정
@@ -18,7 +18,7 @@ urlpatterns = [
     # 기존 프롬프트 API
     path('prompt/', views.process_prompt, name='process_prompt'),
     path('prompt/history/', views.get_prompt_history, name='get_prompt_history'),
-    path('prompt/history/<int:session_id>/', views.get_session_detail, name='get_session_detail'),
+    path('prompt/history/<str:session_id>/', views.get_session_detail, name='get_session_detail'),
     
     # VLM 채팅 API (새로 추가)
     path('vlm-chat/', views.process_vlm_chat, name='process_vlm_chat'),
@@ -27,6 +27,7 @@ urlpatterns = [
     path('videos/', views.video_list_create, name='video_list_create'),
     path('videos/<str:video_id>/', views.video_detail, name='video_detail'),
     path('videos/<str:video_id>/summary/', generate_video_summary, name='generate_video_summary'),
+    path('videos/<str:video_id>/summary/status/', check_summary_status, name='check_summary_status'),
     path('videos/check-duplicate/', views.check_duplicate_video, name='check_duplicate_video'),
     
     # S3 업로드 API

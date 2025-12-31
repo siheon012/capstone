@@ -168,7 +168,7 @@ class PromptSessionSerializer(serializers.ModelSerializer):
     timeline_summary = serializers.ReadOnlyField()
     main_event_display = serializers.ReadOnlyField()
     main_event = EventSerializer(read_only=True)
-    video = VideoSerializer(read_only=True)
+    video = serializers.SerializerMethodField()  # related_videos의 첫 번째 비디오
     detected_events = serializers.SerializerMethodField()
     
     # 새로운 클라우드 필드들
@@ -179,6 +179,13 @@ class PromptSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PromptSession
         fields = '__all__'
+    
+    def get_video(self, obj):
+        """related_videos의 첫 번째 비디오 반환 (기존 호환성)"""
+        first_video = obj.related_videos.first()
+        if first_video:
+            return VideoSerializer(first_video).data
+        return None
     
     def get_detected_events(self, obj):
         """세션의 모든 프롬프트 인터랙션에서 찾은 이벤트들을 반환 (기존 호환성)"""

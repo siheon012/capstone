@@ -40,13 +40,15 @@ class HybridSearchService:
         """
         all_events = []
         event_ids_seen = set()  # 중복 제거용
+        sql_query_results = []  # SQL 쿼리 원본 결과 저장
         
         # ============================================
         # 1. Text2SQL 정확한 조건 검색
         # ============================================
         if use_text2sql:
             print(f"🔍 Text2SQL 검색 시작")
-            sql_events = self._text2sql_search(prompt, video)
+            sql_events, sql_results = self._text2sql_search(prompt, video)
+            sql_query_results = sql_results  # SQL 결과 저장
             
             for event in sql_events:
                 if event.id not in event_ids_seen:
@@ -80,8 +82,24 @@ class HybridSearchService:
         # ============================================
         # 4. Bedrock RAG로 자연어 응답 생성
         # ============================================
+        video_name = video.name if video else "알 수 없음"
+        
+        # Event 객체가 없어도 SQL 쿼리 결과가 있으면 사용
+        if not all_events and sql_query_results:
+            print(f"⚠️ Event 객체는 없지만 SQL 쿼리 결과({len(sql_query_results)}개)로 답변 생성")
+            
+            response_text = self.bedrock_service.format_timeline_response(
+                prompt=prompt,
+                events=sql_query_results,  # SQL 쿼리 결과 직접 사용
+                video_name=video_name
+            )
+            
+            return [], response_text
+        
+        # Event 객체도 없고 SQL 결과도 없으면
         if not all_events:
-            return [], "요청하신 조건에 해당하는 이벤트를 찾을 수 없습니다."
+            print("⚠️ 결과가 없어 기본 답변 반환")
+            return [], "요청하신 조건에 해당하는 데이터를 찾을 수 없습니다."
         
         # Event 객체를 딕셔너리로 변환
         events_data = []
@@ -96,8 +114,6 @@ class HybridSearchService:
                 'scene_analysis': getattr(event, 'scene_analysis', None),
             })
         
-        video_name = video.name if video else "알 수 없음"
-        
         response_text = self.bedrock_service.format_timeline_response(
             prompt=prompt,
             events=events_data,
@@ -106,8 +122,13 @@ class HybridSearchService:
         
         return all_events, response_text
     
-    def _text2sql_search(self, prompt: str, video=None) -> List[Event]:
-        """Text2SQL로 정확한 조건 검색"""
+    def _text2sql_search(self, prompt: str, video=None) -> Tuple[List[Event], List[dict]]:
+        """
+        Text2SQL로 정확한 조건 검색
+        
+        Returns:
+            (Event 객체 리스트, SQL 쿼리 결과 딕셔너리 리스트)
+        """
         try:
             # Bedrock Text2SQL
             video_id = video.video_id if video else None
@@ -118,42 +139,73 @@ class HybridSearchService:
             
             if text2sql_result.get('error'):
                 print(f"⚠️ Text2SQL 오류: {text2sql_result['error']}")
-                return []
+                return [], []
             
             sql_query = text2sql_result.get('sql')
             if not sql_query:
-                return []
+                return [], []
             
             print(f"📝 생성된 SQL: {sql_query}")
             
-            # SQL 실행
-            with connection.cursor() as cursor:
-                cursor.execute(sql_query)
-                query_results = cursor.fetchall()
+            # SQL 실행 (예외 처리)
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(sql_query)
+                    query_results = cursor.fetchall()
+                    column_names = [desc[0] for desc in cursor.description] if cursor.description else []
+            except Exception as sql_error:
+                print(f"❌ SQL 실행 오류: {sql_error}")
+                print(f"📝 실패한 SQL: {sql_query}")
+                return [], []
             
-            # Event 객체 조회
-            events = []
+            if not query_results:
+                return [], []
+            
+            # SQL 결과를 딕셔너리로 변환
+            sql_results_dict = []
             for result in query_results:
-                timestamp_value = result[0]
-                
-                if video:
-                    event_objs = Event.objects.filter(
-                        timestamp=timestamp_value, 
-                        video=video
-                    )
-                else:
-                    event_objs = Event.objects.filter(
-                        timestamp=timestamp_value
-                    )
-                
-                if event_objs.exists():
-                    events.append(event_objs.first())
+                result_dict = dict(zip(column_names, result))
+                sql_results_dict.append(result_dict)
             
-            return events
+            print(f"📊 SQL 쿼리 결과: {len(sql_results_dict)}개 행")
+            
+            # Event 객체 조회 시도 (id 컬럼이 있는 경우에만)
+            events = []
+            if 'id' in column_names:
+                for result_dict in sql_results_dict:
+                    event_id = result_dict.get('id')
+                    if event_id:
+                        try:
+                            event = Event.objects.get(id=event_id)
+                            events.append(event)
+                        except Event.DoesNotExist:
+                            print(f"⚠️ Event ID {event_id} not found")
+            else:
+                # id가 없으면 timestamp로 시도
+                for result_dict in sql_results_dict:
+                    timestamp_value = result_dict.get('timestamp')
+                    if timestamp_value is not None:
+                        if video:
+                            event_objs = Event.objects.filter(
+                                timestamp=timestamp_value, 
+                                video=video
+                            )
+                        else:
+                            event_objs = Event.objects.filter(
+                                timestamp=timestamp_value
+                            )
+                        
+                        if event_objs.exists():
+                            events.append(event_objs.first())
+            
+            print(f"📊 Event 객체: {len(events)}개")
+            return events, sql_results_dict
             
         except Exception as e:
             print(f"❌ Text2SQL 검색 오류: {str(e)}")
-            return []
+            import traceback
+            traceback.print_exc()
+            return [], []
     
     def _vector_search(self, prompt: str, video=None, limit: int = 5) -> List[Event]:
         """pgvector로 의미 기반 유사도 검색"""

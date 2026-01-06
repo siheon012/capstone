@@ -35,7 +35,8 @@ SECRET_KEY = env('SECRET_KEY', default='django-insecure-fallback-key-only-for-de
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = env('ALLOWED_HOSTS', default='localhost').split(',')
+# AWS 프로덕션 환경을 위한 ALLOWED_HOSTS 설정
+ALLOWED_HOSTS = env('ALLOWED_HOSTS', default='*').split(',')
 
 # Application definition
 
@@ -66,13 +67,19 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# CORS 설정
-CORS_ALLOW_ALL_ORIGINS = True  # 개발 환경에서는 모든 도메인에서의 요청 허용
-# 프로덕션 환경에서는 아래와 같이 특정 도메인만 허용하는 것이 좋습니다
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "https://yourdomain.com",
-# ]
+# CORS 설정 - Same-origin (Path-based routing)
+# Same-origin이지만 안전하게 특정 도메인만 허용
+# 환경변수에서 도메인 가져오기 (없으면 localhost만)
+PRODUCTION_DOMAIN = env('PRODUCTION_DOMAIN', default=None)
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # 로컬 개발용
+]
+if PRODUCTION_DOMAIN:
+    CORS_ALLOWED_ORIGINS.extend([
+        f"https://{PRODUCTION_DOMAIN}",
+        f"https://www.{PRODUCTION_DOMAIN}",
+    ])
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'core.urls'
 
@@ -267,6 +274,11 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8088',
     'http://host.docker.internal:8088',
 ]
+if PRODUCTION_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.extend([
+        f'https://{PRODUCTION_DOMAIN}',
+        f'http://{PRODUCTION_DOMAIN}',
+    ])
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

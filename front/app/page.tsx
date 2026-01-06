@@ -28,7 +28,8 @@ import DragDropZone from '@/components/drag-drop-zone';
 import SmartHeader from '@/components/smart-header';
 import { saveHistory, getHistoryList } from '@/app/actions/history-service';
 import JQueryCounterAnimation from '@/components/jquery-counter-animation';
-import { saveVideoFile, getUploadedVideos } from '@/app/actions/video-service';
+import { saveVideoFile } from '@/app/actions/video-service';
+import { getUploadedVideos } from '@/app/actions/video-service-client';
 import { uploadVideoToS3 } from '@/app/actions/s3-upload-service';
 import type { ChatSession } from '@/app/types/session';
 import type { UploadedVideo } from '@/app/types/video';
@@ -736,13 +737,9 @@ export default function CCTVAnalysis() {
         .then((response) => (response.ok ? 'healthy' : 'error'))
         .catch(() => 'error');
 
-      // AI 서비스 상태 확인 (간접적으로 - 실제로는 ping 엔드포인트가 필요)
-      const aiServiceHealthPromise = fetch('http://localhost:7500/', {
-        method: 'HEAD',
-        signal: AbortSignal.timeout(5000),
-      })
-        .then((response) => (response.ok ? 'healthy' : 'error'))
-        .catch(() => 'error');
+      // AI 서비스는 백엔드를 통해서만 접근하므로 별도 헬스체크 불필요
+      // ECS 환경에서는 직접 접근 불가
+      const aiServiceHealthPromise = Promise.resolve('healthy');
 
       const [backendStatus, aiServiceStatus] = await Promise.all([
         backendHealthPromise,
@@ -975,7 +972,7 @@ export default function CCTVAnalysis() {
       let serverSaveResult = null;
       try {
         const { checkDuplicateVideo } = await import(
-          '@/app/actions/video-service'
+          '@/app/actions/video-service-client'
         );
         const duplicateCheck = await checkDuplicateVideo(file, videoDuration);
 
@@ -3333,7 +3330,7 @@ export default function CCTVAnalysis() {
           {/* 하단 정보 */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-3 md:gap-4">
             <div className="flex items-center gap-2 text-gray-400 text-sm md:text-base">
-              <span>© 2024 Deep Sentinel. All rights reserved.</span>
+              <span>© 2026 Deep Sentinel. All rights reserved.</span>
             </div>
 
             <div className="flex items-center gap-2 text-gray-300 text-sm md:text-base">

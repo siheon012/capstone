@@ -130,7 +130,10 @@ def generate_video_summary(request, video_id):
         # 이벤트 조회
         events = Event.objects.filter(video=video).order_by('timestamp')
         
+        print(f"📊 이벤트 조회 결과: video_id={video_id}, events_count={events.count()}")
+        
         if summary_type == 'events' and not events.exists():
+            print(f"⚠️ 이벤트가 없어 요약 생성 불가")
             return Response(
                 {"error": "분석된 이벤트가 없습니다. 먼저 영상 분석을 진행해주세요."},
                 status=status.HTTP_400_BAD_REQUEST

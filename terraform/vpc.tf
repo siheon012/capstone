@@ -307,7 +307,7 @@ resource "aws_lb_listener" "http" {
 
 # Note: HTTPS Listener는 route53.tf에 정의되어 있음
 
-# ALB Listener Rule - Backend
+# ALB Listener Rule - Backend (Path-based routing)
 resource "aws_lb_listener_rule" "backend" {
   listener_arn = aws_lb_listener.http.arn
   priority     = 100

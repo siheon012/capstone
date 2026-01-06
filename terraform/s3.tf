@@ -61,9 +61,37 @@ resource "aws_s3_bucket_public_access_block" "raw_videos" {
   bucket = aws_s3_bucket.raw_videos.id
 
   block_public_acls       = true
-  block_public_policy     = true
+  block_public_policy     = false  # 버킷 정책 허용
   ignore_public_acls      = true
-  restrict_public_buckets = true
+  restrict_public_buckets = false  # 버킷 정책 허용
+}
+
+# Raw Videos - Bucket Policy (웹 접근 허용)
+resource "aws_s3_bucket_policy" "raw_videos" {
+  bucket = aws_s3_bucket.raw_videos.id
+
+  depends_on = [aws_s3_bucket_public_access_block.raw_videos]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.raw_videos.arn}/*"
+        Condition = {
+          StringLike = {
+            "aws:Referer" = [
+              "https://deepsentinel.cloud/*",
+              "https://www.deepsentinel.cloud/*"
+            ]
+          }
+        }
+      }
+    ]
+  })
 }
 
 # Raw Videos - CORS Configuration
@@ -109,9 +137,37 @@ resource "aws_s3_bucket_public_access_block" "thumbnails" {
   bucket = aws_s3_bucket.thumbnails.id
 
   block_public_acls       = true
-  block_public_policy     = true
+  block_public_policy     = false  # 버킷 정책 허용
   ignore_public_acls      = true
-  restrict_public_buckets = true
+  restrict_public_buckets = false  # 버킷 정책 허용
+}
+
+# Thumbnails - Bucket Policy (웹 접근 허용)
+resource "aws_s3_bucket_policy" "thumbnails" {
+  bucket = aws_s3_bucket.thumbnails.id
+
+  depends_on = [aws_s3_bucket_public_access_block.thumbnails]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.thumbnails.arn}/*"
+        Condition = {
+          StringLike = {
+            "aws:Referer" = [
+              "https://deepsentinel.cloud/*",
+              "https://www.deepsentinel.cloud/*"
+            ]
+          }
+        }
+      }
+    ]
+  })
 }
 
 # Thumbnails - CORS Configuration

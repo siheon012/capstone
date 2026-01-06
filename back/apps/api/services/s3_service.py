@@ -67,11 +67,12 @@ class S3VideoUploadService:
         Returns:
             JWT 토큰 문자열
         """
+        upload_id = str(uuid.uuid4())
         payload = {
             'user_id': user_id,
             'file_name': file_name,
             'file_size': file_size,
-            'upload_id': str(uuid.uuid4()),
+            'upload_id': upload_id,
             'exp': datetime.utcnow() + timedelta(hours=1),  # 1시간 유효
             'iat': datetime.utcnow(),
             'iss': 'capstone-video-service'
@@ -125,13 +126,17 @@ class S3VideoUploadService:
         # 토큰 검증
         payload = self.validate_upload_token(token)
         
-        # S3 키 생성 (videos/{video_id}/{filename} 형태)
-        # Note: video_id는 토큰 생성 시 포함되어야 함
-        video_id = payload.get('video_id')
-        if not video_id:
-            raise ValueError("video_id is required in upload token")
+        # S3 키 생성 (videos/{year}/{month}/{day}/{uuid}_{filename} 형태)
+        from datetime import datetime
+        now = datetime.utcnow()
+        year = now.strftime('%Y')
+        month = now.strftime('%m')
+        day = now.strftime('%d')
         
-        s3_key = f"videos/{video_id}/{payload['file_name']}"
+        # UUID 접두어 추가
+        upload_id = payload.get('upload_id')
+        file_name = payload['file_name']
+        s3_key = f"videos/{year}/{month}/{day}/{upload_id}_{file_name}"
         
         # Pre-signed URL 생성 (15분 유효)
         try:

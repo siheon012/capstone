@@ -244,7 +244,30 @@ export default function EventTimeline({
                   <div className="flex items-center gap-2 text-gray-300">
                     <MapPin className="h-4 w-4 text-[#6c5ce7]" />
                     <span className="font-medium">위치:</span>
-                    <span>{event.location}</span>
+                    <span>
+                      {Number(event.location) === 1
+                        ? 'left'
+                        : Number(event.location) === 2
+                        ? 'center'
+                        : Number(event.location) === 3
+                        ? 'right'
+                        : event.location}
+                    </span>
+                  </div>
+
+                  {/* 관심영역 */}
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <MapPin className="h-4 w-4 text-[#6c5ce7]" />
+                    <span className="font-medium">관심영역:</span>
+                    <span>
+                      {Number(event.area_of_interest) === 1
+                        ? 'left'
+                        : Number(event.area_of_interest) === 2
+                        ? 'center'
+                        : Number(event.area_of_interest) === 3
+                        ? 'right'
+                        : event.area_of_interest}
+                    </span>
                   </div>
 
                   {/* 인물 정보 */}
@@ -252,16 +275,25 @@ export default function EventTimeline({
                     <User className="h-4 w-4 text-[#6c5ce7]" />
                     <span className="font-medium">인물:</span>
                     <span>
-                      {event.gender} ({event.age}세,{' '}
-                      {event.gender_score ? event.gender_score.toFixed(1) : '0'}
-                      % 신뢰도)
+                      {event.gender} ({event.age}세)
+                    </span>
+                  </div>
+
+                  {/* 신뢰도 */}
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <Activity className="h-4 w-4 text-[#6c5ce7]" />
+                    <span className="font-medium">신뢰도:</span>
+                    <span>
+                      {event.confidence
+                        ? `${(event.confidence * 100).toFixed(1)}%`
+                        : '0%'}
                     </span>
                   </div>
 
                   {/* 행동 정보 */}
                   <div className="flex items-center gap-2 text-gray-300 md:col-span-2">
                     <Activity className="h-4 w-4 text-[#6c5ce7]" />
-                    <span className="font-medium">행동:</span>
+                    <span className="font-medium">이상 행동:</span>
                     <span>{event.action_detected}</span>
                   </div>
 

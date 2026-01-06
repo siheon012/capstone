@@ -57,3 +57,4 @@ Write-Host "`nView logs with:" -ForegroundColor Yellow
 Write-Host 'aws logs tail /aws/lambda/capstone-dev-sqs-to-batch --follow --region ap-northeast-2' -ForegroundColor Gray
 
 Set-Location $PROJECT_ROOT
+ 

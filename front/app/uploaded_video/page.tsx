@@ -33,9 +33,9 @@ import type { UploadedVideo } from '@/app/types/video';
 import type { ChatSession } from '@/app/types/session';
 import {
   getUploadedVideos,
-  deleteVideo,
   getVideoEventStats,
-} from '@/app/actions/video-service';
+  deleteVideo,
+} from '@/app/actions/video-service-client';
 import { getAllSessions } from '@/app/actions/session-service';
 import Link from 'next/link';
 import SmartHeader from '@/components/smart-header';
@@ -417,9 +417,15 @@ export default function UploadedVideoPage() {
         case 'name':
           return a.name.localeCompare(b.name);
         case 'size':
-          return b.size - a.size;
+          // null 안전 처리
+          const sizeA = a.size ?? 0;
+          const sizeB = b.size ?? 0;
+          return sizeB - sizeA;
         case 'duration':
-          return b.duration - a.duration;
+          // null/undefined 안전 처리
+          const durationA = a.duration ?? 0;
+          const durationB = b.duration ?? 0;
+          return durationB - durationA;
         default:
           return 0;
       }
@@ -980,7 +986,7 @@ export default function UploadedVideoPage() {
 
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-gray-400">
-              <span>© 2024 Deep Sentinel. All rights reserved.</span>
+              <span>© 2026 Deep Sentinel. All rights reserved.</span>
             </div>
 
             <div className="flex items-center gap-2 text-gray-300">

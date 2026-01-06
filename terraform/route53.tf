@@ -124,7 +124,7 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# HTTPS 리스너 규칙 - Backend
+# HTTPS 리스너 규칙 - Backend (Path-based routing)
 resource "aws_lb_listener_rule" "backend_https" {
   count        = var.domain_name != "" ? 1 : 0
   listener_arn = aws_lb_listener.https[0].arn

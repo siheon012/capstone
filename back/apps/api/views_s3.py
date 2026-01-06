@@ -78,7 +78,7 @@ def request_upload_url(request):
         # user_id = request.user_payload['user_id']  # JWT 사용 시
         user_id = 'demo_user'  # TODO: 임시 사용자 ID
         
-        # 업로드 토큰 생성
+        # 업로드 토큰 생성 (video_id 없이, UUID만 포함)
         upload_token = s3_service.generate_upload_token(
             user_id=user_id,
             file_name=file_name,

@@ -1,36 +1,15 @@
 import { Event, EventResponse, EventDetailResponse } from '@/app/types/event';
 import { getAppConfig } from '@/lib/env-config';
+import { API_BASE_URL, API_ENDPOINTS } from '@/lib/api-config';
 
 // 환경 설정
 const config = getAppConfig();
 
-// API URL 설정 - 모바일 환경 고려
-const getApiBaseUrl = () => {
-  // 서버 사이드에서는 환경설정 사용
-  if (typeof window === 'undefined') {
-    return config.api.baseUrl;
-  }
-
-  // 클라이언트 사이드에서는 현재 호스트 기반으로 동적 설정
-  const hostname = window.location.hostname;
-  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    // HTTPS로 접속한 경우 HTTPS 사용, 아니면 HTTP 사용
-    const protocol = window.location.protocol; // 'https:' 또는 'http:'
-    // deepsentinel.cloud는 포트 없이 사용 (HTTPS는 443, HTTP는 80이 기본)
-    return `${protocol}//${hostname}`;
-  }
-
-  return config.api.baseUrl;
-};
-
-const API_BASE_URL = getApiBaseUrl();
-
 export async function getEvents(videoId?: string): Promise<EventResponse> {
   try {
-    const baseUrl = getApiBaseUrl();
     const url = videoId
-      ? `${baseUrl}/db/events/?video=${videoId}`
-      : `${baseUrl}/db/events/`;
+      ? `${API_BASE_URL}/db/events/?video=${videoId}`
+      : `${API_BASE_URL}/db/events/`;
 
     console.log('[EventService] 🔥 Fetching events from:', url);
     console.log(
@@ -96,8 +75,7 @@ export async function getEvents(videoId?: string): Promise<EventResponse> {
 
 export async function getEvent(eventId: string): Promise<EventDetailResponse> {
   try {
-    const baseUrl = getApiBaseUrl();
-    const url = `${baseUrl}/db/events/${eventId}/`;
+    const url = `${API_BASE_URL}/db/events/${eventId}/`;
 
     console.log('[EventService] Fetching event from:', url);
 
@@ -143,8 +121,7 @@ export async function getEventsByTimeRange(
   endTime: number
 ): Promise<EventResponse> {
   try {
-    const baseUrl = getApiBaseUrl();
-    const url = `${baseUrl}/db/events/?video=${videoId}&timestamp__gte=${startTime}&timestamp__lte=${endTime}`;
+    const url = `${API_BASE_URL}/db/events/?video=${videoId}&timestamp__gte=${startTime}&timestamp__lte=${endTime}`;
 
     console.log('[EventService] Fetching events by time range:', url);
 
@@ -189,8 +166,7 @@ export async function getEventsByType(
   eventType: string
 ): Promise<EventResponse> {
   try {
-    const baseUrl = getApiBaseUrl();
-    const url = `${baseUrl}/db/events/?video=${videoId}&event_type=${eventType}`;
+    const url = `${API_BASE_URL}/db/events/?video=${videoId}&event_type=${eventType}`;
 
     console.log('[EventService] Fetching events by type:', url);
 

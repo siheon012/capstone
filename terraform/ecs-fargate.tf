@@ -189,7 +189,15 @@ resource "aws_ecs_task_definition" "frontend" {
       environment = [
         {
           name  = "NEXT_PUBLIC_API_URL"
-          value = "https://api.deepsentinel.cloud"
+          value = "https://api.${var.domain_name}"
+        },
+        {
+          name  = "DJANGO_DB_URL"
+          value = "https://api.${var.domain_name}/db"
+        },
+        {
+          name  = "NEXT_PUBLIC_PRODUCTION_API_URL"
+          value = "https://api.${var.domain_name}"
         },
         {
           name  = "NEXT_PUBLIC_S3_BUCKET"
@@ -210,6 +218,10 @@ resource "aws_ecs_task_definition" "frontend" {
         {
           name  = "NEXT_PUBLIC_ENABLE_AUTO_TIER_MANAGEMENT"
           value = "true"
+        },
+        {
+          name  = "NODE_ENV"
+          value = "production"
         }
       ]
 
@@ -298,6 +310,14 @@ resource "aws_ecs_task_definition" "backend" {
           value = "*"
         },
         {
+          name  = "DEBUG"
+          value = "False"
+        },
+        {
+          name  = "CORS_ALLOW_ALL_ORIGINS"
+          value = "False"
+        },
+        {
           name  = "USE_BEDROCK"
           value = "true"
         },
@@ -312,6 +332,10 @@ resource "aws_ecs_task_definition" "backend" {
         {
           name  = "AWS_BEDROCK_EMBEDDING_MODEL_ID"
           value = "amazon.titan-embed-text-v1"
+        },
+        {
+          name  = "PRODUCTION_DOMAIN"
+          value = var.domain_name
         }
       ]
 

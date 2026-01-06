@@ -120,8 +120,8 @@ def process_prompt(request):
         if session_id:
             try:
                 history = PromptSession.objects.get(session_id=session_id)
-                # 세션의 첫 번째 관련 비디오 가져오기
-                video = history.related_videos.first()
+                # 세션의 비디오 가져오기 (1:N ForeignKey)
+                video = history.related_videos
             except PromptSession.DoesNotExist:
                 return Response({"error": "존재하지 않는 세션입니다."}, status=status.HTTP_404_NOT_FOUND)
         else:
@@ -134,13 +134,16 @@ def process_prompt(request):
             except Video.DoesNotExist:
                 return Response({"error": "존재하지 않는 비디오입니다."}, status=status.HTTP_404_NOT_FOUND)
             
-            # PromptSession 생성 - main_event는 초기에 None으로 설정
+            # PromptSession 생성 - session_name을 비워두어 display_title이 비디오 기반 제목 생성
             history = PromptSession.objects.create(
-                session_name=prompt_text[:50] if prompt_text else "New Session",
+                session_name="",  # 빈 문자열로 설정하여 display_title이 "{video_name}의 N번째 세션" 생성
                 user_id=request.user.id if hasattr(request, 'user') and request.user.is_authenticated else ""
             )
             # ManyToMany 필드는 create 후에 추가
-            history.related_videos.add(video)
+            # 세션의 비디오 설정 (이미 설정되어 있으면 유지)
+            if not history.related_videos:
+                history.related_videos = video
+                history.save()
         
         # 2. 프롬프트 처리 및 관련 이벤트 검색 (해당 비디오의 이벤트만)
         try:
@@ -255,6 +258,20 @@ def get_session_detail(request, session_id):
         result = []
         
         for interaction in interactions:
+            # 관련 이벤트의 첫 번째 이벤트에서 timestamp 가져오기
+            event_timestamp = None
+            event_data = None
+            if interaction.related_events.exists():
+                first_event = interaction.related_events.first()
+                event_timestamp = first_event.timestamp
+                event_data = {
+                    'id': first_event.id,
+                    'timestamp': first_event.timestamp,
+                    'event_type': first_event.event_type,
+                    'action_detected': first_event.action_detected,
+                    'location': first_event.location
+                }
+            
             item = {
                 'id': interaction.id,
                 'input_prompt': interaction.user_prompt,
@@ -262,6 +279,8 @@ def get_session_detail(request, session_id):
                 'timestamp': interaction.created_at.isoformat(),
                 'sequence_number': interaction.sequence_number,
                 'analysis_type': interaction.analysis_type,
+                'event_timestamp': event_timestamp,  # 영상 내 이벤트 시간 (초)
+                'event': event_data,  # 전체 이벤트 정보
             }
             
             result.append(item)
@@ -308,16 +327,24 @@ def process_vlm_chat(request):
         if session_id:
             try:
                 session = PromptSession.objects.get(session_id=session_id)
+                # 세션이 다른 비디오와 연결되어 있으면 새 세션 생성
+                if session.related_videos and session.related_videos.video_id != video.video_id:
+                    # 다른 비디오의 세션이므로 새 세션 생성
+                    session = PromptSession.objects.create(
+                        session_name="",
+                        video=video,
+                        user_id=request.user.id if hasattr(request, 'user') and request.user.is_authenticated else ""
+                    )
+                # 같은 비디오면 기존 세션 유지
             except PromptSession.DoesNotExist:
                 return Response({"error": "존재하지 않는 세션입니다."}, status=status.HTTP_404_NOT_FOUND)
         else:
             # 새 세션 생성
             session = PromptSession.objects.create(
-                session_name=prompt_text[:50] if prompt_text else "VLM Chat",
+                session_name="",
+                video=video,
                 user_id=request.user.id if hasattr(request, 'user') and request.user.is_authenticated else ""
             )
-            # ManyToMany 필드는 create 후에 추가
-            session.related_videos.add(video)
         
         # 3. 해당 비디오의 이벤트 조회
         events = Event.objects.filter(video=video).order_by('timestamp')
@@ -441,7 +468,10 @@ def process_vlm_chat(request):
                 interaction.related_events.add(event)
         
         # 비디오 추가
-        interaction.related_videos.add(video)
+        # Interaction의 video 설정
+        if not interaction.related_videos:
+            interaction.related_videos = video
+            interaction.save()
         
         # 세션 통계 업데이트
         session.add_interaction(prompt_text)
@@ -776,9 +806,15 @@ def process_prompt_logic(prompt_text, video=None):
             return "SQL 쿼리를 생성하지 못했습니다.", None
         
         # DB에서 쿼리 실행
-        with connection.cursor() as cursor:
-            cursor.execute(sql_query)
-            query_results = cursor.fetchall()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(sql_query)
+                query_results = cursor.fetchall()
+        except Exception as sql_error:
+            print(f"❌ SQL 실행 오류: {sql_error}")
+            print(f"📝 실패한 SQL: {sql_query}")
+            # SQL 오류 시 pgvector 검색으로 폴백
+            return "SQL 실행 오류가 발생했습니다. 다른 방식으로 검색해주세요.", None
             
         if not query_results:
             return "요청하신 조건에 해당하는 이벤트를 찾을 수 없습니다.", None
@@ -894,10 +930,13 @@ class PromptSessionViewSet(viewsets.ModelViewSet):
         """쿼리셋 필터링"""
         queryset = super().get_queryset()
         
-        # 비디오 ID로 필터링 (related_videos ManyToMany)
+        # orphan 세션 제외 (related_videos가 삭제된 세션)
+        queryset = queryset.filter(related_videos__isnull=False)
+        
+        # 비디오 ID로 필터링 (related_videos ForeignKey)
         video_id = self.request.query_params.get('video', None)
         if video_id:
-            queryset = queryset.filter(related_videos__video_id=video_id).distinct()
+            queryset = queryset.filter(related_videos__video_id=video_id)
             
         return queryset
 

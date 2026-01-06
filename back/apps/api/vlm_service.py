@@ -120,11 +120,19 @@ class BedrockVLMService:
             reverse=True
         )[:max_frames]
         
+        print(f"🔍 프레임 추출 시작: sorted_events={len(sorted_events)}개")
+        
         # S3에서 비디오 다운로드 또는 로컬 경로 사용
         video_path = self._get_video_path(video)
         
+        print(f"📁 비디오 경로: {video_path}")
+        print(f"📁 파일 존재 여부: {os.path.exists(video_path) if video_path else False}")
+        
         if not video_path or not os.path.exists(video_path):
             print(f"⚠️ 비디오 파일을 찾을 수 없음: {video_path}")
+            print(f"⚠️ video.s3_raw_key: {getattr(video, 's3_raw_key', None)}")
+            print(f"⚠️ video.filename: {getattr(video, 'filename', None)}")
+            print(f"⚠️ video.video_file: {getattr(video, 'video_file', None)}")
             return frames
         
         # OpenCV로 비디오 열기
@@ -372,13 +380,30 @@ class BedrockVLMService:
         이벤트 기반 요약 (추천 ✅)
         주요 이벤트 프레임만 추출하여 분석
         """
-        # 1. 주요 이벤트 프레임 추출
-        frames = self.extract_event_frames(video, events, max_frames=10)
+        print(f"📊 _generate_event_based_summary 호출: events={len(events)}개")
         
+        # 이벤트가 너무 많으면 샘플링 (Claude 입력 길이 제한)
+        max_events_for_analysis = 50  # 텍스트만 사용하므로 더 많이 가능
+        if len(events) > max_events_for_analysis:
+            # 시간 간격을 두고 균등하게 샘플링
+            step = len(events) // max_events_for_analysis
+            sampled_events = events[::step][:max_events_for_analysis]
+            print(f"⚠️ 이벤트 샘플링: {len(events)}개 → {len(sampled_events)}개")
+        else:
+            sampled_events = events
+        
+        # Vision API 대신 텍스트 기반 요약 사용 (DB에 이미 분석 결과가 있음)
+        print("📝 텍스트 기반 요약 사용 (이미지 분석 건너뜀)")
+        return self._generate_text_based_summary(video, sampled_events)
+        
+        print(f"🖼️ 프레임 추출 결과: {len(frames) if frames else 0}개")
+        
+        # 프레임이 없으면 텍스트 정보로 요약 생성
         if not frames:
-            return "분석할 이벤트가 없습니다."
+            print("⚠️ 프레임 추출 실패, 텍스트 정보로 요약 생성")
+            return self._generate_text_based_summary(video, events)
         
-        # 2. 프레임 정보를 텍스트로 구성
+        # 2. 프레임 정보를 텍스트로 구성 (scene_analysis와 action 포함)
         events_text = ""
         for i, frame_data in enumerate(frames, 1):
             timestamp = frame_data['timestamp']
@@ -386,26 +411,61 @@ class BedrockVLMService:
             seconds = int(timestamp % 60)
             event_type = frame_data['event_type']
             
-            events_text += f"{i}. {minutes}분 {seconds}초: {event_type}\n"
+            # Event 객체에서 추가 정보 가져오기
+            event = frame_data.get('event')
+            
+            events_text += f"{i}. {minutes}분 {seconds}초: {event_type}"
+            
+            # scene_analysis 추가
+            if event and hasattr(event, 'scene_analysis') and event.scene_analysis:
+                events_text += f" - {event.scene_analysis}"
+            
+            # action 추가
+            if event and event.action:
+                events_text += f" (행동: {event.action})"
+            
+            events_text += "\n"
         
         # 3. Claude 3 Vision에 프롬프트 + 이미지 전송
         content = [
             {
                 "type": "text",
-                "text": f"""다음은 CCTV 영상 '{video.name}'의 주요 이벤트 장면들입니다.
-각 장면을 분석하여 전체적인 요약을 작성해주세요.
+                "text": f"""다음은 편의점 CCTV 영상 '{video.name}'의 주요 방문자 장면들입니다.
+각 방문자별로 상세한 분석 보고서를 작성해주세요.
 
 주요 이벤트:
 {events_text}
 
-요구사항:
-1. 시간 순서대로 무슨 일이 일어났는지 설명
-2. 주요 이벤트의 상황과 인물 묘사
-3. 전체적인 상황 요약
-4. 3-5문장으로 간결하게
-5. 존댓말 사용
+출력 형식 (반드시 이 양식을 따라주세요):
 
-요약:"""
+📋 CCTV 방문객 분석 보고서
+
+방문자 1 (visitor_id: X_X)
+방문 시간: XX분 XX초부터 XX분 XX초까지
+성별: XX 추정
+평균 추정 나이: 약 XX세
+행동 및 장면 요약:
+[3-4문장으로 방문자의 외형, 착용한 옷, 위치, 행동을 상세히 묘사]
+
+방문자 2 (visitor_id: X_X)
+방문 시간: XX분 XX초부터 XX분 XX초까지
+성별: XX 추정
+평균 추정 나이: 약 XX세
+행동 및 장면 요약:
+[3-4문장으로 방문자의 외형, 착용한 옷, 위치, 행동을 상세히 묘사]
+
+... (모든 방문자에 대해 반복)
+
+📊 종합 의견
+[전체 방문자 패턴, 연령대 분포, 특이사항을 3-5문장으로 요약]
+
+중요:
+- 방문 시간은 반드시 "XX분 XX초부터 XX분 XX초까지" 형식
+- 각 방문자를 개별적으로 구분하여 분석
+- 외형 특징(옷 색깔, 스타일 등)을 구체적으로 묘사
+- 존댓말 사용
+
+분석 결과:"""
             }
         ]
         
@@ -457,6 +517,92 @@ class BedrockVLMService:
         """
         # 구현 생략 (필요시 추가)
         return "전체 영상 요약은 구현되지 않았습니다. 이벤트 기반 요약을 사용하세요."
+    
+    def _generate_text_based_summary(self, video: Video, events: List[Event]) -> str:
+        """
+        프레임 없이 텍스트 정보만으로 요약 생성
+        이벤트의 scene_analysis, action_detected, attributes 등 활용
+        """
+        if not events:
+            return "분석할 이벤트가 없습니다."
+        
+        print(f"📝 텍스트 기반 요약 생성 시작 ({len(events)}개 이벤트)")
+        
+        # 이벤트 정보 수집
+        events_info = []
+        for i, event in enumerate(events, 1):
+            timestamp = event.timestamp
+            minutes = int(timestamp // 60)
+            seconds = int(timestamp % 60)
+            
+            event_info = {
+                'index': i,
+                'time': f"{minutes}분 {seconds}초",
+                'timestamp': timestamp,
+                'event_type': event.event_type,
+                'gender': event.gender if event.gender else '알 수 없음',
+                'age': event.age if hasattr(event, 'age') and event.age else '알 수 없음',
+                'location': event.location if hasattr(event, 'location') and event.location else '알 수 없음',
+                'action': event.action_detected if hasattr(event, 'action_detected') and event.action_detected else event.action if event.action else '알 수 없음',
+                'scene': event.scene_analysis if hasattr(event, 'scene_analysis') and event.scene_analysis else None,
+            }
+            events_info.append(event_info)
+        
+        # Bedrock으로 요약 생성
+        try:
+            # 이벤트 텍스트 구성
+            events_text = ""
+            for info in events_info:
+                events_text += f"\n{info['index']}. {info['time']}"
+                events_text += f"\n   - 이벤트: {info['event_type']}"
+                events_text += f"\n   - 인물: {info['gender']}, {info['age']}세"
+                events_text += f"\n   - 위치: {info['location']}"
+                events_text += f"\n   - 행동: {info['action']}"
+                if info['scene']:
+                    events_text += f"\n   - 장면 분석: {info['scene']}"
+                events_text += "\n"
+            
+            prompt = f"""다음은 CCTV 영상 '{video.name}'에서 감지된 이벤트 정보입니다.
+이 정보를 바탕으로 방문객 분석 보고서를 작성해주세요.
+
+감지된 이벤트 정보:
+{events_text}
+
+출력 형식:
+
+📋 **영상 요약**
+
+**총 {len(events)}개 이벤트 감지**
+
+**방문객 분석:**
+[각 방문객별로 시간, 성별, 연령, 위치, 주요 행동을 3-4문장으로 요약]
+
+**주요 패턴:**
+[전체적인 방문 패턴이나 특이사항을 2-3문장으로 요약]
+
+중요:
+- 존댓말 사용
+- 구체적인 시간 정보 포함
+- 이벤트 정보만 사용 (추측 금지)
+"""
+            
+            from apps.api.bedrock_service import BedrockService
+            bedrock = BedrockService()
+            
+            response = bedrock._invoke_claude(
+                prompt=prompt,
+                system_prompt="당신은 CCTV 영상 분석 전문가입니다. 주어진 데이터를 바탕으로 명확하고 간결한 보고서를 작성하세요.",
+                max_tokens=1500
+            )
+            
+            print(f"✅ 텍스트 기반 요약 생성 완료")
+            return response.strip()
+            
+        except Exception as e:
+            print(f"❌ 텍스트 기반 요약 생성 실패: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return self._generate_fallback_summary(events)
     
     def _generate_fallback_summary(self, events: List[Event]) -> str:
         """
@@ -525,22 +671,53 @@ class BedrockVLMService:
         """
         비디오 파일 경로 가져오기 (S3 또는 로컬)
         """
-        # S3에서 다운로드 (필요시)
-        if hasattr(video, 's3_key') and video.s3_key:
-            # TODO: S3에서 다운로드 구현
-            # return self._download_from_s3(video)
-            pass
+        import boto3
+        import tempfile
+        
+        # S3 경로 확인
+        s3_key = video.get_current_s3_key() if hasattr(video, 'get_current_s3_key') else None
+        
+        if s3_key:
+            # S3에서 임시 파일로 다운로드
+            try:
+                s3_client = boto3.client('s3', region_name=settings.AWS_S3_REGION_NAME)
+                bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-dev-raw')
+                
+                # 임시 파일 생성
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+                temp_path = temp_file.name
+                temp_file.close()
+                
+                print(f"📥 S3에서 다운로드 중: s3://{bucket}/{s3_key} → {temp_path}")
+                s3_client.download_file(bucket, s3_key, temp_path)
+                print(f"✅ S3 다운로드 완료: {temp_path}")
+                
+                return temp_path
+            except Exception as e:
+                print(f"❌ S3 다운로드 실패: {e}")
         
         # 로컬 경로
-        if hasattr(video, 'filename'):
+        if hasattr(video, 'filename') and video.filename:
             local_path = os.path.join(
                 settings.MEDIA_ROOT,
                 'videos',
                 video.filename
             )
             if os.path.exists(local_path):
+                print(f"✅ 로컬 파일 사용: {local_path}")
                 return local_path
         
+        # video_file 필드 확인 (Django FileField)
+        if hasattr(video, 'video_file') and video.video_file:
+            try:
+                local_path = video.video_file.path
+                if os.path.exists(local_path):
+                    print(f"✅ Django FileField 경로 사용: {local_path}")
+                    return local_path
+            except Exception:
+                pass
+        
+        print(f"❌ 비디오 파일 경로를 찾을 수 없음: video_id={video.video_id}")
         return None
 
 

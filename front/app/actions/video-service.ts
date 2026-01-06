@@ -15,7 +15,7 @@ const DJANGO_DB_BASE = config.api.database;
 console.log('🔧 [Video Service] API 설정:', {
   DJANGO_API_BASE,
   DJANGO_DB_BASE,
-  config: config.api
+  config: config.api,
 });
 
 // Django Video API 통신 함수들
@@ -206,145 +206,6 @@ async function ensureUploadDir() {
   }
 }
 
-// 중복 비디오 체크 함수
-export async function checkDuplicateVideo(
-  file: File,
-  videoDuration?: number
-): Promise<{
-  isDuplicate: boolean;
-  duplicateVideo?: UploadedVideo;
-  error?: string;
-}> {
-  try {
-    console.log('중복 체크 시작:', {
-      fileName: file.name,
-      fileSize: file.size,
-      videoDuration,
-    });
-
-    // Django API에서 기존 비디오들을 가져와서 비교
-    const videosResponse = await getVideosFromDjango();
-    if (!videosResponse.success) {
-      return { isDuplicate: false, error: videosResponse.error };
-    }
-
-    console.log('기존 비디오 개수:', videosResponse.videos?.length || 0);
-
-    // 업로드할 파일명을 정규화 (saveVideoFile과 동일한 로직)
-    const fileNameWithoutExt = file.name.substring(
-      0,
-      file.name.lastIndexOf('.')
-    );
-    const normalizedFileName = fileNameWithoutExt
-      .replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s\-_]/g, '') // 안전하지 않은 문자 제거 (언더스코어와 하이픈 허용)
-      .replace(/\s+/g, '_') // 공백을 언더스코어로 변경
-      .substring(0, 50); // 이름 길이 제한
-    const fileExtension = file.name.split('.').pop() || 'mp4';
-    const normalizedFullFileName = `${normalizedFileName}.${fileExtension}`;
-
-    console.log('파일명 정규화:', {
-      originalFileName: file.name,
-      normalizedFileName: normalizedFullFileName,
-    });
-
-    // 각 비디오에 대해 중복 검사 실행
-    for (const video of videosResponse.videos || []) {
-      // Django에서 가져온 비디오의 name도 정규화해서 비교
-      const videoFileNameWithoutExt = video.name.substring(
-        0,
-        video.name.lastIndexOf('.')
-      );
-      const normalizedVideoFileName = videoFileNameWithoutExt
-        .replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s\-_]/g, '') // 안전하지 않은 문자 제거 (언더스코어와 하이픈 허용)
-        .replace(/\s+/g, '_') // 공백을 언더스코어로 변경
-        .substring(0, 50); // 이름 길이 제한
-      const videoFileExtension = video.name.split('.').pop() || 'mp4';
-      const normalizedVideoFullFileName = `${normalizedVideoFileName}.${videoFileExtension}`;
-
-      console.log('비교 중:', {
-        videoName: video.name,
-        normalizedVideoFileName: normalizedVideoFullFileName,
-        uploadFileName: file.name,
-        normalizedUploadFileName: normalizedFullFileName,
-        videoSize: video.size || video.file_size,
-        uploadFileSize: file.size,
-        videoDuration: video.duration,
-        uploadDuration: videoDuration,
-        fileNameMatch: normalizedVideoFullFileName === normalizedFullFileName,
-        fileSizeMatch: (video.size || video.file_size) === file.size,
-      });
-
-      // 1차: 정규화된 파일명과 크기로 기본 중복 확인
-      const videoFileSize = video.size || video.file_size;
-      if (
-        normalizedVideoFullFileName === normalizedFullFileName &&
-        videoFileSize === file.size
-      ) {
-        console.log('파일명과 크기 일치됨, duration 체크 중...');
-
-        // duration이 제공된 경우 3가지 조건 모두 확인
-        if (videoDuration !== undefined && video.duration > 0) {
-          // duration 비교 시 0.5초 오차범위 허용
-          const durationDiff = Math.abs(video.duration - videoDuration);
-          console.log('Duration 비교:', {
-            videoDuration: video.duration,
-            uploadDuration: videoDuration,
-            diff: durationDiff,
-          });
-
-          if (durationDiff <= 0.5) {
-            console.log('중복 비디오 발견!');
-            // Django 모델을 UploadedVideo 형태로 변환
-            return {
-              isDuplicate: true,
-              duplicateVideo: {
-                id: video.video_id.toString(),
-                name: video.name,
-                filePath: video.file_path || `/uploads/videos/${video.name}`,
-                duration: video.duration,
-                size: video.size || video.file_size,
-                uploadDate: new Date(video.upload_date || video.created_at),
-                thumbnail:
-                  video.thumbnail_url ||
-                  video.computed_thumbnail_path ||
-                  video.thumbnail_path,
-                chatCount: video.chat_count,
-                majorEvent: video.major_event,
-              },
-            };
-          }
-        } else {
-          // duration이 없거나 0인 경우 파일명과 크기만으로 중복 판단
-          console.log('Duration 정보 없음, 파일명과 크기로만 중복 판단');
-          return {
-            isDuplicate: true,
-            duplicateVideo: {
-              id: video.video_id.toString(),
-              name: video.name,
-              filePath: video.file_path || `/uploads/videos/${video.name}`,
-              duration: video.duration,
-              size: video.size || video.file_size,
-              uploadDate: new Date(video.upload_date || video.created_at),
-              thumbnail:
-                video.thumbnail_url ||
-                video.computed_thumbnail_path ||
-                video.thumbnail_path,
-              chatCount: video.chat_count,
-              majorEvent: video.major_event,
-            },
-          };
-        }
-      }
-    }
-
-    console.log('중복 비디오 없음');
-    return { isDuplicate: false };
-  } catch (error) {
-    console.error('Duplicate check error:', error);
-    return { isDuplicate: false, error: '중복 확인 중 오류가 발생했습니다.' };
-  }
-}
-
 // 비디오 파일 저장
 // 로컬 시스템에 직접 저장하고 메타데이터는 Django에 저장하는 구현
 export async function saveVideoFile(
@@ -391,22 +252,8 @@ export async function saveVideoFile(
       };
     }
 
-    // 중복 확인 (duration이 있을 때만 정확한 중복 검사)
-    console.log('중복 체크 실행 중...');
-    const duplicateCheck = await checkDuplicateVideo(file, videoDuration);
-    console.log('중복 체크 결과:', duplicateCheck);
-
-    if (duplicateCheck.isDuplicate && duplicateCheck.duplicateVideo) {
-      console.log('중복 비디오 발견, 업로드 중단');
-      return {
-        success: false,
-        isDuplicate: true,
-        videoId: duplicateCheck.duplicateVideo.id,
-        duplicateVideoId: duplicateCheck.duplicateVideo.id,
-        filePath: duplicateCheck.duplicateVideo.filePath,
-        error: '이미 업로드된 동영상입니다.',
-      };
-    }
+    // 중복 확인은 클라이언트에서 이미 완료됨 (page.tsx에서 checkDuplicateVideo 호출)
+    // 서버 액션에서는 중복 체크 생략
 
     // 원본 파일명 기반 파일명 생성 (언더스코어와 하이픈 허용)
     const timestamp = Date.now();

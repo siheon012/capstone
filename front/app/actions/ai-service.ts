@@ -1,10 +1,15 @@
-'use server';
-
+﻿// Client-side API service (Server Actions 제거하여 403 에러 방지)
 import type { ChatSession } from '@/app/types/session';
-import { getAppConfig } from '@/lib/env-config';
 
-// 환경 설정
-const config = getAppConfig();
+// API Base URL 설정 - 클라이언트에서 상대 경로 사용
+const getApiBaseUrl = () => {
+  if (typeof window === 'undefined') {
+    // Server-side: SSR 시 사용
+    return process.env.NEXT_PUBLIC_API_URL || '';
+  }
+  // Client-side: 상대 경로 사용 (ALB가 /api/*, /db/* 를 Backend로 라우팅)
+  return '';
+};
 
 // 비디오 분석 결과 타입 정의
 export type VideoAnalysisResult = {
@@ -27,23 +32,30 @@ export type VideoAnalysisResult = {
 export async function startAnalyzeVideo(
   videoId: string
 ): Promise<{ success: boolean; message: string }> {
+  const apiBaseUrl = getApiBaseUrl();
+
   try {
+    const analysisUrl = apiBaseUrl
+      ? `${apiBaseUrl}/api/video-analysis/submit-analysis`
+      : '/api/video-analysis/submit-analysis';
+
     console.log('🔄 영상 분석 시작 API 호출:', {
       videoId,
-      url: config.api.videoAnalysis || 'http://localhost:7500/analyze',
+      url: analysisUrl,
       timestamp: new Date().toISOString(),
     });
 
     // 먼저 Django에서 비디오 정보를 가져와서 파일 경로 확인
-    const videoInfoResponse = await fetch(
-      `${config.api.database}/videos/${videoId}/`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const videoInfoUrl = apiBaseUrl
+      ? `${apiBaseUrl}/db/videos/${videoId}/`
+      : `/db/videos/${videoId}/`;
+
+    const videoInfoResponse = await fetch(videoInfoUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
     if (!videoInfoResponse.ok) {
       throw new Error(
@@ -94,7 +106,6 @@ export async function startAnalyzeVideo(
     console.log('📍 [AI Service] 비디오 파일 경로:', videoPath);
 
     // 서버(백엔드)를 통해 분석 작업 제출 (AWS Batch 등으로 라우팅)
-    const analysisUrl = `${config.api.videoAnalysis}submit-analysis`;
     const response = await fetch(analysisUrl, {
       method: 'POST',
       headers: {
@@ -119,7 +130,7 @@ export async function startAnalyzeVideo(
         status: response.status,
         statusText: response.statusText,
         videoId,
-        url: 'http://localhost:7500/analyze',
+        url: analysisUrl,
         errorBody: errorText,
         timestamp: new Date().toISOString(),
       };
@@ -193,18 +204,21 @@ export async function startAnalyzeVideo(
 export async function getAnalysisResult(
   videoId: string
 ): Promise<VideoAnalysisResult> {
+  const apiBaseUrl = getApiBaseUrl();
+
   try {
     console.log('🔍 [AI Service] 분석 결과 조회 시작:', videoId);
 
-    const eventsResponse = await fetch(
-      `${config.api.database}/events/?video=${videoId}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const eventsUrl = apiBaseUrl
+      ? `${apiBaseUrl}/db/events/?video=${videoId}`
+      : `/db/events/?video=${videoId}`;
+
+    const eventsResponse = await fetch(eventsUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
     if (eventsResponse.ok) {
       const eventsData = await eventsResponse.json();
@@ -282,23 +296,28 @@ export async function getAnalysisResult(
 export async function analyzeVideo(
   videoId: string
 ): Promise<VideoAnalysisResult> {
+  const apiBaseUrl = getApiBaseUrl();
+  const analysisUrl = apiBaseUrl
+    ? `${apiBaseUrl}/api/video-analysis/submit-analysis`
+    : '/api/video-analysis/submit-analysis';
+  const videoInfoUrl = apiBaseUrl
+    ? `${apiBaseUrl}/db/videos/${videoId}/`
+    : `/db/videos/${videoId}/`;
+
   try {
     console.log('🔄 영상 분석 API 호출 시작:', {
       videoId,
-      url: config.api.videoAnalysis || 'http://localhost:7500/analyze',
+      url: analysisUrl,
       timestamp: new Date().toISOString(),
     });
 
     // 먼저 Django에서 비디오 정보를 가져와서 파일 경로 확인
-    const videoInfoResponse = await fetch(
-      `${config.api.database}/videos/${videoId}/`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const videoInfoResponse = await fetch(videoInfoUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
     if (!videoInfoResponse.ok) {
       throw new Error(
@@ -349,8 +368,7 @@ export async function analyzeVideo(
     console.log('📍 [AI Service] 비디오 파일 경로:', videoPath);
 
     // Submit analysis request via backend API (which will route to Batch/AI)
-    const analysisUrl2 = `${config.api.videoAnalysis}submit-analysis`;
-    const response = await fetch(analysisUrl2, {
+    const response = await fetch(analysisUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -374,7 +392,7 @@ export async function analyzeVideo(
         status: response.status,
         statusText: response.statusText,
         videoId,
-        url: 'http://localhost:7500/analyze',
+        url: analysisUrl,
         errorBody: errorText,
         timestamp: new Date().toISOString(),
       };
@@ -424,15 +442,16 @@ export async function analyzeVideo(
       try {
         console.log('🔍 [AI Service] 저장된 이벤트 데이터 조회 시작:', videoId);
 
-        const eventsResponse = await fetch(
-          `${config.api.database}/events/?video=${videoId}`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        const eventsUrl = apiBaseUrl
+          ? `${apiBaseUrl}/db/events/?video=${videoId}`
+          : `/db/events/?video=${videoId}`;
+
+        const eventsResponse = await fetch(eventsUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
 
         if (eventsResponse.ok) {
           const eventsData = await eventsResponse.json();
@@ -692,19 +711,20 @@ export async function sendMessage(
   videoId: string,
   sessionId?: string | null
 ): Promise<MessageResponse> {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+  const apiBaseUrl = getApiBaseUrl();
+  const url = apiBaseUrl ? `${apiBaseUrl}/api/prompt/` : '/api/prompt/';
 
   try {
     console.log('🔄 sendMessage API 호출 시작:', {
       message,
       videoId,
       sessionId,
-      url: `${API_URL}/api/prompt/`,
+      url,
       timestamp: new Date().toISOString(),
     });
 
     // Django 백엔드의 process_prompt API 호출
-    const response = await fetch(`${API_URL}/api/prompt/`, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -772,19 +792,20 @@ export async function sendVlmMessage(
   videoId: string,
   sessionId?: string | null
 ): Promise<MessageResponse> {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+  const apiBaseUrl = getApiBaseUrl();
+  const url = apiBaseUrl ? `${apiBaseUrl}/api/vlm-chat/` : '/api/vlm-chat/';
 
   try {
     console.log('🎥 sendVlmMessage API 호출 시작:', {
       message,
       videoId,
       sessionId,
-      url: `${API_URL}/api/vlm-chat/`,
+      url,
       timestamp: new Date().toISOString(),
     });
 
     // Django 백엔드의 VLM 채팅 API 호출
-    const response = await fetch(`${API_URL}/api/vlm-chat/`, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -974,6 +995,7 @@ export async function generateVideoSummary(videoId: string): Promise<{
       },
       body: JSON.stringify({
         summary_type: 'events', // 이벤트 기반 요약
+        async: false, // 동기 처리 - summary가 완성될 때까지 기다림
       }),
     });
 

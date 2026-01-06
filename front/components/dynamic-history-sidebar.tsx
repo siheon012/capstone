@@ -45,7 +45,7 @@ export default function DynamicHistorySidebar({
   const [loading, setLoading] = useState(true);
   const [needsScroll, setNeedsScroll] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  
+
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -115,17 +115,25 @@ export default function DynamicHistorySidebar({
         // updatedAt 기준으로 최신순 정렬 (최근 수정된 순서)
         const sortedSessions = sessionResponse.data.sort((a, b) => {
           // updatedAt이 없으면 createdAt을 fallback으로 사용
-          const dateA = a.updatedAt 
-            ? (typeof a.updatedAt === 'string' ? new Date(a.updatedAt) : a.updatedAt)
-            : (typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt);
-          const dateB = b.updatedAt 
-            ? (typeof b.updatedAt === 'string' ? new Date(b.updatedAt) : b.updatedAt)
-            : (typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt);
-          
+          const dateA = a.updatedAt
+            ? typeof a.updatedAt === 'string'
+              ? new Date(a.updatedAt)
+              : a.updatedAt
+            : typeof a.createdAt === 'string'
+            ? new Date(a.createdAt)
+            : a.createdAt;
+          const dateB = b.updatedAt
+            ? typeof b.updatedAt === 'string'
+              ? new Date(b.updatedAt)
+              : b.updatedAt
+            : typeof b.createdAt === 'string'
+            ? new Date(b.createdAt)
+            : b.createdAt;
+
           // 날짜가 유효하지 않은 경우 처리
           const timeA = dateA && !isNaN(dateA.getTime()) ? dateA.getTime() : 0;
           const timeB = dateB && !isNaN(dateB.getTime()) ? dateB.getTime() : 0;
-          
+
           return timeB - timeA;
         });
         setHistoryList(sortedSessions);
@@ -143,21 +151,26 @@ export default function DynamicHistorySidebar({
       // 현재 URL에서 세션 ID 확인
       const currentSessionId = searchParams.get('sessionId');
       const isCurrentSession = currentSessionId === id;
-      
+
       const success = await deleteSession(id);
       if (success) {
         setHistoryList((prev) => prev.filter((item) => item.id !== id));
-        
+
         // 현재 보고 있는 세션이 삭제된 경우 리디렉션
         if (isCurrentSession) {
           try {
             // 현재 URL에서 videoId 추출
             const currentPath = window.location.pathname;
-            const videoIdMatch = currentPath.match(/\/uploaded_video\/([^\/\?]+)/);
-            
+            const videoIdMatch = currentPath.match(
+              /\/uploaded_video\/([^\/\?]+)/
+            );
+
             if (videoIdMatch && videoIdMatch[1]) {
               const videoId = videoIdMatch[1];
-              console.log('현재 세션이 삭제됨, 리디렉션:', `/uploaded_video/${videoId}`);
+              console.log(
+                '현재 세션이 삭제됨, 리디렉션:',
+                `/uploaded_video/${videoId}`
+              );
               router.push(`/uploaded_video/${videoId}`);
             } else {
               // videoId를 찾을 수 없는 경우 메인 페이지로
@@ -195,12 +208,12 @@ export default function DynamicHistorySidebar({
   const formatDate = (date: Date | string) => {
     // 안전한 날짜 파싱
     const parsedDate = typeof date === 'string' ? new Date(date) : date;
-    
+
     // 유효한 날짜인지 확인
     if (!parsedDate || isNaN(parsedDate.getTime())) {
       return '--/--';
     }
-    
+
     const month = parsedDate.getMonth() + 1;
     const day = parsedDate.getDate();
     return `${month}/${day}`;
@@ -209,12 +222,12 @@ export default function DynamicHistorySidebar({
   const formatTime = (date: Date | string) => {
     // 안전한 날짜 파싱
     const parsedDate = typeof date === 'string' ? new Date(date) : date;
-    
+
     // 유효한 날짜인지 확인
     if (!parsedDate || isNaN(parsedDate.getTime())) {
       return '--:--';
     }
-    
+
     return parsedDate.toLocaleTimeString('ko-KR', {
       hour: '2-digit',
       minute: '2-digit',
@@ -236,20 +249,31 @@ export default function DynamicHistorySidebar({
     }
   };
 
+  // 비디오별 세션 번호를 가져오는 헬퍼 함수 (백엔드에서 제공)
+  const getVideoSessionNumber = (item: ChatSession) => {
+    // 백엔드에서 제공하는 session_number 사용
+    return item.session_number || 1;
+  };
+
   // 제목 생성 함수 추가
   const generateSessionTitle = (item: ChatSession, index: number) => {
+    // display_title이 백엔드에서 제공되면 그것을 사용 (최우선)
+    if (item.title && item.title.includes('번째')) {
+      return item.title;
+    }
+
     if (item.videoInfo?.name) {
       // 동영상 파일명에서 확장자 제거
       const videoName = item.videoInfo.name.replace(
         /\.(mp4|avi|mov|mkv)$/i,
         ''
       );
-      // 세션 번호는 역순으로 계산 (최신이 1번)
-      const sessionNumber = historyList.length - index;
+      // 비디오별 세션 번호 계산
+      const sessionNumber = getVideoSessionNumber(item);
       return `${videoName}의 ${sessionNumber}번째 세션`;
     }
     // videoInfo가 없는 경우 기본 제목
-    return `세션 ${historyList.length - index}`;
+    return item.title || `세션 ${historyList.length - index}`;
   };
 
   // 찾은 사건들을 포맷팅하는 함수 수정
@@ -257,8 +281,8 @@ export default function DynamicHistorySidebar({
     if (!session.detected_events || session.detected_events.length === 0) {
       return null; // 사건이 없으면 null 반환 (뱃지를 표시하지 않음)
     }
-    
-    const eventTypes = session.detected_events.map(event => {
+
+    const eventTypes = session.detected_events.map((event) => {
       switch (event.event_type) {
         case 'theft':
           return '도난';
@@ -270,7 +294,7 @@ export default function DynamicHistorySidebar({
           return event.event_type;
       }
     });
-    
+
     // 중복 제거 후 문자열로 조합
     const uniqueEvents = [...new Set(eventTypes)];
     return uniqueEvents.join(', ');
@@ -295,13 +319,13 @@ export default function DynamicHistorySidebar({
     if (session.videoId) {
       return session.videoId;
     }
-    
+
     // 2. videoInfo.name에서 추출하는 경우 (fallback)
     if (session.videoInfo?.name) {
       // 파일명에서 확장자를 제거한 것을 videoId로 사용
       return session.videoInfo.name.replace(/\.(mp4|avi|mov|mkv)$/i, '');
     }
-    
+
     // 3. 모든 경우에 실패하면 sessionId를 사용
     return session.id;
   };
@@ -310,7 +334,7 @@ export default function DynamicHistorySidebar({
   const handleCardClick = (session: ChatSession) => {
     const videoId = getVideoId(session);
     const sessionId = session.id;
-    
+
     // /uploaded_video/[videoId]?sessionId=[sessionId] 형태로 네비게이션
     router.push(`/uploaded_video/${videoId}?sessionId=${sessionId}`);
   };
@@ -447,9 +471,12 @@ export default function DynamicHistorySidebar({
 
                           <div className="flex-1 min-w-0">
                             {/* 제목을 "prompt_id"에서 "{동영상 이름}의 몇번째 채팅" 형식으로 변경 */}
-                            <h3 
+                            <h3
                               className="font-medium text-white text-xs sm:text-sm truncate"
-                              title={generateSessionTitle(item, historyList.indexOf(item))}
+                              title={generateSessionTitle(
+                                item,
+                                historyList.indexOf(item)
+                              )}
                             >
                               {generateSessionTitle(
                                 item,
@@ -501,23 +528,70 @@ export default function DynamicHistorySidebar({
                         {/* 메시지 개수와 사건 뱃지 */}
                         <div className="flex items-start justify-between text-xs text-gray-500 gap-2">
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <span>{item.interactionCount || item.messages.length}개 메시지</span>
-                            {item.videoInfo && (
-                              <span>
-                                {Math.floor(item.videoInfo.duration / 60)}분
-                              </span>
-                            )}
+                            <span>
+                              {item.interactionCount || item.messages.length}개
+                              메시지
+                            </span>
+                            {item.videoInfo &&
+                              item.videoInfo.duration !== undefined &&
+                              item.videoInfo.duration !== null && (
+                                <span>
+                                  {(() => {
+                                    // duration을 반올림하여 초 단위로 변환
+                                    const durationInSeconds = Math.round(
+                                      Number(item.videoInfo.duration)
+                                    );
+
+                                    console.log(
+                                      '📹 비디오 duration 확인 (스크롤영역):',
+                                      {
+                                        name: item.videoInfo.name,
+                                        duration_raw: item.videoInfo.duration,
+                                        duration_type:
+                                          typeof item.videoInfo.duration,
+                                        rounded: durationInSeconds,
+                                        isValid:
+                                          !isNaN(durationInSeconds) &&
+                                          durationInSeconds > 0,
+                                      }
+                                    );
+
+                                    if (
+                                      isNaN(durationInSeconds) ||
+                                      durationInSeconds <= 0
+                                    ) {
+                                      return null;
+                                    }
+
+                                    // 초를 분과 초로 변환
+                                    const minutes = Math.floor(
+                                      durationInSeconds / 60
+                                    );
+                                    const seconds = durationInSeconds % 60;
+
+                                    // 1분 미만이면 초만 표시
+                                    if (minutes === 0) {
+                                      return `${seconds}초`;
+                                    }
+
+                                    // 1분 이상이면 "분 초" 형식으로 표시
+                                    return `${minutes}분 ${seconds}초`;
+                                  })()}
+                                </span>
+                              )}
                           </div>
-                          
+
                           {/* 찾은 사건 뱃지 - 우측 하단 영역 확장 */}
                           <div className="flex-1 flex justify-end min-w-0">
                             {(() => {
                               const events = formatDetectedEvents(item);
                               if (!events) return null; // 사건이 없으면 뱃지를 표시하지 않음
-                              
+
                               return (
                                 <span
-                                  className={`px-2 py-1 rounded-full text-xs font-medium truncate max-w-full ${getEventBadgeStyle(events)}`}
+                                  className={`px-2 py-1 rounded-full text-xs font-medium truncate max-w-full ${getEventBadgeStyle(
+                                    events
+                                  )}`}
                                   title={`찾은 사건: ${events}`}
                                 >
                                   찾은 사건: {events}
@@ -572,9 +646,12 @@ export default function DynamicHistorySidebar({
 
                         <div className="flex-1 min-w-0 overflow-hidden">
                           {/* 제목을 "prompt_id"에서 "{동영상 이름}의 몇번째 채팅" 형식으로 변경 */}
-                          <h3 
+                          <h3
                             className="font-medium text-white text-xs sm:text-sm truncate overflow-hidden"
-                            title={generateSessionTitle(item, historyList.indexOf(item))}
+                            title={generateSessionTitle(
+                              item,
+                              historyList.indexOf(item)
+                            )}
                           >
                             {generateSessionTitle(
                               item,
@@ -630,23 +707,67 @@ export default function DynamicHistorySidebar({
                       {/* 메시지 개수와 사건 뱃지 */}
                       <div className="flex items-start justify-between text-xs text-gray-500 gap-2 min-w-0 overflow-hidden">
                         <div className="flex items-center gap-2 flex-shrink-0 min-w-0">
-                          <span className="whitespace-nowrap">{item.interactionCount || item.messages.length}개 메시지</span>
-                          {item.videoInfo && (
-                            <span className="whitespace-nowrap">
-                              {Math.floor(item.videoInfo.duration / 60)}분
-                            </span>
-                          )}
+                          <span className="whitespace-nowrap">
+                            {item.interactionCount || item.messages.length}개
+                            메시지
+                          </span>
+                          {item.videoInfo &&
+                            item.videoInfo.duration !== undefined &&
+                            item.videoInfo.duration !== null && (
+                              <span className="whitespace-nowrap">
+                                {(() => {
+                                  // duration을 반올림하여 초 단위로 변환
+                                  const durationInSeconds = Math.round(
+                                    Number(item.videoInfo.duration)
+                                  );
+
+                                  console.log('📹 비디오 duration 확인:', {
+                                    name: item.videoInfo.name,
+                                    duration_raw: item.videoInfo.duration,
+                                    duration_type:
+                                      typeof item.videoInfo.duration,
+                                    rounded: durationInSeconds,
+                                    isValid:
+                                      !isNaN(durationInSeconds) &&
+                                      durationInSeconds > 0,
+                                  });
+
+                                  if (
+                                    isNaN(durationInSeconds) ||
+                                    durationInSeconds <= 0
+                                  ) {
+                                    return null;
+                                  }
+
+                                  // 초를 분과 초로 변환
+                                  const minutes = Math.floor(
+                                    durationInSeconds / 60
+                                  );
+                                  const seconds = durationInSeconds % 60;
+
+                                  // 1분 미만이면 초만 표시
+                                  if (minutes === 0) {
+                                    return `${seconds}초`;
+                                  }
+
+                                  // 1분 이상이면 "분 초" 형식으로 표시
+                                  return `${minutes}분 ${seconds}초`;
+                                })()}
+                              </span>
+                            )}
                         </div>
-                        
+
                         {/* 찾은 사건 뱃지 - 우측 하단 영역 확장 */}
                         <div className="flex-1 flex justify-end min-w-0 overflow-hidden">
                           {(() => {
                             const events = formatDetectedEvents(item);
                             if (!events) return null; // 사건이 없으면 뱃지를 표시하지 않음
-                            
+
                             return (
                               <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium truncate max-w-full whitespace-nowrap overflow-hidden ${getEventBadgeStyle(events)}`}
+                                className={`px-2 py-1 rounded-full text-xs font-medium truncate max-w-full whitespace-nowrap overflow-hidden ${getEventBadgeStyle(
+                                  events
+                                )}`}
                                 title={`찾은 사건: ${events}`}
                               >
                                 찾은 사건: {events}

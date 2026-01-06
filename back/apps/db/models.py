@@ -374,6 +374,71 @@ class Event(models.Model):
         self.last_accessed = timezone.now()
         self.save(update_fields=['search_count', 'last_accessed'])
     
+    # attributes JSON에서 필드 노출하는 @property 메서드들
+    @property
+    def age(self):
+        """attributes에서 age 가져오기"""
+        return self.attributes.get('age', 0)
+    
+    @property
+    def location(self):
+        """attributes에서 location 가져오기"""
+        return self.attributes.get('location', '')
+    
+    @property
+    def action_detected(self):
+        """attributes에서 action_detected 가져오기"""
+        return self.attributes.get('action_detected', '')
+    
+    @property
+    def obj_id(self):
+        """attributes에서 obj_id 가져오기"""
+        return self.attributes.get('obj_id', 0)
+    
+    @property
+    def area_of_interest(self):
+        """attributes에서 area_of_interest 가져오기"""
+        return self.attributes.get('area_of_interest', 0)
+    
+    @property
+    def gender_score(self):
+        """attributes에서 gender_score 가져오기"""
+        return self.attributes.get('gender_score', 0.0)
+    
+    @property
+    def scene_analysis(self):
+        """attributes에서 scene_analysis 가져오기"""
+        return self.attributes.get('scene_analysis', None)
+    
+    @property
+    def orientataion(self):
+        """attributes에서 orientataion 가져오기 (오타 그대로 유지)"""
+        return self.attributes.get('orientataion', None)
+    
+    @property
+    def timestamp_display(self):
+        """MM:SS 형식의 타임스탬프"""
+        minutes = int(self.timestamp // 60)
+        seconds = int(self.timestamp % 60)
+        return f"{minutes:02d}:{seconds:02d}"
+    
+    @property
+    def absolute_time(self):
+        """실제 발생 시각 (ISO 형식)"""
+        if not self.video.recorded_at:
+            return None
+        from datetime import timedelta
+        return (self.video.recorded_at + timedelta(seconds=self.timestamp)).isoformat()
+    
+    @property
+    def absolute_time_display(self):
+        """사용자 친화적 절대 시간 표시"""
+        if not self.video.recorded_at:
+            return "시간 정보 없음"
+        from datetime import timedelta
+        absolute_dt = self.video.recorded_at + timedelta(seconds=self.timestamp)
+        return absolute_dt.strftime("%Y-%m-%d %H:%M:%S")
+    
     def generate_searchable_text(self):
         """검색 가능한 텍스트 생성"""
         parts = [
@@ -425,7 +490,7 @@ class PromptSession(models.Model):
     
     # 주요 이벤트 연결 (RAG 검색의 컨텍스트)
     main_event = models.ForeignKey(Event, on_delete=models.SET_NULL, null=True, blank=True)
-    related_videos = models.ManyToManyField(Video, blank=True)
+    related_videos = models.ForeignKey(Video, on_delete=models.CASCADE, null=True, blank=True, related_name='prompt_sessions')
     
     # 세션 메타데이터
     session_name = models.CharField(max_length=255, blank=True)
@@ -490,8 +555,34 @@ class PromptSession(models.Model):
     
     @property
     def display_title(self):
-        """세션 제목 표시"""
-        return self.session_name or f"세션 {self.session_id[:8]}"
+        """세션 제목 표시 - 항상 '{video_name}의 N번째 세션' 형식"""
+        # session_name은 무시하고 항상 비디오 기반 제목 생성
+        
+        # 관련 비디오 가져오기
+        video = self.related_videos
+        if not video:
+            return f"세션 {self.session_id[:8]}"
+        
+        video_name = video.name or video.filename or "비디오"
+        session_number = self.session_number  # 프로퍼티 사용
+        
+        return f"{video_name}의 {session_number}번째 세션"
+    
+    @property
+    def session_number(self):
+        """비디오별 세션 번호 (created_at 기준 순서)"""
+        if not self.related_videos:
+            return 1
+        
+        try:
+            # 같은 비디오의 세션들을 created_at 순으로 정렬
+            sessions = PromptSession.objects.filter(
+                related_videos=self.related_videos
+            ).order_by('created_at')
+            session_ids = list(sessions.values_list('pk', flat=True))
+            return session_ids.index(self.pk) + 1
+        except (ValueError, Exception):
+            return 1
     
     @property
     def timeline_summary(self):
@@ -546,7 +637,7 @@ class PromptInteraction(models.Model):
     
     # 관련 데이터
     related_events = models.ManyToManyField(Event, blank=True)
-    related_videos = models.ManyToManyField(Video, blank=True)
+    related_videos = models.ForeignKey(Video, on_delete=models.CASCADE, null=True, blank=True, related_name='prompt_interactions')
     
     # 분석 결과
     analysis_type = models.CharField(max_length=50, blank=True)

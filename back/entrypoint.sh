@@ -61,7 +61,7 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
 fi
 
 # ===========================================
-# 2. pgvector ?뺤옣 ?쒖꽦??
+# 2. pgvector 
 # ===========================================
 echo ""
 echo "?뵩 Enabling pgvector extension..."

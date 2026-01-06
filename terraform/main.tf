@@ -18,7 +18,8 @@ provider "aws" {
 variable "account_id" {
   description = "AWS Account ID"
   type        = string
-  default     = "287709190208"
+  # terraform.tfvars 또는 환경변수로 설정
+  # 예: export TF_VAR_account_id=$(aws sts get-caller-identity --query Account --output text)
 }
 
 variable "region" {

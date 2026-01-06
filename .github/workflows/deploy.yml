@@ -2,12 +2,11 @@ name: Deploy to Production
 
 on:
   push:
-    branches: [main]
+    branches: [ECSFargate]
   workflow_dispatch: # 수동 실행도 가능
 
 env:
   AWS_REGION: ap-northeast-2
-  ECR_REGISTRY: 287709190208.dkr.ecr.ap-northeast-2.amazonaws.com
 
 jobs:
   build-and-deploy:
@@ -30,6 +29,12 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      # 3.5 AWS Account ID 가져오기
+      - name: Get AWS Account ID
+        id: account
+        run: |
+          echo "AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
 
       # 4. Frontend 이미지 빌드 & 푸시
       - name: Build and push frontend image
@@ -71,16 +76,28 @@ jobs:
 
           echo "Backend image pushed successfully!"
 
-      # 6. 배포 (EC2 또는 ECS로)
-      - name: Deploy to production
+      # 6. ECS 서비스 배포
+      - name: Deploy Frontend to ECS
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          echo "Deploying with image tag: $IMAGE_TAG"
+          echo "Deploying frontend with image tag: $IMAGE_TAG"
+          aws ecs update-service \
+            --cluster capstone-cluster \
+            --service capstone-frontend-service \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
 
-          # 배포 스크립트 실행 (예시)
-          # aws ecs update-service --cluster capstone --service frontend --force-new-deployment
-          # 또는 EC2에 SSH로 docker-compose 업데이트
+      - name: Deploy Backend to ECS
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "Deploying backend with image tag: $IMAGE_TAG"
+          aws ecs update-service \
+            --cluster capstone-cluster \
+            --service capstone-backend-service \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
 
       # 7. 슬랙 알림 (선택사항)
       - name: Notify deployment

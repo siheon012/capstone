@@ -16,6 +16,18 @@ if (process.env.NODE_ENV === 'development') {
 export const metadata: Metadata = {
   title: 'Deep Sentinel - CCTV Analysis Platform',
   description: 'AI-powered CCTV video analysis platform',
+  icons: {
+    icon: [
+      { url: '/images/ds_logo_transparent.png' },
+      {
+        url: '/images/ds_logo_transparent.png',
+        sizes: '32x32',
+        type: 'image/png',
+      },
+    ],
+    shortcut: '/images/ds_logo_transparent.png',
+    apple: '/images/ds_logo_transparent.png',
+  },
 };
 
 export default function RootLayout({

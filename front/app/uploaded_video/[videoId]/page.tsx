@@ -24,7 +24,7 @@ import ToastNotification, { type Toast } from '@/components/toast-notification';
 import VideoMinimap from '@/components/video-minimap';
 import EventTimeline from '@/components/event-timeline';
 import type { ChatSession } from '@/app/types/session';
-import { getUploadedVideos } from '@/app/actions/video-service';
+import { getUploadedVideos } from '@/app/actions/video-service-client';
 import { getSession } from '@/app/actions/session-service';
 import { sendMessage } from '@/app/actions/ai-service';
 import type { UploadedVideo } from '@/app/types/video';
@@ -66,7 +66,7 @@ export default function CCTVAnalysis() {
   // 분석 상태와 진행도를 관리하는 state (메인페이지와 동일)
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
-  
+
   // 로딩 애니메이션 상태 (분석 진행률과는 별개)
   const [isLoading, setIsLoading] = useState(false);
 
@@ -107,7 +107,7 @@ export default function CCTVAnalysis() {
       setMessages([
         {
           role: 'assistant',
-          content: sessionId 
+          content: sessionId
             ? '영상 로드 중... 기존 세션을 가져오고 있습니다.'
             : '영상을 로드하고 있습니다.',
         },
@@ -167,7 +167,7 @@ export default function CCTVAnalysis() {
             setMessages([
               {
                 role: 'assistant',
-                content: sessionId 
+                content: sessionId
                   ? `"${foundVideo.name}" 영상이 로드되었습니다. 기존 대화를 불러오고 있습니다.`
                   : `"${foundVideo.name}" 영상이 로드되었습니다. 영상 내용에 대해 질문할 수 있습니다.`,
               },
@@ -211,7 +211,10 @@ export default function CCTVAnalysis() {
           // 현재 마지막 메시지가 "영상이 로드되었습니다" 메시지인 경우
           const lastMessage = prevMessages[prevMessages.length - 1];
 
-          if (lastMessage && lastMessage.content.includes('영상이 로드되었습니다')) {
+          if (
+            lastMessage &&
+            lastMessage.content.includes('영상이 로드되었습니다')
+          ) {
             // 세션 메시지들을 추가
             const sessionMessages = sessionData.messages || [];
             return [...prevMessages, ...sessionMessages];
@@ -284,31 +287,106 @@ export default function CCTVAnalysis() {
 
   // Summary 출력 함수
   const handleGenerateSummary = async () => {
-    console.log('[Summary] 함수 호출됨');
-    console.log('[Summary] video 객체:', video);
-    console.log('[Summary] video.summary:', video?.summary);
-    
-    if (!video || !video.summary) {
-      console.log('[Summary] Summary 없음 - video 존재:', !!video, 'summary 존재:', !!video?.summary);
+    console.log('🔥 [Summary] 함수 호출됨');
+    console.log('📹 [Summary] video 객체:', video);
+    console.log('📝 [Summary] video.summary:', video?.summary);
+    console.log('🔢 [Summary] video.id:', video?.id);
+
+    if (!video) {
+      console.error('❌ [Summary] video 객체가 없습니다!');
       addToast({
-        type: 'warning',
-        title: 'Summary 없음',
-        message: '이 영상에는 아직 요약이 생성되지 않았습니다.',
+        type: 'error',
+        title: '비디오 정보 없음',
+        message: '비디오 정보를 불러올 수 없습니다.',
         duration: 3000,
       });
       return;
     }
 
     try {
-      console.log('[Summary] Summary 출력 시작');
       setIsLoading(true);
+      console.log('⏳ [Summary] isLoading = true');
+
+      // Summary가 없거나 실패한 경우 자동 생성
+      const shouldRegenerate =
+        !video.summary ||
+        video.summary.includes('분석할 이벤트가 없습니다') ||
+        video.summary.includes('감지된 이벤트가 없습니다') ||
+        (video.summary.includes('총 ') &&
+          video.summary.includes('개의 이벤트가 감지되었습니다')) || // fallback summary 감지
+        video.summary.includes('실패') ||
+        video.summary.trim().length < 100; // 너무 짧은 summary (100자 미만)
+
+      console.log('📋 [Summary] shouldRegenerate:', shouldRegenerate);
+      console.log('📋 [Summary] 기존 summary:', video.summary);
+
+      if (shouldRegenerate) {
+        addToast({
+          type: 'info',
+          title: 'Summary 생성 중',
+          message: 'AI가 영상 요약을 생성하고 있습니다... (약 10-30초 소요)',
+          duration: 5000,
+        });
+
+        console.log('📦 [Summary] ai-service 임포트 중...');
+        const { generateVideoSummary } = await import(
+          '@/app/actions/ai-service'
+        );
+        console.log('📞 [Summary] generateVideoSummary 호출:', video.id);
+        const result = await generateVideoSummary(video.id);
+        console.log('✅ [Summary] API 응답:', result);
+
+        if (!result.success || !result.summary) {
+          throw new Error(result.error || 'Summary 생성 실패');
+        }
+
+        console.log(
+          '[Summary] Summary 생성 완료:',
+          result.summary.substring(0, 100)
+        );
+
+        // 비디오 정보 새로고침
+        const videosResponse = await getUploadedVideos();
+        if (videosResponse.success) {
+          const updatedVideo = videosResponse.data.find(
+            (v) => v.id === video.id
+          );
+          if (updatedVideo) {
+            setVideo(updatedVideo);
+            video.summary = updatedVideo.summary;
+          }
+        }
+
+        addToast({
+          type: 'success',
+          title: 'Summary 생성 완료',
+          message: 'AI가 영상 요약을 생성했습니다.',
+          duration: 3000,
+        });
+
+        // 생성된 summary가 없으면 결과에서 직접 사용
+        if (!video.summary) {
+          console.log('📝 [Summary] result.summary를 video.summary에 할당');
+          video.summary = result.summary;
+        }
+      } else {
+        console.log('✅ [Summary] Summary가 이미 있음, 바로 출력');
+      }
+
+      console.log('📤 [Summary] Summary 출력 시작');
+      console.log('📄 [Summary] video.summary 길이:', video.summary?.length);
+
+      // summary가 없으면 에러
+      if (!video.summary) {
+        throw new Error('Summary가 생성되지 않았습니다.');
+      }
 
       // 요약을 채팅으로 출력 (포맷팅 개선)
       const formattedSummary = video.summary
         .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .map(line => {
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => {
           // 번호가 있는 항목 처리 (1., 2., 등)
           if (/^\d+\./.test(line)) {
             return `\n${line}`;
@@ -467,7 +545,8 @@ export default function CCTVAnalysis() {
           // 에러 응답 처리
           const errorMessage = {
             role: 'assistant' as const,
-            content: response.error || '응답을 생성하는 중 오류가 발생했습니다.',
+            content:
+              response.error || '응답을 생성하는 중 오류가 발생했습니다.',
           };
 
           setMessages((prev) => [...prev, errorMessage]);
@@ -481,11 +560,12 @@ export default function CCTVAnalysis() {
         }
       } catch (error) {
         console.error('Send message error:', error);
-        
+
         // 에러 시 기본 응답 추가
         const errorMessage = {
           role: 'assistant' as const,
-          content: '죄송합니다. 현재 서비스에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.',
+          content:
+            '죄송합니다. 현재 서비스에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.',
         };
 
         setMessages((prev) => [...prev, errorMessage]);
@@ -728,10 +808,10 @@ export default function CCTVAnalysis() {
                       <div className="relative">
                         {isAnalyzing ? (
                           // 분석 중일 때 민트색 프로그레스 오버레이 (메인페이지와 동일)
-                          <div 
+                          <div
                             className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10"
                             style={{
-                              animation: 'borderGlow 2s ease-in-out infinite'
+                              animation: 'borderGlow 2s ease-in-out infinite',
                             }}
                           >
                             <div className="relative w-24 h-24 md:w-32 md:h-32 mb-4">
@@ -779,28 +859,26 @@ export default function CCTVAnalysis() {
                               </div>
                             </div>
                             <p className="text-white text-sm md:text-base font-medium mb-2">
-                              {analysisProgress === 0 
-                                ? '영상 분석 준비 중...' 
-                                : analysisProgress < 10 
-                                  ? '영상 분석 시작 중...'
-                                  : analysisProgress < 50
-                                    ? '영상 분석 중...'
-                                    : analysisProgress < 90
-                                      ? '영상 분석 중...'
-                                      : '영상 분석 완료 중...'
-                              }
+                              {analysisProgress === 0
+                                ? '영상 분석 준비 중...'
+                                : analysisProgress < 10
+                                ? '영상 분석 시작 중...'
+                                : analysisProgress < 50
+                                ? '영상 분석 중...'
+                                : analysisProgress < 90
+                                ? '영상 분석 중...'
+                                : '영상 분석 완료 중...'}
                             </p>
                             <p className="text-gray-300 text-xs md:text-sm text-center px-4 mb-4">
-                              {analysisProgress === 0 
+                              {analysisProgress === 0
                                 ? 'AI 서버에 분석을 요청하고 있습니다. 잠시만 기다려주세요.'
                                 : analysisProgress < 10
-                                  ? 'AI가 영상 분석을 시작했습니다.'
-                                  : analysisProgress < 50
-                                    ? 'AI가 영상의 객체와 동작을 분석하고 있습니다.'
-                                    : analysisProgress < 90
-                                      ? 'AI가 이벤트를 감지하고 분류하고 있습니다.'
-                                      : 'AI가 분석 결과를 정리하고 있습니다.'
-                              }
+                                ? 'AI가 영상 분석을 시작했습니다.'
+                                : analysisProgress < 50
+                                ? 'AI가 영상의 객체와 동작을 분석하고 있습니다.'
+                                : analysisProgress < 90
+                                ? 'AI가 이벤트를 감지하고 분류하고 있습니다.'
+                                : 'AI가 분석 결과를 정리하고 있습니다.'}
                             </p>
                           </div>
                         ) : isLoading ? (
@@ -810,13 +888,14 @@ export default function CCTVAnalysis() {
                               <div className="w-full h-full border-8 border-gray-600 border-t-[#00e6b4] rounded-full animate-spin"></div>
                             </div>
                             <p className="text-white text-sm md:text-base font-medium mb-2">
-                              {sessionId ? '영상 로드 중...' : '영상 로드 중...'}
+                              {sessionId
+                                ? '영상 로드 중...'
+                                : '영상 로드 중...'}
                             </p>
                             <p className="text-gray-300 text-xs md:text-sm text-center px-4">
-                              {sessionId 
+                              {sessionId
                                 ? '기존 세션을 가져오고 있습니다. 잠시만 기다려주세요.'
-                                : '영상을 준비하고 있습니다. 잠시만 기다려주세요.'
-                              }
+                                : '영상을 준비하고 있습니다. 잠시만 기다려주세요.'}
                             </p>
                           </div>
                         ) : null}
@@ -827,6 +906,7 @@ export default function CCTVAnalysis() {
                             isLoading ? 'opacity-50' : 'opacity-100'
                           } transition-opacity duration-300`}
                           src={videoSrc}
+                          crossOrigin="anonymous"
                           muted={isMobile} // 모바일에서 음소거
                           playsInline={isMobile} // iOS에서 인라인 재생
                           preload="metadata" // 메타데이터 미리 로드
@@ -1095,7 +1175,7 @@ export default function CCTVAnalysis() {
                           실시간 이벤트 감지
                         </span>
                       </div>
-                      <EventTimeline 
+                      <EventTimeline
                         video={video}
                         currentTime={currentTime}
                         onSeekToEvent={seekToTime}
@@ -1114,14 +1194,18 @@ export default function CCTVAnalysis() {
                           새 분석 세션
                         </h2>
                         <p className="text-xs md:text-sm text-gray-400 break-words overflow-hidden">
-                          <span 
+                          <span
                             className="inline-block max-w-full truncate"
-                            title={video?.name ? `${video.name} 영상에 대한 새로운 분석을 시작합니다` : ''}
+                            title={
+                              video?.name
+                                ? `${video.name} 영상에 대한 새로운 분석을 시작합니다`
+                                : ''
+                            }
                           >
-                            {video?.name && video.name.length > 30 
-                              ? `${video.name.substring(0, 30)}...` 
-                              : video?.name || '영상'
-                            } 영상에 대한 새로운 분석을 시작합니다
+                            {video?.name && video.name.length > 30
+                              ? `${video.name.substring(0, 30)}...`
+                              : video?.name || '영상'}{' '}
+                            영상에 대한 새로운 분석을 시작합니다
                           </span>
                         </p>
                       </div>
@@ -1157,7 +1241,7 @@ export default function CCTVAnalysis() {
                                 style={{
                                   wordBreak: 'break-word',
                                   overflowWrap: 'anywhere',
-                                  hyphens: 'auto'
+                                  hyphens: 'auto',
                                 }}
                               >
                                 {message.content}
@@ -1307,7 +1391,7 @@ export default function CCTVAnalysis() {
           {/* 하단 정보 */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-3 md:gap-4">
             <div className="flex items-center gap-2 text-gray-400 text-sm md:text-base">
-              <span>© 2024 Deep Sentinel. All rights reserved.</span>
+              <span>© 2026 Deep Sentinel. All rights reserved.</span>
             </div>
 
             <div className="flex items-center gap-2 text-gray-300 text-sm md:text-base">

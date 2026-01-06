@@ -291,37 +291,50 @@ export default function VideoMinimap({
         );
 
         // seek 완료 대기 (타임아웃 시간 최적화)
-        const seekTimeout = isMobile ? 1500 : 800;
+        const seekTimeout = isMobile ? 3000 : 2000; // 타임아웃 시간 증가
 
         await Promise.race([
           new Promise((resolve) => {
             const handleSeeked = () => {
               video.removeEventListener('seeked', handleSeeked);
               video.removeEventListener('timeupdate', handleTimeUpdate);
+              video.removeEventListener('loadeddata', handleLoadedData);
               resolve(true);
             };
 
             const handleTimeUpdate = () => {
-              if (Math.abs(video.currentTime - time) < 0.3) {
-                // 허용 오차 줄임
+              if (Math.abs(video.currentTime - time) < 0.5) {
+                // 허용 오차 증가
                 video.removeEventListener('seeked', handleSeeked);
                 video.removeEventListener('timeupdate', handleTimeUpdate);
+                video.removeEventListener('loadeddata', handleLoadedData);
+                resolve(true);
+              }
+            };
+
+            const handleLoadedData = () => {
+              // loadeddata 이벤트도 처리
+              if (Math.abs(video.currentTime - time) < 0.5) {
+                video.removeEventListener('seeked', handleSeeked);
+                video.removeEventListener('timeupdate', handleTimeUpdate);
+                video.removeEventListener('loadeddata', handleLoadedData);
                 resolve(true);
               }
             };
 
             video.addEventListener('seeked', handleSeeked);
             video.addEventListener('timeupdate', handleTimeUpdate);
+            video.addEventListener('loadeddata', handleLoadedData);
           }),
           new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Seek timeout')), seekTimeout);
           }),
         ]);
 
-        // 모바일에서 프레임 안정화 대기 시간 단축
-        if (isMobile) {
-          await new Promise((resolve) => setTimeout(resolve, 50)); // 100ms → 50ms
-        }
+        // 프레임 안정화 대기 (seek 후 비디오 프레임이 업데이트되기까지 대기)
+        await new Promise((resolve) =>
+          setTimeout(resolve, isMobile ? 100 : 50)
+        );
 
         // 캔버스에 비디오 프레임 그리기
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -333,7 +346,14 @@ export default function VideoMinimap({
 
         return canvas.toDataURL(format, quality);
       } catch (error) {
-        console.warn(`Failed to generate thumbnail ${index}:`, error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.warn(
+          `Failed to generate thumbnail ${
+            index + 1
+          }/${totalCount}: ${errorMessage}`
+        );
+        // 타임아웃이나 다른 에러 발생 시 플레이스홀더 반환
         return '/placeholder.svg?height=45&width=80';
       }
     },

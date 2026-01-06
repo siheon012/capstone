@@ -81,10 +81,10 @@ export const getCurrentEnvironment = (): Environment => {
 
 // API 엔드포인트 설정
 export const getApiEndpoints = (): ApiEndpoints => {
-  // 프로덕션 환경에서는 실제 API URL, 개발 환경에서는 localhost
+  // 프로덕션 환경에서는 환경변수, 개발 환경에서는 localhost
   const defaultUrl =
     getCurrentEnvironment() === 'production'
-      ? 'https://api.deepsentinel.cloud'
+      ? getEnvVar('NEXT_PUBLIC_PRODUCTION_API_URL', '')
       : 'http://localhost:8001';
   const baseUrl = getEnvVar('NEXT_PUBLIC_API_URL', defaultUrl);
 

@@ -28,15 +28,35 @@ class VideoSerializer(serializers.ModelSerializer):
     
     def get_current_s3_url(self, obj):
         """현재 티어에 맞는 S3 URL 생성"""
-        if hasattr(obj, 'get_current_s3_key') and obj.get_current_s3_key():
-            return self._generate_s3_url(obj.get_current_s3_key())
+        try:
+            if hasattr(obj, 'get_current_s3_key') and obj.get_current_s3_key():
+                s3_url = self._generate_s3_url(obj.get_current_s3_key())
+                if s3_url:
+                    return s3_url
+            # Fallback: S3 공개 URL (presigned URL 실패 시)
+            s3_key = getattr(obj, 's3_key', None) or getattr(obj, 's3_raw_key', None)
+            if s3_key:
+                bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-dev-raw')
+                region = getattr(settings, 'AWS_S3_REGION_NAME', 'ap-northeast-2')
+                return f"https://{bucket_name}.s3.{region}.amazonaws.com/{s3_key}"
+        except Exception as e:
+            print(f"⚠️ current_s3_url 생성 실패: {e}")
         return None
     
     def get_thumbnail_url(self, obj):
         """썸네일 S3 URL 생성"""
-        thumbnail_key = getattr(obj, 'thumbnail_s3_key', None) or getattr(obj, 's3_thumbnail_key', None)
-        if thumbnail_key:
-            return self._generate_s3_url(thumbnail_key, is_thumbnail=True)
+        try:
+            thumbnail_key = getattr(obj, 'thumbnail_s3_key', None) or getattr(obj, 's3_thumbnail_key', None)
+            if thumbnail_key:
+                s3_url = self._generate_s3_url(thumbnail_key, is_thumbnail=True)
+                if s3_url:
+                    return s3_url
+                # Fallback: S3 공개 URL
+                bucket_name = 'capstone-dev-thumbnails'
+                region = getattr(settings, 'AWS_S3_REGION_NAME', 'ap-northeast-2')
+                return f"https://{bucket_name}.s3.{region}.amazonaws.com/{thumbnail_key}"
+        except Exception as e:
+            print(f"⚠️ thumbnail_url 생성 실패: {e}")
         return None
     
     def get_tier_status(self, obj):
@@ -120,6 +140,19 @@ class EventSerializer(serializers.ModelSerializer):
     absolute_time = serializers.ReadOnlyField()
     absolute_time_display = serializers.ReadOnlyField()
     
+    # attributes JSON에서 가져오는 필드들 (ReadOnlyField로 @property 사용)
+    age = serializers.ReadOnlyField()
+    location = serializers.ReadOnlyField()
+    action_detected = serializers.ReadOnlyField()
+    obj_id = serializers.ReadOnlyField()
+    area_of_interest = serializers.ReadOnlyField()
+    gender_score = serializers.ReadOnlyField()
+    scene_analysis = serializers.ReadOnlyField()
+    orientataion = serializers.ReadOnlyField()
+    
+    # confidence는 모델 필드 (JSONField가 아님)
+    # confidence = serializers.FloatField(read_only=True)  # 이미 Meta의 fields='__all__'에 포함됨
+    
     # 새로운 클라우드 필드들
     searchable_content = serializers.SerializerMethodField()
     similarity_score = serializers.SerializerMethodField()
@@ -163,13 +196,26 @@ class EventSerializer(serializers.ModelSerializer):
         }
 
 class PromptSessionSerializer(serializers.ModelSerializer):
+    # 프론트엔드 호환성을 위한 id 필드 (session_id를 id로 매핑)
+    id = serializers.CharField(source='session_id', read_only=True)
+    
     # 기존 호환성 필드들
     display_title = serializers.ReadOnlyField()
+    session_number = serializers.ReadOnlyField()  # 비디오별 세션 번호
     timeline_summary = serializers.ReadOnlyField()
     main_event_display = serializers.ReadOnlyField()
     main_event = EventSerializer(read_only=True)
     video = serializers.SerializerMethodField()  # related_videos의 첫 번째 비디오
     detected_events = serializers.SerializerMethodField()
+    
+    # 프론트엔드 호환성 필드들 (모델 프로퍼티 사용)
+    first_prompt = serializers.ReadOnlyField()
+    first_response = serializers.ReadOnlyField()
+    
+    # 히스토리 창에서 필요한 필드들
+    interactionCount = serializers.SerializerMethodField()
+    videoInfo = serializers.SerializerMethodField()
+    messages = serializers.SerializerMethodField()
     
     # 새로운 클라우드 필드들
     context_summary = serializers.SerializerMethodField()
@@ -181,10 +227,9 @@ class PromptSessionSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_video(self, obj):
-        """related_videos의 첫 번째 비디오 반환 (기존 호환성)"""
-        first_video = obj.related_videos.first()
-        if first_video:
-            return VideoSerializer(first_video).data
+        """related_videos 비디오 반환"""
+        if obj.related_videos:
+            return VideoSerializer(obj.related_videos).data
         return None
     
     def get_detected_events(self, obj):
@@ -208,6 +253,42 @@ class PromptSessionSerializer(serializers.ModelSerializer):
         
         return detected_events
     
+    def get_interactionCount(self, obj):
+        """세션의 상호작용 개수 (히스토리 창용)"""
+        return obj.interaction_count  # 모델의 @property 사용
+    
+    def get_videoInfo(self, obj):
+        """비디오 정보 (히스토리 창용)"""
+        video = obj.related_videos
+        if video:
+            return {
+                'name': video.name or video.filename,
+                'duration': video.duration or 0,
+                'url': video.s3_raw_key if hasattr(video, 's3_raw_key') else ''
+            }
+        return None
+    
+    def get_messages(self, obj):
+        """세션의 메시지들 (히스토리 창용)"""
+        interactions = obj.interactions.order_by('sequence_number').all()
+        messages = []
+        
+        for interaction in interactions:
+            # 사용자 메시지
+            messages.append({
+                'role': 'user',
+                'content': interaction.user_prompt,
+                'timestamp': interaction.created_at.timestamp() if interaction.created_at else 0
+            })
+            # AI 응답
+            messages.append({
+                'role': 'assistant',
+                'content': interaction.ai_response,
+                'timestamp': interaction.created_at.timestamp() if interaction.created_at else 0
+            })
+        
+        return messages
+    
     def get_context_summary(self, obj):
         """세션 컨텍스트 요약"""
         return getattr(obj, 'context_summary', '') or getattr(obj, 'session_summary', '')
@@ -222,24 +303,23 @@ class PromptSessionSerializer(serializers.ModelSerializer):
     
     def get_related_videos_info(self, obj):
         """관련 비디오 정보"""
-        if not hasattr(obj, 'related_videos'):
+        if not obj.related_videos:
             return []
         
         try:
             return [
                 {
-                    'video_id': video.video_id,
-                    'name': getattr(video, 'name', '') or getattr(video, 'filename', ''),
-                    'duration': getattr(video, 'duration', 0)
+                    'video_id': obj.related_videos.video_id,
+                    'name': getattr(obj.related_videos, 'name', '') or getattr(obj.related_videos, 'filename', ''),
+                    'duration': getattr(obj.related_videos, 'duration', 0)
                 }
-                for video in obj.related_videos.all()[:5]  # 최대 5개
             ]
         except Exception:
             return []
 
 class PromptInteractionSerializer(serializers.ModelSerializer):
     # 기존 호환성 필드들
-    interaction_number = serializers.ReadOnlyField()
+    interaction_number = serializers.ReadOnlyField(source='sequence_number')
     is_first_in_session = serializers.ReadOnlyField()
     timeline_display = serializers.ReadOnlyField()
     processing_time_display = serializers.ReadOnlyField()

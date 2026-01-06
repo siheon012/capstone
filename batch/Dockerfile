@@ -6,22 +6,26 @@ FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3-pip \
-    python3-dev \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    libgl1-mesa-glx \
-    git \
-    wget \
-    curl \
-    build-essential \
-    ca-certificates \
-    dos2unix \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies with retry logic
+RUN apt-get update && \
+    for i in 1 2 3; do \
+        apt-get install -y --no-install-recommends \
+            python3.10 \
+            python3-pip \
+            python3-dev \
+            ffmpeg \
+            libsm6 \
+            libxext6 \
+            libgl1-mesa-glx \
+            git \
+            wget \
+            curl \
+            build-essential \
+            ca-certificates \
+            dos2unix \
+        && break || sleep 5; \
+    done && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 

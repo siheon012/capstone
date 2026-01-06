@@ -215,14 +215,49 @@ class BedrockService:
         테이블: db_event (이벤트 정보)
 {event_fields}
         
+        **중요 - attributes JSON 필드 구조 (JSONB 타입):**
+        db_event.attributes에는 다음 정보가 저장되어 있습니다:
+        - age: FLOAT - 정확한 나이 (예: 6.88, 16.61, 45.8)
+        - obj_id: INTEGER - 객체 추적 ID
+        - scene_analysis: TEXT - AI 장면 분석 텍스트
+        - location: INTEGER - 화면상 위치 (1=왼쪽, 2=가운데, 3=오른쪽)
+        - area_of_interest: INTEGER - 관심 영역 (1=왼쪽, 2=가운데, 3=오른쪽)
+        
+        **PostgreSQL JSON 쿼리 방법:**
+        - 정확한 나이: (attributes->>'age')::float
+        - 위치: (attributes->>'location')::int
+        - 관심 영역: (attributes->>'area_of_interest')::int
+        - 장면 분석: attributes->>'scene_analysis'
+        
         중요사항:
         1. timestamp는 FLOAT 타입이며 초(seconds) 단위입니다.
         2. 테이블명은 반드시 db_video, db_event를 사용하세요.
         3. JOIN 시 db_event.video_id = db_video.video_id를 사용하세요.
         4. 시간 관련 질문은 timestamp 컬럼을 사용하세요.
-        5. 위치 정보는 bbox_x, bbox_y를 사용하세요.
-        6. 성별 검색 시 gender 컬럼을 사용하세요.
-        7. 행동 검색 시 action 컬럼을 사용하세요.
+        5. 위치 정보 (bbox): bbox_x, bbox_y, bbox_width, bbox_height 사용
+        6. 성별 검색: gender 컬럼 사용 (male/female)
+        7. 행동 검색: action 컬럼 사용
+        8. **정확한 나이 검색**: (attributes->>'age')::float 사용
+           - "20세 이상" → WHERE (attributes->>'age')::float >= 20
+           - "10대" → WHERE (attributes->>'age')::float BETWEEN 10 AND 19
+           - "30세 남성" → WHERE (attributes->>'age')::float >= 30 AND gender = 'male'
+        9. **화면 위치 검색**: (attributes->>'location')::int 사용
+           - "왼쪽" → WHERE (attributes->>'location')::int = 1
+           - "가운데" → WHERE (attributes->>'location')::int = 2
+           - "오른쪽" → WHERE (attributes->>'location')::int = 3
+        10. **관심 영역 검색**: (attributes->>'area_of_interest')::int 사용
+           - "관심 영역이 왼쪽" → WHERE (attributes->>'area_of_interest')::int = 1
+           - "관심 영역이 오른쪽" → WHERE (attributes->>'area_of_interest')::int = 3
+        11. 나이대 검색 (대략적): age_group 컬럼 사용 (young/middle/old)
+        12. **attributes JSON 필드의 하위 필드들**:
+           - age: (attributes->>'age')::float - 정확한 나이
+           - location: (attributes->>'location')::int - 화면 위치 (1=왼쪽, 2=가운데, 3=오른쪽)
+           - area_of_interest: (attributes->>'area_of_interest')::int - 관심 영역 (1=왼쪽, 2=가운데, 3=오른쪽)
+           - action_detected: attributes->>'action_detected' - 감지된 행동
+           - gender_score: (attributes->>'gender_score')::float - 성별 신뢰도 (0-1)
+           - obj_id: (attributes->>'obj_id')::int - 객체 추적 ID
+           - scene_analysis: attributes->>'scene_analysis' - 장면 분석 텍스트
+           - orientataion: attributes->>'orientataion' - 방향 정보
         """
         
         # 비디오 필터 조건
@@ -244,20 +279,41 @@ class BedrockService:
 3. SELECT 문만 생성하세요 (INSERT, UPDATE, DELETE 금지).
 4. 사용자 질문에 맞는 컬럼들을 선택하세요:
    - 시간 정보: timestamp, duration
-   - 인물 정보: gender, age_group, emotion
-   - 행동 정보: action, event_type, interaction_target
+   - 인물 정보: gender, age_group, emotion, (attributes->>'age')::float
+   - 행동 정보: action, event_type, interaction_target, attributes->>'action_detected'
    - 위치 정보: bbox_x, bbox_y, bbox_width, bbox_height
-   - 신뢰도: confidence
+   - 화면 위치: (attributes->>'location')::int, (attributes->>'area_of_interest')::int
+   - 신뢰도: confidence, (attributes->>'gender_score')::float
+   - 기타: (attributes->>'obj_id')::int, attributes->>'scene_analysis', attributes->>'orientataion'
 5. 반드시 id와 timestamp는 포함하세요 (이벤트 조회용).
 6. 시간 범위 질문의 경우 timestamp 컬럼으로 필터링하세요.
 7. 이벤트 타입 관련 질문은 event_type 컬럼을 사용하세요.
 8. 결과는 timestamp 순으로 정렬하세요 (ORDER BY timestamp).
+9. **나이 관련 질문은 반드시 (attributes->>'age')::float 사용** (age_group은 대략적)
+10. **화면 위치 질문은 (attributes->>'location')::int 사용** (1=왼쪽, 2=가운데, 3=오른쪽)
+11. **관심 영역 질문은 (attributes->>'area_of_interest')::int 사용**
+12. **attributes JSON 필드는 ->> 연산자로 접근**하고 필요시 ::타입으로 캐스팅하세요
 
-예시:
+예시 (정확한 나이):
+- "20세 남성" → SELECT id, timestamp, gender, (attributes->>'age')::float as age WHERE gender='male' AND (attributes->>'age')::float >= 20 AND (attributes->>'age')::float < 21
+- "30세 이상 남성" → SELECT id, timestamp, gender, (attributes->>'age')::float as age WHERE gender='male' AND (attributes->>'age')::float >= 30
+- "10대 여성" → SELECT id, timestamp, gender, (attributes->>'age')::float as age WHERE gender='female' AND (attributes->>'age')::float BETWEEN 10 AND 19
+- "남성의 나이는?" → SELECT id, timestamp, gender, (attributes->>'age')::float as age WHERE gender='male'
+
+예시 (위치):
+- "왼쪽에 있던 시간" → SELECT id, timestamp, (attributes->>'location')::int as location WHERE (attributes->>'location')::int = 1
+- "오른쪽 관심 영역" → SELECT id, timestamp, (attributes->>'area_of_interest')::int as area WHERE (attributes->>'area_of_interest')::int = 3
+- "가운데 남성" → SELECT id, timestamp, gender, (attributes->>'location')::int as location WHERE gender='male' AND (attributes->>'location')::int = 2
+
+예시 (행동 및 기타):
+- "감지된 행동은?" → SELECT id, timestamp, attributes->>'action_detected' as action_detected
+- "객체 ID가 5인 경우" → SELECT id, timestamp, (attributes->>'obj_id')::int as obj_id WHERE (attributes->>'obj_id')::int = 5
+- "성별 신뢰도 높은 이벤트" → SELECT id, timestamp, gender, (attributes->>'gender_score')::float as gender_score WHERE (attributes->>'gender_score')::float > 0.9
+
+예시 (일반):
 - "남성이 나타난 시점" → SELECT id, timestamp, gender WHERE gender='male'
 - "6초에 인물의 성별과 위치" → SELECT id, timestamp, gender, bbox_x, bbox_y WHERE timestamp=6
 - "도난 사건" → SELECT id, timestamp, event_type, action WHERE event_type='theft'
-- "노인이 서있는 장면" → SELECT id, timestamp, age_group, action WHERE age_group='old' AND action='standing'
 
 응답 형식 (JSON):
 {{
@@ -343,46 +399,76 @@ JSON 형식으로만 응답하세요."""
         events_text = ""
         for i, event in enumerate(events, 1):
             timestamp = event.get('timestamp', 0)
-            minutes = int(timestamp // 60)
-            seconds = int(timestamp % 60)
+            if timestamp:
+                minutes = int(timestamp // 60)
+                seconds = int(timestamp % 60)
+                time_str = f"{minutes}분 {seconds}초"
+            else:
+                time_str = "시간 정보 없음"
             
-            event_type = event.get('event_type', 'unknown')
-            event_type_kr = {
-                'theft': '도난',
-                'collapse': '쓰러짐',
-                'sitting': '점거'
-            }.get(event_type, event_type)
+            # 이벤트 정보를 동적으로 구성
+            event_info = f"데이터 {i}:\n"
             
-            action = event.get('action_detected', '알 수 없음')
-            location = event.get('location', '알 수 없음')
-            age = event.get('age', '알 수 없음')
-            gender = event.get('gender', '알 수 없음')
+            # timestamp는 별도 처리
+            if timestamp:
+                event_info += f"- 시간: {time_str}\n"
             
-            events_text += f"""
-이벤트 {i}:
-- 시간: {minutes}분 {seconds}초
-- 유형: {event_type_kr}
-- 행동: {action}
-- 위치: {location}
-- 인물: {gender}, 약 {age}세
-"""
+            # 나머지 모든 필드를 동적으로 추가
+            for key, value in event.items():
+                if key == 'timestamp':
+                    continue  # 이미 처리함
+                
+                # 필드명을 한국어로 변환
+                field_name_kr = {
+                    'event_type': '유형',
+                    'action_detected': '행동',
+                    'location': '위치',
+                    'age': '나이',
+                    'gender': '성별',
+                    'gender_score': '성별 신뢰도',
+                    'scene_analysis': '장면 분석',
+                    'action': '행동',
+                    'emotion': '감정',
+                    'age_group': '연령대',
+                }.get(key, key)
+                
+                # 값 변환
+                if key == 'event_type':
+                    value = {
+                        'theft': '도난',
+                        'collapse': '쓰러짐',
+                        'sitting': '점거',
+                        'walking': '걷기',
+                        'standing': '서있기'
+                    }.get(value, value)
+                elif key == 'gender':
+                    value = {'male': '남성', 'female': '여성'}.get(value, value)
+                elif key == 'location':
+                    if isinstance(value, int):
+                        value = {1: '왼쪽', 2: '가운데', 3: '오른쪽'}.get(value, f'위치 {value}')
+                
+                if value is not None and value != '':
+                    event_info += f"- {field_name_kr}: {value}\n"
+            
+            events_text += event_info + "\n"
         
         # RAG 프롬프트
-        rag_prompt = f"""다음 CCTV 영상 분석 결과를 바탕으로 사용자 질문에 답변하세요.
+        rag_prompt = f"""다음은 CCTV 영상 분석 결과입니다. 사용자 질문에 대해 이 데이터를 바탕으로 답변하세요.
 
 사용자 질문: "{prompt}"
 
 비디오: {video_name or '알 수 없음'}
 
-검색된 이벤트 정보:
+검색된 데이터:
 {events_text}
 
 요구사항:
 1. 자연스러운 한국어로 답변하세요.
-2. 각 이벤트의 시간(xx분 yy초)을 명확히 언급하세요.
-3. 이벤트가 여러 개면 순서대로 설명하세요.
-4. 구체적이고 유용한 정보를 제공하세요.
+2. 데이터에 있는 정보를 정확하게 전달하세요.
+3. 시간 정보가 있다면 명확히 언급하세요.
+4. 여러 데이터가 있으면 요약하거나 대표값을 제시하세요.
 5. 존댓말을 사용하세요.
+6. 데이터가 부족하면 솔직하게 "정보가 부족합니다"라고 말하세요.
 
 답변:"""
 
@@ -475,6 +561,62 @@ JSON 형식으로만 응답하세요."""
         except Exception as e:
             print(f"❌ Knowledge Base 검색 오류: {str(e)}")
             return []
+    
+    def generate_embedding(self, text: str) -> Optional[List[float]]:
+        """
+        Bedrock Titan Embeddings로 텍스트를 벡터로 변환
+        
+        Args:
+            text: 임베딩할 텍스트
+            
+        Returns:
+            1536차원 임베딩 벡터 (OpenAI ada-002와 동일 차원)
+            실패 시 None
+        """
+        if not text or not text.strip():
+            print("⚠️ 임베딩할 텍스트가 비어있습니다.")
+            return None
+        
+        try:
+            # Titan Embeddings G1 - Text 모델 사용
+            # 1536 dimensions (OpenAI ada-002와 호환)
+            embedding_model_id = "amazon.titan-embed-text-v1"
+            
+            # 텍스트 길이 제한 (Titan: 8192 토큰)
+            max_chars = 30000  # 안전 마진
+            if len(text) > max_chars:
+                text = text[:max_chars]
+                print(f"⚠️ 텍스트가 너무 길어 {max_chars}자로 자릅니다.")
+            
+            # Bedrock Embeddings API 호출
+            body = json.dumps({
+                "inputText": text
+            })
+            
+            response = self.bedrock_runtime.invoke_model(
+                modelId=embedding_model_id,
+                body=body,
+                contentType='application/json',
+                accept='application/json'
+            )
+            
+            # 응답 파싱
+            response_body = json.loads(response['body'].read())
+            
+            # embedding 벡터 추출
+            embedding = response_body.get('embedding')
+            
+            if embedding and len(embedding) == 1536:
+                return embedding
+            else:
+                print(f"⚠️ 예상치 못한 임베딩 차원: {len(embedding) if embedding else 0}")
+                return None
+            
+        except Exception as e:
+            print(f"❌ Embedding 생성 오류: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None
 
 
 # 싱글톤 인스턴스

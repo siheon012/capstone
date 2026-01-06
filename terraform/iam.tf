@@ -59,6 +59,46 @@ resource "aws_iam_user_policy_attachment" "github_actions_ecr" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
 }
 
+# GitHub Actions 사용자 ECS 배포 권한
+resource "aws_iam_policy" "github_actions_ecs_deploy" {
+  name        = "GitHubActionsECSDeploy"
+  description = "GitHub Actions를 위한 ECS 배포 권한"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:UpdateService",
+          "ecs:DescribeServices",
+          "ecs:DescribeTaskDefinition",
+          "ecs:DescribeTasks",
+          "ecs:ListTasks",
+          "ecs:RegisterTaskDefinition",
+          "ecs:DeregisterTaskDefinition"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:PassRole"
+        ]
+        Resource = [
+          aws_iam_role.ecs_task_execution_role.arn,
+          aws_iam_role.ecs_task_role.arn
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_user_policy_attachment" "github_actions_ecs_deploy" {
+  user       = aws_iam_user.github_actions.name
+  policy_arn = aws_iam_policy.github_actions_ecs_deploy.arn
+}
+
 # siheon-admin 사용자 추가 권한들
 resource "aws_iam_user_policy_attachment" "siheon_admin_billing" {
   user       = aws_iam_user.siheon_admin.name

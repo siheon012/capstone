@@ -235,7 +235,7 @@ OPENAI_EMBEDDING_MODEL = env('OPENAI_EMBEDDING_MODEL', default='text-embedding-a
 # AWS Bedrock 설정
 AWS_BEDROCK_REGION = env('AWS_BEDROCK_REGION', default='ap-northeast-2')
 AWS_BEDROCK_MODEL_ID = env('AWS_BEDROCK_MODEL_ID', default='anthropic.claude-3-5-sonnet-20241022-v2:0')  # Claude 3.5 Sonnet v2 (Vision)
-AWS_BEDROCK_EMBEDDING_MODEL_ID = env('AWS_BEDROCK_EMBEDDING_MODEL_ID', default='amazon.titan-embed-text-v1')
+AWS_BEDROCK_EMBEDDING_MODEL_ID = env('AWS_BEDROCK_EMBEDDING_MODEL_ID', default='amazon.titan-embed-text-v2:0')
 AWS_BEDROCK_KNOWLEDGE_BASE_ID = env('AWS_BEDROCK_KNOWLEDGE_BASE_ID', default=None)
 USE_BEDROCK = env('USE_BEDROCK', default='true').lower() == 'true'
 
@@ -248,7 +248,7 @@ VECTOR_SEARCH_SIMILARITY_THRESHOLD = env('VECTOR_SEARCH_SIMILARITY_THRESHOLD', d
 HYBRID_SEARCH_LIMIT = env('HYBRID_SEARCH_LIMIT', default=5, cast=int)
 
 # 벡터 검색 설정
-VECTOR_DIMENSION = env('VECTOR_DIMENSION', default=1536, cast=int)  # OpenAI ada-002
+VECTOR_DIMENSION = env('VECTOR_DIMENSION', default=1024, cast=int)  # Titan Embed v2 (1024D Matryoshka)
 VECTOR_SIMILARITY_THRESHOLD = env('VECTOR_SIMILARITY_THRESHOLD', default=0.8, cast=float)
 VECTOR_SEARCH_LIMIT = env('VECTOR_SEARCH_LIMIT', default=10, cast=int)
 

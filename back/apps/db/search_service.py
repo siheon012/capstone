@@ -15,24 +15,33 @@ class RAGSearchService:
     
     def __init__(self):
         self.bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
-        self.embedding_model = 'amazon.titan-embed-text-v1'
+        self.embedding_model = 'amazon.titan-embed-text-v2:0'  # v2 - Matryoshka Embedding 지원
+        self.embedding_dimension = 1024  # v2 권장 차원 (1536 → 1024)
         self.llm_model = 'anthropic.claude-3-5-sonnet-20241022-v2:0'  # Claude 3.5 Sonnet v2
     
     def create_embedding(self, text: str) -> List[float]:
-        """텍스트를 Bedrock으로 임베딩 벡터로 변환"""
+        """텍스트를 Bedrock Titan v2로 임베딩 벡터로 변환"""
         try:
             response = self.bedrock.invoke_model(
                 modelId=self.embedding_model,
                 body=json.dumps({
-                    "inputText": text
+                    "inputText": text,
+                    "dimensions": self.embedding_dimension,  # v2 전용: 출력 차원 지정
+                    "normalize": True  # v2 전용: 정규화된 벡터 (코사인 유사도 최적화)
                 })
             )
             
             result = json.loads(response['body'].read())
-            return result['embedding']
+            embedding = result['embedding']
+            
+            # v2는 다중 차원 지원, 1024차원만 반환 확인
+            if len(embedding) != self.embedding_dimension:
+                logger.warning(f"Expected {self.embedding_dimension}D, got {len(embedding)}D")
+            
+            return embedding
             
         except Exception as e:
-            logger.error(f"Failed to create embedding: {str(e)}")
+            logger.error(f"Failed to create embedding with Titan v2: {str(e)}")
             return []
     
     def search_similar_events(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:

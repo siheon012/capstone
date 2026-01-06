@@ -2,6 +2,7 @@
 하이브리드 RAG 검색 서비스
 - Text2SQL (정확한 조건 검색)
 - pgvector (의미 기반 유사도 검색)
+- Bedrock Reranker (정밀도 향상)
 - 결과 병합 및 Bedrock RAG 응답
 """
 import json
@@ -10,14 +11,18 @@ from django.db import connection
 from apps.db.models import Event
 from apps.db.search_service import RAGSearchService
 from apps.api.bedrock_service import get_bedrock_service
+from apps.api.bedrock_reranker import get_reranker_service  # Reranker 임포트 수정
+from apps.api.event_windowing_service import EventWindowingService  # Windowing 추가
 
 
 class HybridSearchService:
-    """Text2SQL + pgvector 하이브리드 검색"""
+    """Text2SQL + pgvector + Reranker 하이브리드 검색"""
     
     def __init__(self):
         self.bedrock_service = get_bedrock_service()
         self.rag_search = RAGSearchService()
+        self.reranker = get_reranker_service()  # Reranker 추가
+        self.windowing_service = EventWindowingService(window_size=2)  # Windowing 추가
     
     def hybrid_search(
         self, 
@@ -58,11 +63,12 @@ class HybridSearchService:
             print(f"✅ Text2SQL 결과: {len(sql_events)}개")
         
         # ============================================
-        # 2. pgvector 의미 기반 유사도 검색
+        # 2. pgvector 의미 기반 유사도 검색 (Recall 확대)
         # ============================================
         if use_vector_search:
-            print(f"🧠 pgvector 유사도 검색 시작")
-            vector_events = self._vector_search(prompt, video)
+            print(f"🧠 pgvector 유사도 검색 시작 (후보군 30개)")
+            # Reranking을 위해 후보군을 더 많이 가져옴 (10 → 30)
+            vector_events = self._vector_search(prompt, video, limit=30)
             
             for event in vector_events:
                 if event.id not in event_ids_seen:
@@ -72,12 +78,45 @@ class HybridSearchService:
             print(f"✅ pgvector 결과: {len(vector_events)}개 (중복 제외)")
         
         # ============================================
-        # 3. 결과 병합 및 순서 정렬
+        # 3. Bedrock Reranker로 정밀도 향상 ⭐ NEW
         # ============================================
-        # timestamp 순으로 정렬
-        all_events.sort(key=lambda e: e.timestamp)
+        if len(all_events) > 5:
+            print(f"🎯 Reranking 시작: {len(all_events)}개 → 상위 5개")
+            
+            # Event Windowing으로 컨텍스트 강화 후 Reranker에 전달
+            rerank_docs = []
+            for event in all_events:
+                context_text = self.windowing_service.create_windowed_text(event)
+                rerank_docs.append({
+                    'id': event.id,
+                    'text': context_text,  # 윈도잉된 텍스트
+                    'original_obj': event
+                })
+            
+            reranked_results = self.reranker.rerank(
+                query=prompt,
+                documents=rerank_docs,
+                top_k=5,
+                max_chunks=30
+            )
+            
+            # (doc_dict, relevance_score) 튜플에서 original_obj 추출
+            all_events = [doc['original_obj'] for doc, score in reranked_results]
+            
+            # 로깅: Reranking 점수
+            for i, (doc, score) in enumerate(reranked_results):
+                event = doc['original_obj']
+                event_desc = getattr(event, 'description', '') or getattr(event, 'searchable_text', '')[:50]
+                print(f"  #{i+1}: {getattr(event, 'event_type', 'unknown')} (score: {score:.3f}) - {event_desc}")
         
-        print(f"📊 총 {len(all_events)}개 이벤트 발견 (중복 제거 후)")
+        # ============================================
+        # 4. 결과 정렬 (Reranking 후에는 이미 순서가 최적화됨)
+        # ============================================
+        # Reranking이 안 된 경우에만 timestamp 정렬
+        elif all_events:
+            all_events.sort(key=lambda e: e.timestamp)
+        
+        print(f"📊 최종 {len(all_events)}개 이벤트 선택 (Reranking 완료)")
         
         # ============================================
         # 4. Bedrock RAG로 자연어 응답 생성
@@ -207,19 +246,69 @@ class HybridSearchService:
             traceback.print_exc()
             return [], []
     
+    def _extract_metadata_keywords(self, prompt: str) -> Dict[str, List[str]]:
+        """
+        사용자 질문에서 메타데이터 키워드 추출
+        
+        Returns:
+            {
+                'objects': ['칼', '담배', '술', ...],
+                'actions': ['걷기', '서있기', ...],
+                'persons': ['남자', '여자', ...]
+            }
+        """
+        keywords = {
+            'objects': [],
+            'actions': [],
+            'persons': []
+        }
+        
+        # 객체 키워드 (objects_detected 필드에서 검색)
+        object_keywords = ['칼', '담배', '술', '가위', '총', '무기', '병', '음료', '콜라', '사이다']
+        for keyword in object_keywords:
+            if keyword in prompt:
+                keywords['objects'].append(keyword)
+        
+        # 행동 키워드 (action_detected 필드)
+        action_keywords = ['걷기', '서있기', '앉기', '뛰기', '넘어짐', '쓰러짐', '싸움', '도난', '훔침']
+        for keyword in action_keywords:
+            if keyword in prompt:
+                keywords['actions'].append(keyword)
+        
+        # 인물 키워드 (gender, age 필드)
+        if '남자' in prompt or '남성' in prompt:
+            keywords['persons'].append('male')
+        if '여자' in prompt or '여성' in prompt:
+            keywords['persons'].append('female')
+        
+        return keywords
+    
     def _vector_search(self, prompt: str, video=None, limit: int = 5) -> List[Event]:
-        """pgvector로 의미 기반 유사도 검색"""
+        """
+        pgvector로 의미 기반 유사도 검색 + Metadata Filtering
+        
+        Args:
+            prompt: 사용자 질문
+            video: 대상 비디오 (선택)
+            limit: 반환할 최대 이벤트 수
+            
+        Returns:
+            유사도 + Metadata 필터링된 이벤트 리스트
+        """
         try:
-            # 임베딩 생성
+            # 1. 메타데이터 키워드 추출
+            metadata_keywords = self._extract_metadata_keywords(prompt)
+            
+            # 2. 임베딩 생성
             query_embedding = self.rag_search.create_embedding(prompt)
             if not query_embedding:
                 print(f"⚠️ 임베딩 생성 실패")
                 return []
             
-            # pgvector 유사도 검색
-            # Event 모델의 embedding 필드 활용
+            # 3. 기본 쿼리셋 구성
             from django.contrib.postgres.aggregates import ArrayAgg
             from pgvector.django import CosineDistance
+            from django.db.models import Q
             
             queryset = Event.objects.filter(
                 embedding__isnull=False
@@ -229,12 +318,39 @@ class HybridSearchService:
             if video:
                 queryset = queryset.filter(video=video)
             
-            # 유사도 검색 (코사인 거리)
+            # 4. Metadata Filtering 적용 ⭐ NEW
+            # objects_detected JSONB 필드 활용
+            if metadata_keywords['objects']:
+                print(f"🔍 객체 필터링: {metadata_keywords['objects']}")
+                object_filters = Q()
+                for obj in metadata_keywords['objects']:
+                    # JSONB 필드에서 객체 검색
+                    object_filters |= Q(objects_detected__icontains=obj)
+                queryset = queryset.filter(object_filters)
+            
+            # action_detected 필터링
+            if metadata_keywords['actions']:
+                print(f"🔍 행동 필터링: {metadata_keywords['actions']}")
+                action_filters = Q()
+                for action in metadata_keywords['actions']:
+                    action_filters |= Q(action_detected__icontains=action)
+                queryset = queryset.filter(action_filters)
+            
+            # gender 필터링
+            if metadata_keywords['persons']:
+                print(f"🔍 성별 필터링: {metadata_keywords['persons']}")
+                queryset = queryset.filter(gender__in=metadata_keywords['persons'])
+            
+            # 5. pgvector 유사도 검색
             similar_events = queryset.annotate(
                 distance=CosineDistance('embedding', query_embedding)
             ).filter(
                 distance__lt=0.3  # 유사도 임계값 (거리가 작을수록 유사)
             ).order_by('distance')[:limit]
+            
+            filtered_count = queryset.count()
+            result_count = len(similar_events)
+            print(f"📊 Metadata 필터링: {filtered_count}개 후보 → pgvector 검색: {result_count}개")
             
             return list(similar_events)
             

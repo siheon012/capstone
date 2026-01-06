@@ -342,8 +342,8 @@ class Event(models.Model):
         help_text="썸네일이 S3에 업로드된 시각"
     )
     
-    # RAG 검색을 위한 임베딩
-    embedding = VectorField(dimensions=1536, blank=True, null=True)
+    # RAG 검색을 위한 임베딩 (Titan Embed v2 - 1024D Matryoshka)
+    embedding = VectorField(dimensions=1024, blank=True, null=True)
     searchable_text = models.TextField(blank=True)
     keywords = ArrayField(models.CharField(max_length=100), blank=True, default=list)
     
@@ -502,7 +502,7 @@ class PromptSession(models.Model):
     
     # 세션 컨텍스트 (RAG)
     context_summary = models.TextField(blank=True)
-    context_embedding = VectorField(dimensions=1536, blank=True, null=True)
+    context_embedding = VectorField(dimensions=1024, blank=True, null=True)
     
     # 상태 관리
     status = models.CharField(max_length=20, choices=[
@@ -662,8 +662,8 @@ class PromptInteraction(models.Model):
     )
     
     # 임베딩 (검색 최적화)
-    query_embedding = VectorField(dimensions=1536, blank=True, null=True)
-    response_embedding = VectorField(dimensions=1536, blank=True, null=True)
+    query_embedding = VectorField(dimensions=1024, blank=True, null=True)
+    response_embedding = VectorField(dimensions=1024, blank=True, null=True)
     
     # 메타데이터
     processing_time = models.FloatField(default=0.0)  # 처리 시간 (초)
@@ -878,7 +878,7 @@ class VideoAnalysis(models.Model):
     result_data = models.JSONField()  # 실제 분석 결과
     
     # 벡터 임베딩 (RAG 검색용)
-    embedding = VectorField(dimensions=1536, blank=True, null=True)  # OpenAI ada-002 차원
+    embedding = VectorField(dimensions=1024, blank=True, null=True)  # Titan Embed v2 (1024D)
     
     # 검색 최적화
     searchable_text = models.TextField()  # 검색 가능한 텍스트 표현

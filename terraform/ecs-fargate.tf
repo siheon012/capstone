@@ -331,7 +331,11 @@ resource "aws_ecs_task_definition" "backend" {
         },
         {
           name  = "AWS_BEDROCK_EMBEDDING_MODEL_ID"
-          value = "amazon.titan-embed-text-v1"
+          value = "amazon.titan-embed-text-v2:0"
+        },
+        {
+          name  = "VECTOR_DIMENSION"
+          value = "1024"
         },
         {
           name  = "PRODUCTION_DOMAIN"

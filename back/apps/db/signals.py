@@ -16,10 +16,12 @@ def generate_event_embedding(sender, instance, **kwargs):
     """
     Event 저장 전 embedding 자동 생성 (Django ORM 사용 시만 작동)
     
-    주의: MEMI는 직접 SQL INSERT를 사용하므로 이 signal이 발동하지 않습니다.
-    MEMI 데이터는 Video post_save signal에서 일괄 처리합니다.
+    주의: 
+    - MEMI는 직접 SQL INSERT를 사용하므로 이 signal이 발동하지 않습니다.
+    - MEMI 데이터는 Video post_save signal에서 일괄 처리합니다.
+    - pre_save이므로 무한루프 위험 없음 (save() 호출 전에 embedding 세팅)
     """
-    # embedding이 이미 있으면 스킵
+    # embedding이 이미 있으면 스킵 (중복 생성 방지)
     if instance.embedding:
         return
     

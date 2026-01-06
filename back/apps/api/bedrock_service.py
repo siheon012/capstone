@@ -249,7 +249,10 @@ class BedrockService:
            - "관심 영역이 왼쪽" → WHERE (attributes->>'area_of_interest')::int = 1
            - "관심 영역이 오른쪽" → WHERE (attributes->>'area_of_interest')::int = 3
         11. 나이대 검색 (대략적): age_group 컬럼 사용 (young/middle/old)
-        12. **attributes JSON 필드의 하위 필드들**:
+        12. **objects_detected JSONB 필드 검색**:
+           - "칼을 든 사람" → WHERE objects_detected::text LIKE '%칼%'
+           - "담배 피우는 사람" → WHERE objects_detected::text LIKE '%담배%'
+        13. **attributes JSON 필드의 하위 필드들**:
            - age: (attributes->>'age')::float - 정확한 나이
            - location: (attributes->>'location')::int - 화면 위치 (1=왼쪽, 2=가운데, 3=오른쪽)
            - area_of_interest: (attributes->>'area_of_interest')::int - 관심 영역 (1=왼쪽, 2=가운데, 3=오른쪽)
@@ -258,6 +261,11 @@ class BedrockService:
            - obj_id: (attributes->>'obj_id')::int - 객체 추적 ID
            - scene_analysis: attributes->>'scene_analysis' - 장면 분석 텍스트
            - orientataion: attributes->>'orientataion' - 방향 정보
+        
+        **JSONB 쿼리 예시**:
+        - 나이: WHERE (attributes->>'age')::float BETWEEN 20 AND 30
+        - 객체: WHERE objects_detected::text LIKE '%칼%' OR objects_detected::text LIKE '%담배%'
+        - 위치: WHERE (attributes->>'location')::int = 1
         """
         
         # 비디오 필터 조건
@@ -564,13 +572,13 @@ JSON 형식으로만 응답하세요."""
     
     def generate_embedding(self, text: str) -> Optional[List[float]]:
         """
-        Bedrock Titan Embeddings로 텍스트를 벡터로 변환
+        Bedrock Titan Embeddings V2로 텍스트를 벡터로 변환
         
         Args:
             text: 임베딩할 텍스트
             
         Returns:
-            1536차원 임베딩 벡터 (OpenAI ada-002와 동일 차원)
+            1024차원 임베딩 벡터 (Titan v2 권장 차원)
             실패 시 None
         """
         if not text or not text.strip():
@@ -578,19 +586,21 @@ JSON 형식으로만 응답하세요."""
             return None
         
         try:
-            # Titan Embeddings G1 - Text 모델 사용
-            # 1536 dimensions (OpenAI ada-002와 호환)
-            embedding_model_id = "amazon.titan-embed-text-v1"
+            # Titan Embeddings V2 - 다중 차원(Matryoshka) 지원, 문맥 이해도 향상
+            # 1024 dimensions (v2 권장 차원, 속도와 정확도 최적화)
+            embedding_model_id = "amazon.titan-embed-text-v2:0"
             
-            # 텍스트 길이 제한 (Titan: 8192 토큰)
+            # 텍스트 길이 제한 (Titan v2: 8192 토큰)
             max_chars = 30000  # 안전 마진
             if len(text) > max_chars:
                 text = text[:max_chars]
                 print(f"⚠️ 텍스트가 너무 길어 {max_chars}자로 자릅니다.")
             
-            # Bedrock Embeddings API 호출
+            # Bedrock Embeddings API 호출 (v2 형식)
             body = json.dumps({
-                "inputText": text
+                "inputText": text,
+                "dimensions": 1024,  # v2는 차원 지정 가능 (256, 512, 1024)
+                "normalize": True     # 정규화로 코사인 유사도 최적화
             })
             
             response = self.bedrock_runtime.invoke_model(
@@ -606,7 +616,7 @@ JSON 형식으로만 응답하세요."""
             # embedding 벡터 추출
             embedding = response_body.get('embedding')
             
-            if embedding and len(embedding) == 1536:
+            if embedding and len(embedding) == 1024:
                 return embedding
             else:
                 print(f"⚠️ 예상치 못한 임베딩 차원: {len(embedding) if embedding else 0}")

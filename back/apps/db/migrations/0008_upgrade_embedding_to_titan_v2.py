@@ -48,4 +48,9 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 UPDATE db_event SET embedding = NULL WHERE embedding IS NOT NULL;
-                UPDATE db_promptsession SET context_embedding = NULL WHERE context
+                UPDATE db_promptsession SET context_embedding = NULL WHERE context_embedding IS NOT NULL;
+                UPDATE db_videoanalysis SET embedding = NULL WHERE embedding IS NOT NULL;
+            """,
+            reverse_sql=migrations.RunSQL.noop,
+        ),
+    ]

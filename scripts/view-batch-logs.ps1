@@ -1,9 +1,9 @@
 # Get CloudWatch Logs for Failed Batch Job
 # Exit Code 127 디버깅용
-# 귀찮으면 이거로  aws logs tail /aws/batch/capstone-memi-processor --follow --region ap-northeast-2
+# 귀찮으면 이거로  aws logs tail /aws/batch/capstone-video-analysis-processor --follow --region ap-northeast-2
 param(
     [string]$JobId = "",
-    [string]$LogGroup = "/aws/batch/capstone-memi-processor",
+    [string]$LogGroup = "/aws/batch/capstone-video-analysis-processor",
     [string]$Region = "ap-northeast-2",
     [int]$Minutes = 30
 )

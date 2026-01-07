@@ -28,8 +28,8 @@
       "Resource": [
         "arn:aws:batch:ap-northeast-2:287709190208:job-queue/capstone-dev-video-processing-queue",
         "arn:aws:batch:ap-northeast-2:287709190208:job-definition/capstone-dev-video-processor:*",
-        "arn:aws:batch:ap-northeast-2:287709190208:job-queue/capstone-dev-memi-gpu-queue",
-        "arn:aws:batch:ap-northeast-2:287709190208:job-definition/capstone-dev-memi-processor:*"
+        "arn:aws:batch:ap-northeast-2:287709190208:job-queue/capstone-dev-video-analysis-gpu-queue",
+        "arn:aws:batch:ap-northeast-2:287709190208:job-definition/capstone-dev-video-analysis-processor:*"
       ]
     }
   ]

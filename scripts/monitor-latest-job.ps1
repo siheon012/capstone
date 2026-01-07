@@ -3,7 +3,7 @@
 
 param(
     [string]$Region = "ap-northeast-2",
-    [string]$JobQueue = "capstone-dev-memi-gpu-queue",
+    [string]$JobQueue = "capstone-dev-video-analysis-gpu-queue",
     [string]$Status = "",  # 비어있으면 모든 상태
     [int]$Limit = 5  # 확인할 Job 개수
 )

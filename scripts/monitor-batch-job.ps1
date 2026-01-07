@@ -93,7 +93,7 @@ while ($true) {
             Write-Host "[SUCCESS] Job completed successfully!" -ForegroundColor Green
             Write-Host ""
             Write-Host "View logs:" -ForegroundColor Yellow
-            Write-Host "  aws logs tail /aws/batch/capstone-memi-processor --follow --region $Region" -ForegroundColor Cyan
+            Write-Host "  aws logs tail /aws/batch/capstone-video-analysis-processor --follow --region $Region" -ForegroundColor Cyan
             break
         }
         
@@ -102,7 +102,7 @@ while ($true) {
             Write-Host "[FAILED] Job failed!" -ForegroundColor Red
             Write-Host ""
             Write-Host "Check logs for details:" -ForegroundColor Yellow
-            Write-Host "  aws logs tail /aws/batch/capstone-memi-processor --region $Region" -ForegroundColor Cyan
+            Write-Host "  aws logs tail /aws/batch/capstone-video-analysis-processor --region $Region" -ForegroundColor Cyan
             Write-Host ""
             Write-Host "Common issues:" -ForegroundColor Yellow
             Write-Host "  - EC2 instance failed to start (check AMI)" -ForegroundColor White

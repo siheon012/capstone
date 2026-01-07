@@ -46,10 +46,10 @@ Write-Host ""
 # Check if models exist
 Write-Host "Checking for AI models..." -ForegroundColor Yellow
 $ModelPaths = @(
-    "memi\models\yolov8x_person_face.pt",
-    "memi\models\model_imdb_cross_person_4.22_99.46.pth.tar",
-    "memi\experiments\coco\segm-4_lr1e-3.yaml",
-    "memi\checkpoints\llava-fastvithd_0.5b_stage2"
+    "video-analysis\models\yolov8x_person_face.pt",
+    "video-analysis\models\model_imdb_cross_person_4.22_99.46.pth.tar",
+    "video-analysis\experiments\coco\segm-4_lr1e-3.yaml",
+    "video-analysis\checkpoints\llava-fastvithd_0.5b_stage2"
 )
 
 $MissingModels = @()
@@ -163,7 +163,7 @@ Write-Host "[SUCCESS] Build and Push Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "1. Update terraform/batch-memi-gpu.tf with the new image digest:" -ForegroundColor White
+Write-Host "1. Update terraform/batch-video-analysis-gpu.tf with the new image digest:" -ForegroundColor White
 Write-Host "   `"image`": `"${RepositoryUri}@${ImageDigest}`"" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "2. Apply Terraform changes:" -ForegroundColor White

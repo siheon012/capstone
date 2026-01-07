@@ -62,8 +62,8 @@ resource "aws_iam_role_policy" "sqs_to_batch_lambda" {
           "batch:TagResource"
         ]
         Resource = [
-          aws_batch_job_queue.memi_gpu.arn,
-          "${aws_batch_job_definition.memi_processor.arn}*"
+          aws_batch_job_queue.video_analysis_gpu.arn,
+          "${aws_batch_job_definition.video_analysis_processor.arn}*"
         ]
       },
       {
@@ -92,8 +92,8 @@ resource "aws_lambda_function" "sqs_to_batch" {
 
   environment {
     variables = {
-      BATCH_JOB_QUEUE      = aws_batch_job_queue.memi_gpu.name  # batch-memi-gpu.tf의 GPU Queue 사용
-      BATCH_JOB_DEFINITION = aws_batch_job_definition.memi_processor.arn  # batch-memi-gpu.tf의 Job Definition 사용
+      BATCH_JOB_QUEUE      = aws_batch_job_queue.video_analysis_gpu.name  # batch-video-analysis-gpu.tf의 GPU Queue 사용
+      BATCH_JOB_DEFINITION = aws_batch_job_definition.video_analysis_processor.arn  # batch-video-analysis-gpu.tf의 Job Definition 사용
       MAX_CONCURRENT_JOBS  = "1" # 안전장치: 최대 1개 Job만 동시 실행
       ENVIRONMENT          = var.environment
     }

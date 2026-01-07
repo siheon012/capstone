@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AWS Batch GPU Video Processor with memi
-S3에서 비디오를 다운로드하고 memi run.py를 직접 실행 (GPU 사용)
+AWS Batch GPU Video Processor with video-analysis
+S3에서 비디오를 다운로드하고 video-analysis run.py를 직접 실행 (GPU 사용)
 """
 
 import os
@@ -39,19 +39,19 @@ def download_from_s3(bucket: str, key: str, local_path: str, region: str = 'ap-n
         return False
 
 
-def run_memi_analysis(video_id: int, video_path: str, output_dir: str = '/app/output'):
-    """memi run.py 실행"""
+def run_video_analysis(video_id: int, video_path: str, output_dir: str = '/app/output'):
+    """video-analysis run.py 실행"""
     try:
         logger.info("=" * 60)
-        logger.info("🚀 Starting memi video analysis")
+        logger.info("🚀 Starting video analysis pipeline")
         logger.info("=" * 60)
         logger.info(f"Video ID: {video_id}")
         logger.info(f"Video Path: {video_path}")
         logger.info(f"Output Dir: {output_dir}")
         
-        # memi run.py 명령어 구성
+        # video-analysis run.py 명령어 구성
         cmd = [
-            'python', '/app/memi/run.py',
+            'python', '/app/video-analysis/run.py',
             '--video-id', str(video_id),
             '--input', video_path,
             '--output', output_dir,
@@ -65,7 +65,7 @@ def run_memi_analysis(video_id: int, video_path: str, output_dir: str = '/app/ou
         
         logger.info(f"Command: {' '.join(cmd)}")
         
-        # memi 실행
+        # 실행
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -84,15 +84,15 @@ def run_memi_analysis(video_id: int, video_path: str, output_dir: str = '/app/ou
         
         if return_code == 0:
             logger.info("=" * 60)
-            logger.info("✅ memi analysis completed successfully")
+            logger.info(f"✅ Video analysis completed successfully")
             logger.info("=" * 60)
             return True
         else:
-            logger.error(f"❌ memi analysis failed with exit code: {return_code}")
+            logger.error(f"❌ Video analysis failed with exit code: {return_code}")
             return False
             
     except Exception as e:
-        logger.error(f"❌ Error running memi: {e}")
+        logger.error(f"❌ Error running video analysis: {e}")
         logger.exception("Full traceback:")
         return False
 
@@ -124,11 +124,11 @@ def main():
             logger.error("❌ Failed to download video from S3")
             sys.exit(1)
         
-        # memi 분석 실행
+        # video analysis 실행
         output_dir = '/app/output'
         os.makedirs(output_dir, exist_ok=True)
         
-        success = run_memi_analysis(int(video_id), local_video_path, output_dir)
+        success = run_video_analysis(int(video_id), local_video_path, output_dir)
         
         # 임시 파일 정리
         try:

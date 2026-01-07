@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AWS Batch Memi Video Processor
-SQS 메시지를 받아 S3에서 비디오를 다운로드하고 memi AI 분석을 실행
+AWS Batch Video Analysis Processor
+SQS 메시지를 받아 S3에서 비디오를 다운로드하고 video-analysis AI 분석을 실행
 """
 
 import os
@@ -25,13 +25,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class MemiVideoProcessorError(Exception):
+class VideoAnalysisProcessorError(Exception):
     """비디오 처리 중 발생하는 커스텀 예외"""
     pass
 
 
-class MemiVideoProcessor:
-    """Memi AI 비디오 분석 처리를 담당하는 메인 클래스"""
+class VideoAnalysisProcessor:
+    """Video Analysis AI 비디오 분석 처리를 담당하는 메인 클래스"""
     
     def __init__(self):
         """환경 변수에서 설정 로드"""
@@ -45,14 +45,14 @@ class MemiVideoProcessor:
         self.direct_s3_key = os.environ.get('S3_KEY')
         self.message_id = os.environ.get('MESSAGE_ID')
         
-        # Memi 모델 경로 (컨테이너 내부)
+        # 모델 경로 (컨테이너 내부)
         self.detector_weights = os.environ.get('DETECTOR_WEIGHTS', '/workspace/models/yolov8x_person_face.pt')
         self.mivolo_checkpoint = os.environ.get('MIVOLO_CHECKPOINT', '/workspace/models/model_imdb_cross_person_4.22_99.46.pth.tar')
         self.mebow_cfg = os.environ.get('MEBOW_CFG', '/workspace/experiments/coco/segm-4_lr1e-3.yaml')
         self.vlm_path = os.environ.get('VLM_PATH', '/workspace/checkpoints/llava-fastvithd_0.5b_stage2')
         self.device = os.environ.get('DEVICE', 'cuda:0')
         
-        # PostgreSQL 설정 (memi run.py가 사용)
+        # PostgreSQL 설정 (video-analysis run.py가 사용)
         self.postgres_host = os.environ.get('POSTGRES_HOST')
         self.postgres_port = os.environ.get('POSTGRES_PORT', '5432')
         self.postgres_db = os.environ.get('POSTGRES_DB')
@@ -75,7 +75,7 @@ class MemiVideoProcessor:
         self.videos_dir.mkdir(parents=True, exist_ok=True)
         self.results_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"MemiVideoProcessor initialized for environment: {self.environment}")
+        logger.info(f"VideoAnalysisProcessor initialized for environment: {self.environment}")
         logger.info(f"SQS Queue: {self.sqs_queue_url}")
         logger.info(f"S3 Bucket: {self.s3_bucket_raw}")
         logger.info(f"Device: {self.device}")
@@ -104,7 +104,7 @@ class MemiVideoProcessor:
         missing_vars = [var for var in required_vars if not os.environ.get(var)]
         
         if missing_vars:
-            raise MemiVideoProcessorError(
+            raise VideoAnalysisProcessorError(
                 f"Missing required environment variables: {', '.join(missing_vars)}"
             )
         
@@ -138,7 +138,7 @@ class MemiVideoProcessor:
             
         except ClientError as e:
             logger.error(f"Error receiving message from SQS: {e}")
-            raise MemiVideoProcessorError(f"SQS receive error: {e}")
+            raise VideoAnalysisProcessorError(f"SQS receive error: {e}")
     
     def parse_s3_event(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """S3 이벤트 메시지 파싱"""
@@ -148,7 +148,7 @@ class MemiVideoProcessor:
             
             # S3 이벤트 레코드 추출
             if 'Records' not in body:
-                raise MemiVideoProcessorError("Invalid S3 event format: no Records found")
+                raise VideoAnalysisProcessorError("Invalid S3 event format: no Records found")
             
             record = body['Records'][0]
             s3_info = record['s3']
@@ -173,7 +173,7 @@ class MemiVideoProcessor:
             
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"Error parsing S3 event: {e}")
-            raise MemiVideoProcessorError(f"S3 event parsing error: {e}")
+            raise VideoAnalysisProcessorError(f"S3 event parsing error: {e}")
     
     def _extract_video_id(self, s3_key: str) -> int:
         """S3 key에서 video_id 추출"""
@@ -186,7 +186,7 @@ class MemiVideoProcessor:
                 raise ValueError(f"Invalid S3 key format: {s3_key}")
         except (ValueError, IndexError) as e:
             logger.error(f"Failed to extract video_id from key: {s3_key}")
-            raise MemiVideoProcessorError(f"Video ID extraction error: {e}")
+            raise VideoAnalysisProcessorError(f"Video ID extraction error: {e}")
     
     def download_video_from_s3(self, bucket: str, key: str) -> Path:
         """S3에서 비디오 다운로드"""
@@ -207,11 +207,11 @@ class MemiVideoProcessor:
             
         except ClientError as e:
             logger.error(f"Error downloading from S3: {e}")
-            raise MemiVideoProcessorError(f"S3 download error: {e}")
+            raise VideoAnalysisProcessorError(f"S3 download error: {e}")
     
-    def run_memi_analysis(self, video_path: Path, video_id: int, output_dir: Path) -> bool:
+    def run_video_analysis(self, video_path: Path, video_id: int, output_dir: Path) -> bool:
         """
-        Memi AI 분석 실행
+        Video Analysis AI 분석 실행
         
         로컬 커맨드:
         python run.py --input "video.mp4" --output "result" 
@@ -223,14 +223,14 @@ class MemiVideoProcessor:
         """
         try:
             logger.info("=" * 80)
-            logger.info("Starting Memi AI Video Analysis")
+            logger.info("Starting Video Analysis AI Pipeline")
             logger.info("=" * 80)
             
             # run.py 경로
-            run_py = self.work_dir / 'memi' / 'run.py'
+            run_py = self.work_dir / 'video-analysis' / 'run.py'
             if not run_py.exists():
                 # Docker 컨테이너에서 실행 중
-                run_py = Path('/workspace/memi/run.py')
+                run_py = Path('/workspace/video-analysis/run.py')
             
             # 명령어 구성 (--draw 플래그 제거하여 비디오 생성 스킵)
             cmd = [
@@ -269,25 +269,25 @@ class MemiVideoProcessor:
                 bufsize=1  # Line buffered
             )
             
-            # 실시간 로그 출력 (진행률은 memi/run.py에서 직접 DB 업데이트)
+            # 실시간 로그 출력 (진행률은 video-analysis/run.py에서 직접 DB 업데이트)
             for line in process.stdout:
-                logger.info(f"[MEMI] {line.rstrip()}")
+                logger.info(f"[VIDEO-ANALYSIS] {line.rstrip()}")
             
             # 프로세스 종료 대기
             return_code = process.wait()
             
             if return_code == 0:
                 logger.info("=" * 80)
-                logger.info("Memi AI Analysis Completed Successfully")
+                logger.info("Video Analysis AI Completed Successfully")
                 logger.info("Results saved to PostgreSQL + pgvector")
                 logger.info("=" * 80)
                 return True
             else:
-                logger.error(f"Memi analysis failed with return code: {return_code}")
+                logger.error(f"Video analysis failed with return code: {return_code}")
                 return False
             
         except Exception as e:
-            logger.error(f"Error running memi analysis: {e}")
+            logger.error(f"Error running video analysis: {e}")
             logger.exception("Full traceback:")
             return False
     
@@ -307,7 +307,7 @@ class MemiVideoProcessor:
             
         except ClientError as e:
             logger.error(f"Error deleting message: {e}")
-            raise MemiVideoProcessorError(f"Message deletion error: {e}")
+            raise VideoAnalysisProcessorError(f"Message deletion error: {e}")
     
     def cleanup(self, video_path: Path):
         """임시 파일 정리"""
@@ -323,7 +323,7 @@ class MemiVideoProcessor:
         단일 메시지 처리 파이프라인
         1. S3 이벤트 파싱
         2. S3에서 비디오 다운로드
-        3. Memi AI 분석 실행 (PostgreSQL + pgvector에 저장)
+        3. Video Analysis AI 분석 실행 (PostgreSQL + pgvector에 저장)
         4. SQS 메시지 삭제
         5. 임시 파일 정리
         """
@@ -348,11 +348,11 @@ class MemiVideoProcessor:
             output_dir = self.results_dir / f"video_{video_id}"
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            # 4. Memi AI 분석 실행
-            success = self.run_memi_analysis(video_path, video_id, output_dir)
+            # 4. Video Analysis AI 분석 실행
+            success = self.run_video_analysis(video_path, video_id, output_dir)
             
             if not success:
-                logger.error("Memi analysis failed")
+                logger.error("Video analysis failed")
                 return False
             
             # 5. 성공한 메시지 삭제
@@ -367,7 +367,7 @@ class MemiVideoProcessor:
             
             return True
             
-        except MemiVideoProcessorError as e:
+        except VideoAnalysisProcessorError as e:
             logger.error(f"Processing failed: {e}")
             return False
         
@@ -383,7 +383,7 @@ class MemiVideoProcessor:
     
     def run(self):
         """메인 실행 루프"""
-        logger.info("Memi Video Processor started")
+        logger.info("Video Analysis Processor started")
         
         try:
             # Lambda로부터 직접 S3 정보를 받은 경우
@@ -450,9 +450,9 @@ class MemiVideoProcessor:
 def main():
     """진입점"""
     try:
-        processor = MemiVideoProcessor()
+        processor = VideoAnalysisProcessor()
         processor.run()
-    except MemiVideoProcessorError as e:
+    except VideoAnalysisProcessorError as e:
         logger.error(f"Initialization failed: {e}")
         sys.exit(1)
     except Exception as e:

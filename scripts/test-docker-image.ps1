@@ -40,13 +40,13 @@ if ($LASTEXITCODE -eq 0) {
 }
 Write-Host ""
 
-# Test 4: Check run_memi_analysis.py
-Write-Host "Test 4: Checking run_memi_analysis.py..." -ForegroundColor Yellow
-docker run --rm $ImageName ls -la /workspace/run_memi_analysis.py
+# Test 4: Check run_video_analysis.py
+Write-Host "Test 4: Checking run_video_analysis.py..." -ForegroundColor Yellow
+docker run --rm $ImageName ls -la /workspace/run_video_analysis.py
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "[OK] run_memi_analysis.py exists" -ForegroundColor Green
+    Write-Host "[OK] run_video_analysis.py exists" -ForegroundColor Green
 } else {
-    Write-Host "[FAIL] run_memi_analysis.py not found" -ForegroundColor Red
+    Write-Host "[FAIL] run_video_analysis.py not found" -ForegroundColor Red
 }
 Write-Host ""
 

@@ -1,5 +1,5 @@
 # ========================================
-# ECS GPU Cluster for memi FastAPI
+# ECS GPU Cluster for Video Analysis FastAPI
 # ========================================
 
 # ECS Cluster (기존 클러스터 사용)
@@ -110,11 +110,11 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
 }
 
 # ========================================
-# memi GPU FastAPI Task Definition
+# Video Analysis GPU FastAPI Task Definition
 # ========================================
 
-resource "aws_ecs_task_definition" "memi_gpu" {
-  family                   = "capstone-memi-gpu"
+resource "aws_ecs_task_definition" "video_analysis_gpu" {
+  family                   = "capstone-video-analysis-gpu"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
   cpu                      = "2048"  # 2 vCPU
@@ -124,7 +124,7 @@ resource "aws_ecs_task_definition" "memi_gpu" {
 
   container_definitions = jsonencode([
     {
-      name      = "memi-gpu"
+      name      = "video-analysis-gpu"
       image     = "${aws_ecr_repository.batch_processor.repository_url}:latest"
       cpu       = 2048
       memory    = 8192
@@ -198,9 +198,9 @@ resource "aws_ecs_task_definition" "memi_gpu" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.memi_gpu.name
+          "awslogs-group"         = aws_cloudwatch_log_group.video_analysis_gpu.name
           "awslogs-region"        = "ap-northeast-2"
-          "awslogs-stream-prefix" = "memi-gpu"
+          "awslogs-stream-prefix" = "video-analysis-gpu"
         }
       }
 
@@ -224,32 +224,32 @@ resource "aws_ecs_task_definition" "memi_gpu" {
   ])
 
   tags = {
-    Name        = "capstone-memi-gpu"
+    Name        = "capstone-video-analysis-gpu"
     Environment = var.environment
     Project     = "Unmanned"
   }
 }
 
-# CloudWatch Log Group for memi GPU
-resource "aws_cloudwatch_log_group" "memi_gpu" {
-  name              = "/ecs/capstone-memi-gpu"
+# CloudWatch Log Group for Video Analysis GPU
+resource "aws_cloudwatch_log_group" "video_analysis_gpu" {
+  name              = "/ecs/capstone-video-analysis-gpu"
   retention_in_days = 7
 
   tags = {
-    Name        = "capstone-memi-gpu-logs"
+    Name        = "capstone-video-analysis-gpu-logs"
     Environment = var.environment
     Project     = "Unmanned"
   }
 }
 
 # ========================================
-# ECS Service for memi GPU
+# ECS Service for Video Analysis GPU
 # ========================================
 
-resource "aws_ecs_service" "memi_gpu" {
-  name            = "capstone-memi-gpu-service"
+resource "aws_ecs_service" "video_analysis_gpu" {
+  name            = "capstone-video-analysis-gpu-service"
   cluster         = data.aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.memi_gpu.arn
+  task_definition = aws_ecs_task_definition.video_analysis_gpu.arn
   desired_count   = 1
   launch_type     = "EC2"
 
@@ -263,7 +263,7 @@ resource "aws_ecs_service" "memi_gpu" {
   }
 
   service_registries {
-    registry_arn = aws_service_discovery_service.memi_gpu.arn
+    registry_arn = aws_service_discovery_service.video_analysis_gpu.arn
   }
 
   depends_on = [
@@ -272,7 +272,7 @@ resource "aws_ecs_service" "memi_gpu" {
   ]
 
   tags = {
-    Name        = "capstone-memi-gpu-service"
+    Name        = "capstone-video-analysis-gpu-service"
     Environment = var.environment
     Project     = "Unmanned"
   }
@@ -294,8 +294,8 @@ resource "aws_service_discovery_private_dns_namespace" "internal" {
   }
 }
 
-resource "aws_service_discovery_service" "memi_gpu" {
-  name = "memi-gpu"
+resource "aws_service_discovery_service" "video_analysis_gpu" {
+  name = "video-analysis-gpu"
 
   dns_config {
     namespace_id = aws_service_discovery_private_dns_namespace.internal.id
@@ -313,7 +313,7 @@ resource "aws_service_discovery_service" "memi_gpu" {
   # }
 
   tags = {
-    Name        = "capstone-memi-gpu-discovery"
+    Name        = "capstone-video-analysis-gpu-discovery"
     Environment = var.environment
     Project     = "Unmanned"
   }
@@ -323,14 +323,14 @@ resource "aws_service_discovery_service" "memi_gpu" {
 # Outputs
 # ========================================
 
-output "memi_gpu_service_name" {
-  description = "memi GPU ECS Service name"
-  value       = aws_ecs_service.memi_gpu.name
+output "video_analysis_gpu_service_name" {
+  description = "Video Analysis GPU ECS Service name"
+  value       = aws_ecs_service.video_analysis_gpu.name
 }
 
-output "memi_gpu_internal_url" {
-  description = "Internal URL for memi GPU API"
-  value       = "http://memi-gpu.capstone.local:8000"
+output "video_analysis_gpu_internal_url" {
+  description = "Internal URL for Video Analysis GPU API"
+  value       = "http://video-analysis-gpu.capstone.local:8000"
 }
 
 output "gpu_asg_name" {

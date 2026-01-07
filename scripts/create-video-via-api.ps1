@@ -24,8 +24,8 @@ param(
     [string]$S3Key = "",  # S3 키 (비어있으면 videos/{FileName}으로 설정)
     [string]$Region = "ap-northeast-2",
     [string]$BackendUrl = "",  # Backend API URL (비어있으면 ECS 서비스 URL 자동 탐지)
-    [string]$JobQueue = "capstone-dev-memi-gpu-queue",
-    [string]$JobDefinition = "capstone-dev-memi-processor"
+    [string]$JobQueue = "capstone-dev-video-analysis-gpu-queue",
+    [string]$JobDefinition = "capstone-dev-video-analysis-processor"
 )
 
 $ErrorActionPreference = "Stop"

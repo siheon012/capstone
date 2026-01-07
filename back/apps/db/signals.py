@@ -1,6 +1,6 @@
 """
 Django signals for Event and Video models
-- Video 분석 완료 시 자동 embedding 생성 (MEMI 데이터용)
+- Video 분석 완료 시 자동 embedding 생성 (Video Analysis 데이터용)
 - Event 생성/수정 시 자동 embedding 생성 (Django ORM 사용 시)
 """
 from django.db.models.signals import post_save, pre_save
@@ -17,8 +17,8 @@ def generate_event_embedding(sender, instance, **kwargs):
     Event 저장 전 embedding 자동 생성 (Django ORM 사용 시만 작동)
     
     주의: 
-    - MEMI는 직접 SQL INSERT를 사용하므로 이 signal이 발동하지 않습니다.
-    - MEMI 데이터는 Video post_save signal에서 일괄 처리합니다.
+    - Video Analysis는 직접 SQL INSERT를 사용하므로 이 signal이 발동하지 않습니다.
+    - Video Analysis 데이터는 Video post_save signal에서 일괄 처리합니다.
     - pre_save이므로 무한루프 위험 없음 (save() 호출 전에 embedding 세팅)
     """
     # embedding이 이미 있으면 스킵 (중복 생성 방지)
@@ -53,7 +53,7 @@ def generate_embeddings_on_video_completed(sender, instance, **kwargs):
     """
     Video 분석 완료 시 모든 이벤트의 embedding 자동 생성
     
-    MEMI가 직접 SQL INSERT로 이벤트를 저장하면 Event signal이 발동하지 않으므로,
+    Video Analysis가 직접 SQL INSERT로 이벤트를 저장하면 Event signal이 발동하지 않으므로,
     Video의 analysis_status가 'completed'로 변경될 때 일괄 처리합니다.
     """
     # analysis_status가 'completed'로 변경되었는지 확인

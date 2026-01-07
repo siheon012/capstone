@@ -10,7 +10,7 @@ Write-Host "=====================================" -ForegroundColor Cyan
 
 # 1. ECS 서비스 Desired Count를 0으로 설정
 Write-Host "`n[1/4] ECS 서비스 중지..." -ForegroundColor Yellow
-$services = @("capstone-frontend-service", "capstone-backend-service", "capstone-memi-gpu-service")
+$services = @("capstone-frontend-service", "capstone-backend-service", "capstone-video-analysis-gpu-service")
 foreach ($service in $services) {
     Write-Host "  - $service 중지 중..." -ForegroundColor Gray
     aws ecs update-service --cluster $CLUSTER --service $service --desired-count 0 --region $REGION --query 'service.[serviceName,desiredCount]' --output text

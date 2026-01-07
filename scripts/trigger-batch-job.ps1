@@ -7,8 +7,8 @@ param(
     [string]$BackendUrl = "",  # Empty = auto-detect (ALB first, then ECS task IP)
     [string]$S3Bucket = "capstone-dev-raw",
     [string]$Region = "ap-northeast-2",
-    [string]$JobQueue = "capstone-dev-memi-gpu-queue",
-    [string]$JobDefinition = "capstone-dev-memi-processor"
+    [string]$JobQueue = "capstone-dev-video-analysis-gpu-queue",
+    [string]$JobDefinition = "capstone-dev-video-analysis-processor"
 )
 
 $ErrorActionPreference = "Stop"

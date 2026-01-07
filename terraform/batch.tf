@@ -226,7 +226,7 @@ resource "aws_launch_template" "gpu_batch" {
   }
 }
 
-# 🔧 이 Compute Environment는 사용하지 않음 (batch-memi-gpu.tf의 memi_gpu 사용)
+# 🔧 이 Compute Environment는 사용하지 않음 (batch-video-analysis-gpu.tf의 video_analysis_gpu 사용)
 # resource "aws_batch_compute_environment" "gpu_video_processing" {
 #   type                           = "MANAGED"
 #   service_role                   = aws_iam_role.batch_service_role.arn
@@ -329,7 +329,7 @@ data "aws_ami" "ecs_gpu" {
 # AWS Batch Job Queue
 # ========================================
 
-# GPU Job Queue (EC2) - 사용 안함 (batch-memi-gpu.tf의 memi_gpu_queue 사용)
+# GPU Job Queue (EC2) - 사용 안함 (batch-video-analysis-gpu.tf의 video_analysis_gpu_queue 사용)
 # resource "aws_batch_job_queue" "video_processing" {
 #   name     = "capstone-${var.environment}-video-processing-queue"
 #   state    = "ENABLED"
@@ -521,7 +521,7 @@ resource "aws_ecr_lifecycle_policy" "batch_processor" {
 # Outputs
 # ========================================
 
-# 사용 안 함 - MEMI Compute Environment 사용
+# 사용 안 함 - Video Analysis Compute Environment 사용
 # output "batch_compute_environment_arn" {
 #   description = "Batch Compute Environment ARN"
 #   value       = aws_batch_compute_environment.gpu_video_processing.arn

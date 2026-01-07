@@ -2,7 +2,7 @@
 set -e
 
 echo "====================================="
-echo "Starting memi GPU Video Processor"
+echo "Starting Video Analysis GPU Processor"
 echo "====================================="
 echo "VIDEO_ID: ${VIDEO_ID}"
 echo "S3_BUCKET: ${S3_BUCKET}"
@@ -39,13 +39,13 @@ mkdir -p "${OUTPUT_DIR}"
 echo "Checking GPU availability..."
 nvidia-smi || echo "WARNING: nvidia-smi not available"
 
-# Run memi video analysis directly
+# Run video video analysis directly
 echo "====================================="
-echo "Starting memi analysis..."
+echo "Starting video analysis..."
 echo "====================================="
 echo "Current working directory: $(pwd)"
 
-# Ensure we're in the memi directory (run.py의 import 경로 때문에)
+# Ensure we're in the analysis directory (run.py의 import 경로 때문에)
 cd /workspace || { echo "ERROR: Failed to cd to /workspace"; exit 1; }
 
 # run.py에서 --video-id를 integer로 받으므로 VIDEO_ID를 정수로 추출
@@ -60,7 +60,7 @@ fi
 
 echo "Extracted video_id: ${VIDEO_ID_NUM} from VIDEO_ID: ${VIDEO_ID}"
 
-python3 memi/run.py \
+python3 video-analysis/run.py \
     --video-id "${VIDEO_ID_NUM}" \
     --input "${INPUT_VIDEO}" \
     --output "${OUTPUT_DIR}" \
@@ -76,12 +76,12 @@ EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
     echo "====================================="
-    echo "memi analysis completed successfully!"
+    echo "video analysis completed successfully!"
     echo "Results saved to database (video_id: ${VIDEO_ID})"
     echo "====================================="
 else
     echo "====================================="
-    echo "ERROR: memi analysis failed with exit code ${EXIT_CODE}"
+    echo "ERROR: video analysis failed with exit code ${EXIT_CODE}"
     echo "====================================="
     exit $EXIT_CODE
 fi

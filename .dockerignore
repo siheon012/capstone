@@ -13,8 +13,8 @@ build/
 venv/
 ENV/
 env/
-memi/.venv/
-memi/venv/
+video-analysis/.venv/
+video-analysis/venv/
 
 # IDE
 .vscode/
@@ -24,20 +24,20 @@ memi/venv/
 *~
 
 # Local test data
-memi/videos/*
-!memi/videos/.gitkeep
-memi/result/*
-!memi/result/.gitkeep
-!memi/result/*.py
-memi/mivolo_output/*
-memi/depth_json/*
-memi/db_data/*
-memi/images/*
+video-analysis/videos/*
+!video-analysis/videos/.gitkeep
+video-analysis/result/*
+!video-analysis/result/.gitkeep
+!video-analysis/result/*.py
+video-analysis/mivolo_output/*
+video-analysis/depth_json/*
+video-analysis/db_data/*
+video-analysis/images/*
 
-# Memi large directories (exclude from batch build)
-memi/0.26.0/
-memi/build/
-memi/__pycache__/
+# video-analysis large directories (exclude from batch build)
+video-analysis/0.26.0/
+video-analysis/build/
+video-analysis/__pycache__/
 
 # Git
 .git/

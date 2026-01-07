@@ -1,4 +1,4 @@
-# AWS Batch GPU Video Processor with memi
+# AWS Batch GPU Video Processor with video-analysis
 # Build from project root: docker build -f batch/Dockerfile -t capstone-batch-processor:latest .
 
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
@@ -30,10 +30,10 @@ RUN apt-get update && \
 WORKDIR /workspace
 
 # Set Python path
-ENV PYTHONPATH=/workspace/memi:/workspace:${PYTHONPATH}
+ENV PYTHONPATH=/workspace/video-analysis:/workspace:${PYTHONPATH}
 
-# Copy memi requirements and install
-COPY memi/requirements.txt /workspace/memi_requirements.txt
+# Copy video-analysis requirements and install
+COPY video-analysis/requirements.txt /workspace/video-analysis_requirements.txt
 
 # Install Python dependencies in one layer to reduce image size
 RUN pip3 install --no-cache-dir --upgrade pip && \
@@ -43,25 +43,25 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
         --index-url https://download.pytorch.org/whl/cu118 && \
     pip3 install --no-cache-dir --no-build-isolation \
         "git+https://github.com/philferriere/cocoapi.git#subdirectory=PythonAPI" && \
-    grep -v "philferriere/cocoapi\|^-e git+\|^-f https://\|^torch==\|^torchvision==" /workspace/memi_requirements.txt > /workspace/requirements_filtered.txt && \
+    grep -v "philferriere/cocoapi\|^-e git+\|^-f https://\|^torch==\|^torchvision==" /workspace/video-analysis_requirements.txt > /workspace/requirements_filtered.txt && \
     pip3 install --no-cache-dir -r /workspace/requirements_filtered.txt && \
     pip3 install --no-cache-dir boto3 psycopg2-binary requests awscli && \
-    rm -rf /root/.cache/pip /workspace/memi_requirements.txt /workspace/requirements_filtered.txt
+    rm -rf /root/.cache/pip /workspace/video-analysis_requirements.txt /workspace/requirements_filtered.txt
 
-# Copy memi Python files (including run.py, mebow.py, etc.)
-COPY memi/*.py /workspace/memi/
-COPY memi/lib /workspace/memi/lib
-COPY memi/llava /workspace/memi/llava
-COPY memi/mivolo /workspace/memi/mivolo
-COPY memi/src /workspace/memi/src
-COPY memi/tools /workspace/memi/tools
-COPY memi/result /workspace/memi/result
-COPY memi/models /workspace/models
-COPY memi/experiments /workspace/experiments
-COPY memi/checkpoints /workspace/checkpoints
+# Copy video-analysis Python files (including run.py, mebow.py, etc.)
+COPY video-analysis/*.py /workspace/video-analysis/
+COPY video-analysis/lib /workspace/video-analysis/lib
+COPY video-analysis/llava /workspace/video-analysis/llava
+COPY video-analysis/mivolo /workspace/video-analysis/mivolo
+COPY video-analysis/src /workspace/video-analysis/src
+COPY video-analysis/tools /workspace/video-analysis/tools
+COPY video-analysis/result /workspace/video-analysis/result
+COPY video-analysis/models /workspace/models
+COPY video-analysis/experiments /workspace/experiments
+COPY video-analysis/checkpoints /workspace/checkpoints
 COPY batch/entrypoint.sh /workspace/entrypoint.sh
-COPY batch/run_memi_analysis.py /workspace/run_memi_analysis.py
-COPY batch/process_video_memi.py /workspace/process_video_memi.py
+COPY batch/run_analysis.py /workspace/run_analysis.py
+COPY batch/process_video.py /workspace/process_video.py
 
 # Fix line endings and set permissions
 RUN dos2unix /workspace/entrypoint.sh && \
@@ -79,5 +79,5 @@ ENV CUDA_VISIBLE_DEVICES=0
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python3 -c "import sys; sys.exit(0)"
 
-# Entrypoint will download video from S3 and run memi
+# Entrypoint will download video from S3 and run video-analysis
 ENTRYPOINT ["/workspace/entrypoint.sh"]

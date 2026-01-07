@@ -3,7 +3,7 @@
 
 param(
     [string]$Region = "ap-northeast-2",
-    [string]$JobQueue = "capstone-dev-memi-gpu-queue",
+    [string]$JobQueue = "capstone-dev-video-analysis-gpu-queue",
     [switch]$IncludeFailed,  # FAILED 상태도 포함
     [switch]$Force           # 확인 없이 바로 삭제
 )

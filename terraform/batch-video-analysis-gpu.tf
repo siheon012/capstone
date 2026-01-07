@@ -1,5 +1,5 @@
 # ========================================
-# AWS Batch - MEMI GPU Video Processing
+# AWS Batch - Video Analysis GPU Processing
 # ========================================
 # This file configures AWS Batch for on-demand GPU video processing.
 # 
@@ -19,7 +19,7 @@
 # - ecs-gpu.tf: Alternative 24/7 mode (currently disabled)
 # ========================================
 
-# ECR Repository for Memi Batch Processor - 기존 리포지토리 사용
+# ECR Repository for Video Analysis Batch Processor - 기존 리포지토리 사용
 data "aws_ecr_repository" "ai_batch" {
   name = "capstone-dev-batch-processor"
 }
@@ -166,7 +166,7 @@ resource "aws_iam_role_policy_attachment" "batch_instance_ecs" {
 # AWS Batch GPU Compute Environment
 # ========================================
 
-resource "aws_batch_compute_environment" "memi_gpu" {
+resource "aws_batch_compute_environment" "video_analysis_gpu" {
   type         = "MANAGED"
   service_role = aws_iam_role.batch_service_role.arn
   state        = "ENABLED"
@@ -201,14 +201,14 @@ resource "aws_batch_compute_environment" "memi_gpu" {
     }
 
     tags = {
-      Name        = "capstone-memi-gpu-instance"
+      Name        = "capstone-video-analysis-gpu-instance"
       Environment = var.environment
       Project     = "Unmanned"
     }
   }
 
   tags = {
-    Name        = "capstone-memi-gpu-compute"
+    Name        = "capstone-video-analysis-gpu-compute"
     Environment = var.environment
     Project     = "Unmanned"
   }
@@ -223,29 +223,29 @@ resource "aws_batch_compute_environment" "memi_gpu" {
 # AWS Batch Job Queue for GPU
 # ========================================
 
-resource "aws_batch_job_queue" "memi_gpu" {
-  name     = "capstone-${var.environment}-memi-gpu-queue"
+resource "aws_batch_job_queue" "video_analysis_gpu" {
+  name     = "capstone-${var.environment}-video-analysis-gpu-queue"
   state    = "ENABLED"
   priority = 10 # 높은 우선순위
 
   compute_environment_order {
     order               = 1
-    compute_environment = aws_batch_compute_environment.memi_gpu.arn
+    compute_environment = aws_batch_compute_environment.video_analysis_gpu.arn
   }
 
   tags = {
-    Name        = "capstone-memi-gpu-queue"
+    Name        = "capstone-video-analysis-gpu-queue"
     Environment = var.environment
     Project     = "Unmanned"
   }
 }
 
 # ========================================
-# AWS Batch Job Definition for Memi AI
+# AWS Batch Job Definition for Video Analysis AI
 # ========================================
 
-resource "aws_batch_job_definition" "memi_processor" {
-  name = "capstone-${var.environment}-memi-processor"
+resource "aws_batch_job_definition" "video_analysis_processor" {
+  name = "capstone-${var.environment}-video-analysis-processor"
   type = "container"
 
   platform_capabilities = ["EC2"]
@@ -276,9 +276,9 @@ resource "aws_batch_job_definition" "memi_processor" {
     logConfiguration = {
       logDriver = "awslogs"
       options = {
-        "awslogs-group"         = "/aws/batch/capstone-memi-processor"
+        "awslogs-group"         = "/aws/batch/capstone-video-analysis-processor"
         "awslogs-region"        = var.region
-        "awslogs-stream-prefix" = "memi"
+        "awslogs-stream-prefix" = "video-analysis"
       }
     }
 
@@ -386,19 +386,19 @@ resource "aws_batch_job_definition" "memi_processor" {
   }
 
   tags = {
-    Name        = "capstone-memi-processor"
+    Name        = "capstone-video-analysis-processor"
     Environment = var.environment
     Project     = "Unmanned"
   }
 }
 
-# CloudWatch Log Group for Memi Batch Jobs
-resource "aws_cloudwatch_log_group" "batch_memi_processor" {
-  name              = "/aws/batch/capstone-memi-processor"
+# CloudWatch Log Group for Video Analysis Batch Jobs
+resource "aws_cloudwatch_log_group" "batch_video_analysis_processor" {
+  name              = "/aws/batch/capstone-video-analysis-processor"
   retention_in_days = 7
 
   tags = {
-    Name        = "capstone-memi-batch-logs"
+    Name        = "capstone-video-analysis-batch-logs"
     Environment = var.environment
     Project     = "Unmanned"
   }
@@ -408,19 +408,19 @@ resource "aws_cloudwatch_log_group" "batch_memi_processor" {
 # Outputs
 # ========================================
 
-output "memi_batch_compute_environment_arn" {
-  description = "Memi GPU Batch Compute Environment ARN"
-  value       = aws_batch_compute_environment.memi_gpu.arn
+output "video_analysis_batch_compute_environment_arn" {
+  description = "Video Analysis GPU Batch Compute Environment ARN"
+  value       = aws_batch_compute_environment.video_analysis_gpu.arn
 }
 
-output "memi_batch_job_queue_arn" {
-  description = "Memi GPU Batch Job Queue ARN"
-  value       = aws_batch_job_queue.memi_gpu.arn
+output "video_analysis_batch_job_queue_arn" {
+  description = "Video Analysis GPU Batch Job Queue ARN"
+  value       = aws_batch_job_queue.video_analysis_gpu.arn
 }
 
-output "memi_batch_job_definition_arn" {
-  description = "Memi Batch Job Definition ARN"
-  value       = aws_batch_job_definition.memi_processor.arn
+output "video_analysis_batch_job_definition_arn" {
+  description = "Video Analysis Batch Job Definition ARN"
+  value       = aws_batch_job_definition.video_analysis_processor.arn
 }
 
 output "ai_batch_ecr_url" {

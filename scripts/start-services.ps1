@@ -25,8 +25,8 @@ aws ecs update-service --cluster $CLUSTER --service capstone-frontend-service --
 Write-Host "  - capstone-backend-service 시작 중..." -ForegroundColor Gray
 aws ecs update-service --cluster $CLUSTER --service capstone-backend-service --desired-count 1 --region $REGION --query 'service.[serviceName,desiredCount]' --output text
 
-Write-Host "  - capstone-memi-gpu-service 시작 중 (optional)..." -ForegroundColor Gray
-aws ecs update-service --cluster $CLUSTER --service capstone-memi-gpu-service --desired-count 0 --region $REGION --query 'service.[serviceName,desiredCount]' --output text
+Write-Host "  - capstone-video-analysis-gpu-service 시작 중 (optional)..." -ForegroundColor Gray
+aws ecs update-service --cluster $CLUSTER --service capstone-video-analysis-gpu-service --desired-count 0 --region $REGION --query 'service.[serviceName,desiredCount]' --output text
 
 Write-Host "`n=====================================" -ForegroundColor Green
 Write-Host "서비스 재시작 완료!" -ForegroundColor Green

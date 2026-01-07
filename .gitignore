@@ -112,8 +112,8 @@ localstack/
 # ISSUE 정리 파일
 ISSUE.md
 
-# memi 폴더 전체 제외
-memi/
+# video-analysis 폴더 전체 제외
+video-analysis/
 
 # Bedrock 테스트 파일들 (임시 테스트용)
 test_bedrock.py

@@ -45,7 +45,7 @@ jobs:
           echo "Building frontend with commit SHA: $IMAGE_TAG"
 
           # 프로덕션 이미지 빌드
-          docker build --target production \
+          docker build --no-cache --target production \
             -t $ECR_REGISTRY/capstone-frontend:$IMAGE_TAG \
             -t $ECR_REGISTRY/capstone-frontend:latest \
             ./front
@@ -65,7 +65,7 @@ jobs:
           echo "Building backend with commit SHA: $IMAGE_TAG"
 
           # Backend 이미지 빌드 (Dockerfile이 있다면)
-          docker build \
+          docker build --no-cache\
             -t $ECR_REGISTRY/capstone-backend:$IMAGE_TAG \
             -t $ECR_REGISTRY/capstone-backend:latest \
             ./back

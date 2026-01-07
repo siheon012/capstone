@@ -6,6 +6,7 @@ AWS Bedrock 서비스 모듈
 import json
 import boto3
 from typing import Dict, Optional, List, Tuple
+from datetime import datetime
 from django.conf import settings
 from apps.db.models import Event, Video
 
@@ -264,8 +265,51 @@ class BedrockService:
         
         **JSONB 쿼리 예시**:
         - 나이: WHERE (attributes->>'age')::float BETWEEN 20 AND 30
-        - 객체: WHERE objects_detected::text LIKE '%칼%' OR objects_detected::text LIKE '%담배%'
+        - 객체 (정확 매칭): WHERE objects_detected::jsonb ? '칼'
+        - 객체 (부분 매칭): WHERE objects_detected::text ILIKE '%칼%'
         - 위치: WHERE (attributes->>'location')::int = 1
+        
+        14. **실제 시각 기준 조회 (중요)**:
+            - 사용자 질문에 '오후 2시', '어제', '오늘 아침' 등 실제 시각이 포함되면:
+            - db_video.recorded_at (촬영 시작 시각) + (db_event.timestamp * INTERVAL '1 second')로 계산
+            - 예: "어제 오후 2시" → WHERE db_video.recorded_at + (db_event.timestamp * INTERVAL '1 second') 
+              BETWEEN '2026-01-07 14:00:00' AND '2026-01-07 15:00:00'
+            - 현재 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        
+        15. **집계 및 통계 쿼리**:
+            - "몇 번?" → COUNT(*) 사용
+            - "가장 많이?" → GROUP BY ... ORDER BY COUNT(*) DESC LIMIT 1
+            - "평균 나이" → AVG((attributes->>'age')::float)
+            - "시간대별 분포" → EXTRACT(HOUR FROM recorded_at + (timestamp * INTERVAL '1 second'))
+            - 예: "남성이 몇 번 나타났어?" → SELECT COUNT(*) FROM db_event WHERE gender='male'
+            - 예: "가장 많이 온 시간대는?" → SELECT EXTRACT(HOUR FROM db_video.recorded_at + (db_event.timestamp * INTERVAL '1 second')) as hour, COUNT(*) FROM db_event JOIN db_video ON db_event.video_id = db_video.video_id GROUP BY hour ORDER BY COUNT(*) DESC LIMIT 1
+        
+        16. **중복 제거**:
+            - 동일 인물이 여러 프레임에 나올 수 있으므로 필요시 DISTINCT 사용
+            - 예: "몇 명의 남성?" → SELECT COUNT(DISTINCT (attributes->>'obj_id')::int) WHERE gender='male'
+        
+        17. **event_type 전체 목록 (무인 점포 특화)**:
+            - theft: 도난 (물건을 몰래 가져가는 행위)
+            - collapse: 쓰러짐 (사람이 바닥에 쓰러진 상태)
+            - sitting: 점거 (오래 앉아있거나 공간 점거)
+            - loitering: 배회 (의심스럽게 배회하는 행동)
+            - intrusion: 침입 (허가되지 않은 영역 진입)
+            - fighting: 싸움/폭력 (신체적 충돌)
+            - vandalism: 기물 파손
+            - person_enter: 사람 진입
+            - person_exit: 사람 퇴장
+            - interaction: 상호작용 (물건 집기, 대화 등)
+            - anomaly: 일반적 이상 행동
+            - walking: 걷기
+            - standing: 서있기
+            - picking: 물건 집기
+            - **사용자 질문의 의도를 파악하여 가장 적합한 event_type으로 매핑하세요**
+            - 예: "싸움" → event_type='fighting', "물건 훔침" → event_type='theft'
+        
+        18. **JSONB 검색 최적화**:
+            - 정확 매칭(성능 우선): objects_detected::jsonb ? '칼'
+            - 부분 매칭(유연성 우선): objects_detected::text ILIKE '%칼%' (대소문자 무시)
+            - 예: "칼 든 사람" → WHERE objects_detected::jsonb ? '칼' OR objects_detected::text ILIKE '%knife%'
         """
         
         # 비디오 필터 조건
@@ -322,6 +366,20 @@ class BedrockService:
 - "남성이 나타난 시점" → SELECT id, timestamp, gender WHERE gender='male'
 - "6초에 인물의 성별과 위치" → SELECT id, timestamp, gender, bbox_x, bbox_y WHERE timestamp=6
 - "도난 사건" → SELECT id, timestamp, event_type, action WHERE event_type='theft'
+
+예시 (실제 시각):
+- "어제 오후 2시에 무슨 일이?" → SELECT id, timestamp, event_type FROM db_event JOIN db_video ON db_event.video_id = db_video.video_id WHERE db_video.recorded_at + (db_event.timestamp * INTERVAL '1 second') BETWEEN '2026-01-07 14:00:00' AND '2026-01-07 15:00:00'
+- "오늘 아침 남성" → SELECT id, timestamp, gender FROM db_event JOIN db_video ON db_event.video_id = db_video.video_id WHERE gender='male' AND EXTRACT(HOUR FROM db_video.recorded_at + (db_event.timestamp * INTERVAL '1 second')) BETWEEN 6 AND 12
+
+예시 (집계):
+- "남성이 몇 번 나타났어?" → SELECT COUNT(*) as count FROM db_event WHERE gender='male'
+- "20대 여성이 물건을 집어간 기록" → SELECT id, timestamp, gender, (attributes->>'age')::float as age, action FROM db_event WHERE gender='female' AND (attributes->>'age')::float BETWEEN 20 AND 29 AND (action ILIKE '%pick%' OR event_type='picking')
+- "최근 1시간 동안 이상 행동(신뢰도 0.8 이상)" → SELECT id, timestamp, event_type, confidence FROM db_event JOIN db_video ON db_event.video_id = db_video.video_id WHERE event_type IN ('anomaly', 'theft', 'intrusion') AND confidence >= 0.8 AND db_video.recorded_at + (db_event.timestamp * INTERVAL '1 second') >= NOW() - INTERVAL '1 hour'
+- "가장 많이 감지된 나이대는?" → SELECT CASE WHEN (attributes->>'age')::float < 20 THEN '10대' WHEN (attributes->>'age')::float < 30 THEN '20대' WHEN (attributes->>'age')::float < 40 THEN '30대' ELSE '40대 이상' END as age_range, COUNT(*) as count FROM db_event WHERE (attributes->>'age')::float IS NOT NULL GROUP BY age_range ORDER BY count DESC LIMIT 1
+
+예시 (복합 조건):
+- "왼쪽에 있던 남성 중 30세 이상" → SELECT id, timestamp, gender, (attributes->>'age')::float as age, (attributes->>'location')::int as location WHERE gender='male' AND (attributes->>'age')::float >= 30 AND (attributes->>'location')::int = 1
+- "칼을 든 사람이 있었나?" → SELECT id, timestamp, event_type, objects_detected FROM db_event WHERE objects_detected::jsonb ? '칼' OR objects_detected::text ILIKE '%knife%' OR objects_detected::text ILIKE '%칼%'
 
 응답 형식 (JSON):
 {{

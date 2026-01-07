@@ -22,9 +22,9 @@ class Migration(migrations.Migration):
             ),
         ),
         
-        # Session 모델 context_embedding 차원 변경
+        # PromptSession 모델 context_embedding 차원 변경
         migrations.AlterField(
-            model_name='session',
+            model_name='promptsession',
             name='context_embedding',
             field=pgvector.django.vector.VectorField(
                 blank=True,
@@ -70,7 +70,7 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql="""
                 UPDATE db_event SET embedding = NULL WHERE embedding IS NOT NULL;
-                UPDATE db_session SET context_embedding = NULL WHERE context_embedding IS NOT NULL;
+                UPDATE db_promptsession SET context_embedding = NULL WHERE context_embedding IS NOT NULL;
                 UPDATE db_searchquery SET query_embedding = NULL WHERE query_embedding IS NOT NULL;
                 UPDATE db_searchquery SET response_embedding = NULL WHERE response_embedding IS NOT NULL;
                 UPDATE db_videoanalysis SET embedding = NULL WHERE embedding IS NOT NULL;

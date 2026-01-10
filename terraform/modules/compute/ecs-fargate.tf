@@ -12,136 +12,8 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
-# ECS Task Execution Role
-resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "capstone-ecs-task-execution-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-# ECS Task Role (애플리케이션이 사용)
-resource "aws_iam_role" "ecs_task_role" {
-  name = "capstone-ecs-task-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-# S3 접근 권한
-resource "aws_iam_role_policy" "ecs_task_s3_policy" {
-  name = "ecs-task-s3-policy"
-  role = aws_iam_role.ecs_task_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          "${aws_s3_bucket.raw_videos.arn}",
-          "${aws_s3_bucket.raw_videos.arn}/*",
-          "${aws_s3_bucket.thumbnails.arn}",
-          "${aws_s3_bucket.thumbnails.arn}/*",
-          "${aws_s3_bucket.highlights.arn}",
-          "${aws_s3_bucket.highlights.arn}/*"
-        ]
-      }
-    ]
-  })
-}
-
-# Bedrock 접근 권한
-resource "aws_iam_role_policy" "ecs_task_bedrock_policy" {
-  name = "ecs-task-bedrock-policy"
-  role = aws_iam_role.ecs_task_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "bedrock:InvokeModel",
-          "bedrock:InvokeModelWithResponseStream",
-          "bedrock:GetFoundationModelAvailability",
-          "bedrock:ListFoundationModels"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "bedrock:Retrieve",
-          "bedrock:RetrieveAndGenerate"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:RequestedRegion" = "ap-northeast-2"
-          }
-        }
-      }
-    ]
-  })
-}
-
-# SQS 접근 권한
-resource "aws_iam_role_policy" "ecs_task_sqs_policy" {
-  name = "ecs-task-sqs-policy"
-  role = aws_iam_role.ecs_task_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "sqs:SendMessage",
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:GetQueueUrl"
-        ]
-        Resource = [
-          aws_sqs_queue.video_processing.arn,
-          aws_sqs_queue.video_processing_dlq.arn
-        ]
-      }
-    ]
-  })
-}
+# IAM Roles는 security 모듈로 이동했습니다
+# 변수로 받아서 사용: var.ecs_task_execution_role_arn, var.ecs_task_role_arn
 
 # CloudWatch Logs Group - Frontend
 resource "aws_cloudwatch_log_group" "frontend" {
@@ -170,8 +42,8 @@ resource "aws_ecs_task_definition" "frontend" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = "512"  # 0.5 vCPU
   memory                   = "1024" # 1 GB
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
+  execution_role_arn       = var.ecs_task_execution_role_arn  # from security module
+  task_role_arn            = var.ecs_task_role_arn  # from security module
 
   container_definitions = jsonencode([
     {
@@ -201,7 +73,7 @@ resource "aws_ecs_task_definition" "frontend" {
         },
         {
           name  = "NEXT_PUBLIC_S3_BUCKET"
-          value = aws_s3_bucket.raw_videos.id
+          value = var.s3_raw_videos_bucket
         },
         {
           name  = "NEXT_PUBLIC_S3_REGION"
@@ -248,8 +120,8 @@ resource "aws_ecs_task_definition" "backend" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = "1024" # 1 vCPU
   memory                   = "2048" # 2 GB
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
+  execution_role_arn       = var.ecs_task_execution_role_arn  # from security module
+  task_role_arn            = var.ecs_task_role_arn  # from security module
 
   container_definitions = jsonencode([
     {
@@ -267,7 +139,7 @@ resource "aws_ecs_task_definition" "backend" {
       environment = [
         {
           name  = "DB_HOST"
-          value = aws_db_instance.postgres.address
+          value = var.db_host
         },
         {
           name  = "DB_PORT"
@@ -283,11 +155,11 @@ resource "aws_ecs_task_definition" "backend" {
         },
         {
           name  = "AWS_STORAGE_BUCKET_NAME"
-          value = aws_s3_bucket.raw_videos.id
+          value = var.s3_raw_videos_bucket
         },
         {
           name  = "AWS_S3_THUMBNAILS_BUCKET"
-          value = aws_s3_bucket.thumbnails.id
+          value = var.s3_thumbnails_bucket
         },
         {
           name  = "AWS_S3_REGION_NAME"
@@ -295,7 +167,7 @@ resource "aws_ecs_task_definition" "backend" {
         },
         {
           name  = "AWS_SQS_QUEUE_URL"
-          value = aws_sqs_queue.video_processing.url
+          value = var.sqs_queue_url
         },
         {
           name  = "USE_S3"
@@ -346,11 +218,11 @@ resource "aws_ecs_task_definition" "backend" {
       secrets = [
         {
           name      = "DB_PASSWORD"
-          valueFrom = aws_secretsmanager_secret.db_password.arn
+          valueFrom = var.db_password_secret_arn
         },
         {
           name      = "SECRET_KEY"
-          valueFrom = aws_secretsmanager_secret.django_secret.arn
+          valueFrom = var.django_secret_arn
         }
       ]
 
@@ -390,18 +262,18 @@ resource "aws_ecs_service" "frontend" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = [aws_subnet.public_1.id, aws_subnet.public_2.id]
-    security_groups  = [aws_security_group.ecs_tasks.id]
+    subnets          = var.public_subnet_ids
+    security_groups  = [var.ecs_tasks_security_group_id]
     assign_public_ip = true
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.frontend.arn
+    target_group_arn = var.frontend_target_group_arn
     container_name   = "frontend"
     container_port   = 3000
   }
 
-  depends_on = [aws_lb_listener.http]
+  # depends_on removed - ALB listener is in network module
 
   tags = {
     Name = "capstone-frontend-service"
@@ -417,18 +289,19 @@ resource "aws_ecs_service" "backend" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = [aws_subnet.public_1.id, aws_subnet.public_2.id]
-    security_groups  = [aws_security_group.ecs_tasks.id]
+    subnets          = var.public_subnet_ids
+    security_groups  = [var.ecs_tasks_security_group_id]
     assign_public_ip = true
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.backend.arn
+    target_group_arn = var.backend_target_group_arn
     container_name   = "backend"
     container_port   = 8000
   }
 
-  depends_on = [aws_lb_listener.http, aws_db_instance.postgres]
+  # depends_on 제거: aws_lb_listener.http는 network 모듈, aws_db_instance.postgres는 storage 모듈에 있음
+  # 모듈 간 의존성은 main.tf의 module 블록 순서로 자동 처리됨
 
   tags = {
     Name = "capstone-backend-service"
@@ -485,18 +358,4 @@ resource "aws_appautoscaling_policy" "backend_cpu" {
   }
 }
 
-# Outputs
-output "ecs_cluster_name" {
-  description = "ECS Cluster Name"
-  value       = aws_ecs_cluster.main.name
-}
-
-output "frontend_service_name" {
-  description = "Frontend Service Name"
-  value       = aws_ecs_service.frontend.name
-}
-
-output "backend_service_name" {
-  description = "Backend Service Name"
-  value       = aws_ecs_service.backend.name
-}
+# Outputs는 outputs.tf에 정의됨

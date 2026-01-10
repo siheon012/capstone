@@ -55,7 +55,7 @@ resource "aws_sqs_queue_policy" "video_processing" {
         Resource = aws_sqs_queue.video_processing.arn
         Condition = {
           ArnLike = {
-            "aws:SourceArn" = aws_s3_bucket.raw_videos.arn
+            "aws:SourceArn" = var.s3_raw_videos_arn
           }
         }
       },
@@ -83,7 +83,7 @@ resource "aws_sqs_queue_policy" "video_processing" {
 
 # S3 버킷 알림 설정 - 비디오 업로드 시 SQS로 이벤트 전송
 resource "aws_s3_bucket_notification" "video_upload" {
-  bucket = aws_s3_bucket.raw_videos.id
+  bucket = var.s3_raw_videos_bucket
 
   queue {
     queue_arn     = aws_sqs_queue.video_processing.arn
@@ -138,26 +138,4 @@ resource "aws_cloudwatch_metric_alarm" "queue_depth" {
   }
 }
 
-# ========================================
-# Outputs
-# ========================================
-
-output "sqs_queue_url" {
-  description = "SQS Queue URL for video processing"
-  value       = aws_sqs_queue.video_processing.url
-}
-
-output "sqs_queue_arn" {
-  description = "SQS Queue ARN for video processing"
-  value       = aws_sqs_queue.video_processing.arn
-}
-
-output "sqs_dlq_url" {
-  description = "SQS DLQ URL"
-  value       = aws_sqs_queue.video_processing_dlq.url
-}
-
-output "sqs_dlq_arn" {
-  description = "SQS DLQ ARN"
-  value       = aws_sqs_queue.video_processing_dlq.arn
-}
+# Outputs는 outputs.tf에 정의됨

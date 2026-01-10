@@ -237,18 +237,7 @@ resource "aws_s3_bucket_cors_configuration" "highlights" {
   }
 }
 
-# ============================================
-# Outputs
-# ============================================
-output "s3_raw_videos_bucket" {
-  description = "Raw videos S3 bucket name"
-  value       = aws_s3_bucket.raw_videos.id
-}
-
-output "s3_thumbnails_bucket" {
-  description = "Thumbnails S3 bucket name"
-  value       = aws_s3_bucket.thumbnails.id
-}
+# Outputs는 outputs.tf에 정의됨
 
 # ============================================
 # Terraform State Backup Bucket
@@ -291,8 +280,5 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
   restrict_public_buckets = true
 }
 
-output "s3_terraform_state_bucket" {
-  description = "Terraform state backup S3 bucket name"
-  value       = aws_s3_bucket.terraform_state.id
-}
+# Terraform state bucket output는 outputs.tf에 정의됨
 

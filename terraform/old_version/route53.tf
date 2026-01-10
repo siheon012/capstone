@@ -167,30 +167,4 @@ resource "aws_lb_listener_rule" "backend_https" {
 # }
 
 # ========================================
-# Outputs
-# ========================================
-
-output "route53_zone_id" {
-  description = "Route 53 Hosted Zone ID"
-  value       = var.domain_name != "" ? aws_route53_zone.main[0].zone_id : null
-}
-
-output "route53_name_servers" {
-  description = "Route 53 Name Servers (도메인 등록 업체에 설정 필요)"
-  value       = var.domain_name != "" ? aws_route53_zone.main[0].name_servers : null
-}
-
-output "frontend_url" {
-  description = "Frontend URL (도메인)"
-  value       = var.domain_name != "" ? "https://${var.domain_name}" : "ALB disabled for cost savings"
-}
-
-output "api_url" {
-  description = "API URL (API 서브도메인)"
-  value       = var.domain_name != "" ? "https://api.${var.domain_name}" : "ALB disabled for cost savings"
-}
-
-output "acm_certificate_arn" {
-  description = "ACM Certificate ARN"
-  value       = var.domain_name != "" ? aws_acm_certificate.main[0].arn : null
-}
+# Outputs는 outputs.tf에 정의됨

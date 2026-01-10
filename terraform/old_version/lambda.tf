@@ -136,16 +136,4 @@ resource "aws_lambda_event_source_mapping" "sqs_to_batch" {
   }
 }
 
-# ========================================
-# Outputs
-# ========================================
-
-output "lambda_function_arn" {
-  description = "Lambda Function ARN"
-  value       = aws_lambda_function.sqs_to_batch.arn
-}
-
-output "lambda_function_name" {
-  description = "Lambda Function Name"
-  value       = aws_lambda_function.sqs_to_batch.function_name
-}
+# Outputs는 outputs.tf에 정의됨

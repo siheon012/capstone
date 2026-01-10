@@ -105,6 +105,7 @@ terraform.rc
 tfplan
 tfplan.*
 .terraform.lock.hcl
+terraform/lambda_deployment.zip
 
 # localstack data
 localstack/
@@ -112,8 +113,85 @@ localstack/
 # ISSUE 정리 파일
 ISSUE.md
 
-# video-analysis 폴더 전체 제외
-video-analysis/
+# video-analysis 폴더 내 제외 파일들
+# Environment variables (CRITICAL - contains secrets!)
+video-analysis/.env
+video-analysis/.env.*
+!video-analysis/.env.*.template
+
+# Python 가상환경 및 빌드 결과물
+video-analysis/.venv/
+video-analysis/build/
+video-analysis/*.egg-info/
+video-analysis/dist/
+
+# Database files (전역 *.db로 이미 제외되므로 특정 폴더만 명시)
+video-analysis/db_data/
+
+# PyTorch weights and large model files
+video-analysis/checkpoints/
+video-analysis/models/
+video-analysis/experiments/
+
+# 외부 라이브러리 (requirements.txt로 설치)
+video-analysis/llava/
+video-analysis/mivolo/
+video-analysis/src/
+video-analysis/tools/
+video-analysis/scripts/
+video-analysis/sql/
+video-analysis/license/
+
+# Generated outputs and test data
+video-analysis/output/
+video-analysis/input/
+video-analysis/videos/
+video-analysis/depth_json/
+video-analysis/result/
+video-analysis/mivolo_output/
+video-analysis/images/
+
+# 특정 임시/테스트 파일만 제외 (설정 파일은 포함)
+video-analysis/payload.json
+video-analysis/memi_docker.zip
+video-analysis/run.sh
+video-analysis/start.txt
+video-analysis/0.26.0
+video-analysis/*.ipynb
+video-analysis/Untitled.ipynb
+video-analysis/Testing notebook.ipynb
+video-analysis/CHANGELOG.md
+
+
+# 테스트/개발 스크립트
+video-analysis/demo.py
+video-analysis/eval_pretrained.py
+video-analysis/eval_tools.py
+video-analysis/measure_time.py
+video-analysis/tew.py
+video-analysis/fastapi_app.py
+video-analysis/lib
+video-analysis/mebow.py
+video-analysis/run.py
+
+# 문서/메타 파일
+video-analysis/api_spec.md
+video-analysis/CHANGELOG.md
+video-analysis/0.26.0
+video-analysis/start.txt
+
+# 린터 설정
+video-analysis/.pre-commit-config.yaml
+video-analysis/.flake8
+video-analysis/.isort.cfg
+video-analysis/mypy.ini
+
+# Python 패키지 설정
+video-analysis/setup.py
+video-analysis/setup.cfg
+
+
+
 
 # Bedrock 테스트 파일들 (임시 테스트용)
 test_bedrock.py

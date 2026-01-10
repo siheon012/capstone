@@ -324,41 +324,7 @@ resource "aws_lb_listener_rule" "backend" {
   }
 }
 
-# Outputs
-output "vpc_id" {
-  description = "VPC ID"
-  value       = aws_vpc.main.id
-}
-
-output "public_subnet_ids" {
-  description = "Public Subnet IDs"
-  value       = [aws_subnet.public_1.id, aws_subnet.public_2.id]
-}
-
-output "private_subnet_ids" {
-  description = "Private Subnet IDs"
-  value       = [aws_subnet.private_1.id, aws_subnet.private_2.id]
-}
-
-output "alb_dns_name" {
-  description = "Application Load Balancer DNS Name"
-  value       = aws_lb.main.dns_name
-}
-
-output "alb_url" {
-  description = "Application Load Balancer URL"
-  value       = "http://${aws_lb.main.dns_name}"
-}
-
-output "ecs_security_group_id" {
-  description = "ECS Tasks Security Group ID"
-  value       = aws_security_group.ecs_tasks.id
-}
-
-output "rds_security_group_id" {
-  description = "RDS Security Group ID"
-  value       = aws_security_group.rds.id
-}
+# Outputs는 outputs.tf에 정의됨
 
 # ========================================
 # VPC Endpoints (비용 절감)
@@ -470,7 +436,4 @@ resource "aws_security_group" "vpc_endpoints" {
   }
 }
 
-output "s3_endpoint_id" {
-  description = "S3 VPC Endpoint ID"
-  value       = aws_vpc_endpoint.s3.id
-}
+# S3 endpoint output는 outputs.tf에 정의됨

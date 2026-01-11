@@ -32,8 +32,10 @@ import { getVideoSessions, deleteSession } from '@/app/actions/session-service';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import SmartHeader from '@/components/layout/SmartHeader';
+import HistoryLayout from '@/components/layout/HistoryLayout';
 import HistorySidebar from '@/components/history/HistorySidebar';
 import ToastNotification from '@/components/feedback/ToastNotification';
+import Footer from '@/components/layout/Footer';
 
 export default function VideoSessionsPage() {
   const params = useParams();
@@ -878,116 +880,18 @@ export default function VideoSessionsPage() {
         </div>
       </main>
 
-      {/* History Sidebar - 모바일에서는 전체 화면으로 */}
-      {isMobile ? (
-        <div
-          className={`fixed inset-0 z-50 bg-[#1a1f2c] transform transition-transform duration-300 ease-out ${
-            historyOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          {/* 모바일 전용 헤더 */}
-          <div className="bg-[#242a38] border-b border-[#2a3142] p-4 flex items-center">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 flex items-center justify-center">
-                <img
-                  src="/images/ds_logo_transparent.png"
-                  alt="Deep Sentinel Logo"
-                  className="w-full h-full object-contain scale-[1.7]"
-                />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-white">Deep Sentinel</h1>
-                <span className="text-xs text-gray-400">분석 히스토리</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 h-[calc(100vh-80px)] overflow-hidden">
-            {/* 모바일 히스토리 사이드바에 onHistoryRefresh prop 추가 */}
-            <HistorySidebar
-              onSelectHistory={handleSelectHistory}
-              onClose={handleCloseHistory}
-              onHistoryRefresh={handleHistoryRefresh}
-              refreshTrigger={historyRefreshTrigger}
-            />
-          </div>
-        </div>
-      ) : (
-        <div
-          className={`fixed inset-y-0 right-0 z-50 transform transition-transform duration-300 ease-in-out ${
-            historyOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-          style={{
-            top: '73px',
-            height: 'calc(100vh - 73px)',
-            width: '35vw',
-            maxWidth: '600px',
-            minWidth: '400px',
-          }}
-        >
-          {/* 데스크톱 히스토리 사이드바에도 onHistoryRefresh prop 추가 */}
-          <HistorySidebar
-            onSelectHistory={handleSelectHistory}
-            onClose={handleCloseHistory}
-            onHistoryRefresh={handleHistoryRefresh}
-            refreshTrigger={historyRefreshTrigger}
-          />
-        </div>
-      )}
-
-      {/* History Backdrop - 데스크톱에서만 표시 */}
-      {historyOpen && !isMobile && (
-        <div
-          className="fixed inset-0 z-40 backdrop-blur-sm bg-gradient-to-r from-[#1a1f2c]/20 via-[#00e6b4]/5 to-[#3694ff]/10"
-          style={{
-            top: '73px',
-            height: 'calc(100vh - 73px)',
-          }}
-          onClick={() => setHistoryOpen(false)}
-        />
-      )}
+      <HistoryLayout
+        historyOpen={historyOpen}
+        isMobile={isMobile}
+        currentHistoryId={currentHistoryId}
+        historyRefreshTrigger={historyRefreshTrigger}
+        onSelectHistory={handleSelectHistory}
+        onClose={handleCloseHistory}
+        onHistoryRefresh={handleHistoryRefresh}
+      />
 
       {/* Footer */}
-      <footer
-        className={`bg-[#242a38] border-t border-[#2a3142] mt-auto transition-all duration-300 ${
-          historyOpen ? 'blur-sm opacity-75' : 'blur-0 opacity-100'
-        }`}
-      >
-        <div className="container mx-auto px-4 py-6 sm:py-8">
-          <div className="text-center mb-4 sm:mb-6">
-            <h2 className="text-xl sm:text-2xl font-bold text-[#00e6b4] mb-2 sm:mb-3">
-              AI 기반 CCTV 영상 분석 플랫폼
-            </h2>
-            <p className="text-sm sm:text-lg text-gray-400">
-              실시간 이벤트 감지 • 스마트 보안 솔루션 • Deep Sentinel
-            </p>
-          </div>
-
-          <Separator className="bg-[#2a3142] my-4 sm:my-6" />
-
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-2 text-xs sm:text-base text-gray-400">
-              <span>© 2026 Deep Sentinel. All rights reserved.</span>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs sm:text-base text-gray-300">
-              <span>궁금한 부분은 여기로</span>
-              <span className="text-[#00e6b4]">→</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-[#00e6b4] hover:text-[#00c49c] hover:bg-[#1a1f2c] p-1 sm:p-2 text-xs sm:text-sm"
-                onClick={() =>
-                  window.open('mailto:contact@deepsentinel.com', '_blank')
-                }
-              >
-                Contact
-              </Button>
-            </div>
-          </div>
-        </div>
-      </footer>
-
+      <Footer historyOpen={historyOpen} />
       {/* Toast Notifications */}
       <ToastNotification toasts={toasts} onRemove={removeToast} />
     </div>

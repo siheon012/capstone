@@ -613,6 +613,7 @@ export default function CCTVAnalysis() {
     setTimeMarkers,
     setIsAnalyzing,
     setAnalysisProgress,
+    setDuration,
     isMobile,
     isDuplicateVideo,
     uploadStartTime,

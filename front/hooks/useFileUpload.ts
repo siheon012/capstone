@@ -19,6 +19,7 @@ interface UseFileUploadProps {
   setTimeMarkers: (markers: number[]) => void;
   setIsAnalyzing: (analyzing: boolean) => void;
   setAnalysisProgress: (progress: number) => void;
+  setDuration: (duration: number) => void;
   isMobile: boolean;
   isDuplicateVideo: boolean;
   uploadStartTime: number | null;
@@ -84,6 +85,7 @@ export const useFileUpload = ({
   setTimeMarkers,
   setIsAnalyzing,
   setAnalysisProgress,
+  setDuration,
   isMobile,
   isDuplicateVideo,
   uploadStartTime,

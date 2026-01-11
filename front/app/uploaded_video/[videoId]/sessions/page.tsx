@@ -369,6 +369,8 @@ export default function VideoSessionsPage() {
       case 'sitting':
       case '점거':
         return 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30';
+      case 'interaction':
+        return 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30';
       default:
         return 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30';
     }

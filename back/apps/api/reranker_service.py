@@ -16,8 +16,10 @@ class BedrockReranker:
     """Amazon Bedrock Reranking 서비스"""
     
     def __init__(self):
-        self.bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
-        # Cohere Rerank 모델 사용 (Bedrock에서 제공)
+        # Cohere Rerank 모델은 도쿄 리전(ap-northeast-1)에서만 지원됨
+        # 서울 리전(ap-northeast-2)에서는 지원하지 않음
+        self.bedrock = boto3.client('bedrock-runtime', region_name='ap-northeast-1')
+        # Cohere Rerank 모델 사용 (도쿄 리전에서 v3-5 지원 확인됨)
         self.rerank_model = 'cohere.rerank-v3-5:0'
     
     def rerank(

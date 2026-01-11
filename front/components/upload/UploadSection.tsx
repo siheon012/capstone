@@ -44,7 +44,7 @@ const UploadSection = forwardRef<HTMLDivElement, UploadSectionProps>(
                 ? 'bg-[#2a3142] border-2 border-[#FFB800] shadow-2xl shadow-[#FFB800]/30'
                 : uploadHighlight
                 ? 'bg-[#2a3142] border-2 border-[#00e6b4] shadow-2xl shadow-[#00e6b4]/30'
-                : 'bg-[#2a3142] border-2 border-[#3a4553] hover:border-[#4a5563]'
+                : 'bg-[#2a3142] border-2 border-[#3a4553] hover:border-[#00e6b4] hover:shadow-lg hover:shadow-[#00e6b4]/30'
             }`}
             style={{
               animation: isUploading

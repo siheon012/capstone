@@ -24,6 +24,7 @@ interface ChatInterfaceProps {
   onNewChat: () => void;
   onQuickQuestion: (question: string) => void;
   onTextareaClick?: () => void;
+  onSeekToTime?: (time: number) => void;
   formatTime: (seconds: number) => string;
 }
 
@@ -38,6 +39,7 @@ export default function ChatInterface({
   onNewChat,
   onQuickQuestion,
   onTextareaClick,
+  onSeekToTime,
   formatTime,
 }: ChatInterfaceProps) {
   return (
@@ -92,11 +94,20 @@ export default function ChatInterface({
                     >
                       {message.content}
                     </p>
-                    {message.timestamp !== undefined && (
-                      <div className="mt-2 pt-2 border-t border-gray-500 flex items-center justify-between">
-                        <span className="text-xs opacity-75">
-                          타임스탬프: {formatTime(message.timestamp)}
-                        </span>
+                    {message.timestamp !== undefined && onSeekToTime && (
+                      <div className="mt-2 pt-2 border-t border-gray-500">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs opacity-75">
+                            타임스탬프: {formatTime(message.timestamp)}
+                          </span>
+                          <Button
+                            onClick={() => onSeekToTime(message.timestamp!)}
+                            size="sm"
+                            className="h-6 px-2 py-0 text-xs bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]"
+                          >
+                            {formatTime(message.timestamp)}로 이동
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -140,7 +151,7 @@ export default function ChatInterface({
                 ? '영상 업로드가 완료될 때까지 기다려주세요...'
                 : '영상에 대해 질문하세요...'
             }
-            className="flex-1 bg-[#2a3142] border-[#3a4553] text-white placeholder-gray-500 text-sm md:text-base resize-none min-h-[60px] md:min-h-[80px]"
+            className="flex-1 bg-[#2a3142] border-[#3a4553] text-white placeholder-gray-500 text-sm md:text-base resize-none min-h-[60px] md:min-h-[80px] transition-all duration-300 focus:border-[#00e6b4] focus:ring-2 focus:ring-[#00e6b4]/50 focus:shadow-lg focus:shadow-[#00e6b4]/20"
             onKeyDown={(e) => {
               if (
                 e.key === 'Enter' &&

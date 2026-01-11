@@ -46,6 +46,8 @@ import VideoPlayer from '@/components/video/VideoPlayer';
 import { useVideoControls } from '@/hooks/useVideoControls';
 import { useToast } from '@/hooks/useToast';
 import { useChatMessage } from '@/hooks/useChatMessage';
+import { useVideoEventListeners } from '@/hooks/useVideoEventListeners';
+import ChatInterface from '@/components/chat/ChatInterface';
 
 export default function CCTVAnalysis() {
   const params = useParams();
@@ -410,71 +412,17 @@ export default function CCTVAnalysis() {
     }
   };
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const updateTime = () => setCurrentTime(video.currentTime);
-    const updateDuration = () => {
-      setDuration(video.duration);
-      console.log('Video metadata loaded, duration:', video.duration);
-    };
-
-    // 비디오 준비 상태 확인을 위한 추가 이벤트 리스너 (메인 페이지와 동일하게 확장)
-    const handleCanPlay = () => {
-      console.log('Video can play, ready state:', video.readyState);
-      setVideoReady(true);
-    };
-
-    const handleLoadedData = () => {
-      console.log(
-        'Video data loaded, dimensions:',
-        video.videoWidth,
-        'x',
-        video.videoHeight
-      );
-      setVideoReady(true); // loadeddata에서도 비디오 준비 상태 설정
-    };
-
-    const handleCanPlayThrough = () => {
-      console.log('Video can play through, ready state:', video.readyState);
-      setVideoReady(true);
-    };
-
-    const handleLoadedMetadata = () => {
-      console.log('Video metadata loaded, ready state:', video.readyState);
-      if (video.duration && !isNaN(video.duration) && video.duration > 0) {
-        setDuration(video.duration);
-      }
-    };
-
-    // 에러 처리를 위한 추가 이벤트 리스너
-    const handleError = () => {
-      console.log('Video error or stalled');
-      setVideoReady(false);
-    };
-
-    // 메인 페이지와 동일한 이벤트 리스너 등록
-    video.addEventListener('timeupdate', updateTime);
-    video.addEventListener('loadedmetadata', handleLoadedMetadata);
-    video.addEventListener('loadeddata', handleLoadedData);
-    video.addEventListener('canplay', handleCanPlay);
-    video.addEventListener('canplaythrough', handleCanPlayThrough);
-    video.addEventListener('error', handleError);
-    video.addEventListener('abort', handleError);
-    video.addEventListener('stalled', handleError);
-
-    return () => {
-      video.removeEventListener('timeupdate', updateTime);
-      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      video.removeEventListener('loadeddata', handleLoadedData);
-      video.removeEventListener('canplay', handleCanPlay);
-      video.removeEventListener('canplaythrough', handleCanPlayThrough);
-      video.removeEventListener('error', handleError);
-      video.removeEventListener('abort', handleError);
-      video.removeEventListener('stalled', handleError);
-    };
-  }, [videoSrc]);
+  // 비디오 이벤트 리스너 설정
+  useVideoEventListeners({
+    videoRef,
+    videoSrc,
+    isMobile,
+    setCurrentTime,
+    setDuration,
+    setIsPlaying,
+    setVideoError,
+    setVideoReady,
+  });
 
   // 모바일에서 히스토리 열릴 때 body 스크롤 방지
   useEffect(() => {
@@ -628,112 +576,30 @@ export default function CCTVAnalysis() {
               </div>
 
               <div className="order-2 lg:order-2 lg:col-span-2 min-w-0 overflow-hidden flex flex-col">
-                <Card className="flex-1 min-h-[500px] lg:min-h-[600px] max-h-[90vh] lg:max-h-[85vh] bg-[#242a38] border-0 shadow-lg chat-container-flexible overflow-hidden">
-                  <CardContent className="p-2 md:p-4 flex flex-col h-full overflow-hidden">
-                    <div className="flex items-center justify-between mb-2 md:mb-4 flex-shrink-0">
-                      <div className="flex-1 min-w-0 pr-2">
-                        <h2 className="text-base md:text-xl font-semibold text-white">
-                          새 분석 세션
-                        </h2>
-                        <p className="text-xs md:text-sm text-gray-400 break-words overflow-hidden">
-                          <span
-                            className="inline-block max-w-full truncate"
-                            title={
-                              video?.name
-                                ? `${video.name} 영상에 대한 새로운 분석을 시작합니다`
-                                : ''
-                            }
-                          >
-                            {video?.name && video.name.length > 30
-                              ? `${video.name.substring(0, 30)}...`
-                              : video?.name || '영상'}{' '}
-                            영상에 대한 새로운 분석을 시작합니다
-                          </span>
-                        </p>
-                      </div>
-                      <Link href="/">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-[#6c5ce7] text-[#6c5ce7] hover:bg-[#6c5ce7] hover:text-white hover:border-[#6c5ce7] transition-all duration-200"
-                        >
-                          <MessageSquare className="h-4 w-4 mr-2" />새 분석 시작
-                        </Button>
-                      </Link>
-                    </div>
-
-                    <div className="flex-1 overflow-hidden mb-2 md:mb-4 border border-[#2a3142] rounded-md chat-messages-area">
-                      <ScrollArea className="h-full pr-1 md:pr-2">
-                        <div className="space-y-2 md:space-y-4 p-2 md:p-4">
-                          {messages.map((message, index) => (
-                            <div
-                              key={index}
-                              className={`flex ${
-                                message.role === 'user'
-                                  ? 'justify-end'
-                                  : 'justify-start'
-                              }`}
-                            >
-                              <div
-                                className={`max-w-[90%] md:max-w-[80%] rounded-lg p-2 md:p-3 text-xs md:text-base break-words overflow-wrap-anywhere word-break ${
-                                  message.role === 'user'
-                                    ? 'bg-[#6c5ce7] text-white'
-                                    : 'bg-[#2a3142] text-gray-200'
-                                }`}
-                                style={{
-                                  wordBreak: 'break-word',
-                                  overflowWrap: 'anywhere',
-                                  hyphens: 'auto',
-                                }}
-                              >
-                                {message.content}
-                                {message.timestamp && (
-                                  <button
-                                    onClick={() =>
-                                      seekToTime(message.timestamp || 0)
-                                    }
-                                    className="mt-2 text-xs md:text-sm font-medium text-[#00e6b4] hover:underline block"
-                                  >
-                                    {formatTime(message.timestamp)}로 이동
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
-
-                    <Separator className="my-3 md:my-4 bg-[#2a3142]" />
-
-                    <form
-                      onSubmit={handleSendMessage}
-                      className="flex gap-1 md:gap-2"
-                    >
-                      <Textarea
-                        placeholder="영상 내용에 대해 질문하세요..."
-                        value={inputMessage}
-                        onChange={(e) => setInputMessage(e.target.value)}
-                        disabled={isLoading}
-                        className={`flex-1 resize-none border-[#2a3142] text-gray-200 placeholder:text-gray-500 text-sm md:text-base bg-[#1a1f2c] hover:border-[#00e6b4] focus:border-[#00e6b4] ${
-                          isLoading ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                        rows={3}
-                      />
-                      <Button
-                        type="submit"
-                        disabled={!inputMessage.trim() || isLoading}
-                        className={`px-3 md:px-4 text-sm md:text-sm transition-all duration-200 ${
-                          !inputMessage.trim() || isLoading
-                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
-                            : 'bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]'
-                        }`}
-                      >
-                        {isLoading ? '로드 중...' : '전송'}
-                      </Button>
-                    </form>
-                  </CardContent>
-                </Card>
+                <ChatInterface
+                  messages={messages}
+                  inputMessage={inputMessage}
+                  isAnalyzing={isLoading}
+                  videoSrc={videoSrc}
+                  videoId={videoId}
+                  onInputChange={setInputMessage}
+                  onSendMessage={handleSendMessage}
+                  onNewChat={() => {
+                    window.location.href = '/';
+                  }}
+                  onQuickQuestion={(question: string) => {
+                    setInputMessage(question);
+                    setTimeout(() => {
+                      const event = new Event('submit', {
+                        bubbles: true,
+                        cancelable: true,
+                      });
+                      handleSendMessage(event as any);
+                    }, 100);
+                  }}
+                  onSeekToTime={seekToTime}
+                  formatTime={formatTime}
+                />
               </div>
             </div>
           </div>

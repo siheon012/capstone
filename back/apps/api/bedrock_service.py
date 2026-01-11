@@ -284,6 +284,12 @@ class BedrockService:
             - 예: "남성이 몇 번 나타났어?" → SELECT COUNT(*) FROM db_event WHERE gender='male'
             - 예: "가장 많이 온 시간대는?" → SELECT EXTRACT(HOUR FROM db_video.recorded_at + (db_event.timestamp * INTERVAL '1 second')) as hour, COUNT(*) FROM db_event JOIN db_video ON db_event.video_id = db_video.video_id GROUP BY hour ORDER BY COUNT(*) DESC LIMIT 1
         
+        **중요**: hour는 DB의 실제 칼럼이 아닙니다! 
+        - hour는 EXTRACT(HOUR FROM db_video.recorded_at + (db_event.timestamp * INTERVAL '1 second'))로 계산된 값입니다
+        - SELECT 절에서 "as hour"로 별칭을 지정하면 사용 가능합니다
+        - WHERE 절에서 hour를 사용하려면 전체 EXTRACT 함수를 사용해야 합니다
+        - GROUP BY나 ORDER BY에서는 별칭 hour를 사용할 수 있습니다
+        
         16. **중복 제거**:
             - 동일 인물이 여러 프레임에 나올 수 있으므로 필요시 DISTINCT 사용
             - 예: "몇 명의 남성?" → SELECT COUNT(DISTINCT (attributes->>'obj_id')::int) WHERE gender='male'

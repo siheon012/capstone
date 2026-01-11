@@ -38,9 +38,11 @@ import {
 } from '@/app/actions/video-service-client';
 import { getAllSessions } from '@/app/actions/session-service';
 import Link from 'next/link';
-import SmartHeader from '@/components/smart-header';
-import DynamicHistorySidebar from '@/components/dynamic-history-sidebar';
-import ToastNotification, { type Toast } from '@/components/toast-notification';
+import SmartHeader from '@/components/layout/SmartHeader';
+import HistorySidebar from '@/components/history/HistorySidebar';
+import ToastNotification, {
+  type Toast,
+} from '@/components/feedback/ToastNotification';
 
 // 토스트 알림을 위한 import 제거 (useToast 대신 자체 토스트 시스템 사용)
 // import { useToast } from '@/components/ui/use-toast';
@@ -919,7 +921,7 @@ export default function UploadedVideoPage() {
           </div>
 
           <div className="flex-1 h-[calc(100vh-80px)] overflow-hidden">
-            <DynamicHistorySidebar
+            <HistorySidebar
               onSelectHistory={handleSelectHistory}
               currentHistoryId={currentHistoryId}
               onClose={handleCloseHistory}
@@ -941,7 +943,7 @@ export default function UploadedVideoPage() {
             minWidth: '400px',
           }}
         >
-          <DynamicHistorySidebar
+          <HistorySidebar
             onSelectHistory={handleSelectHistory}
             currentHistoryId={currentHistoryId}
             onClose={handleCloseHistory}

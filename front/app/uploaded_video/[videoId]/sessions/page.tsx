@@ -31,9 +31,9 @@ import {
 import { getVideoSessions, deleteSession } from '@/app/actions/session-service';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import SmartHeader from '@/components/smart-header';
-import DynamicHistorySidebar from '@/components/dynamic-history-sidebar';
-import ToastNotification from '@/components/toast-notification';
+import SmartHeader from '@/components/layout/SmartHeader';
+import HistorySidebar from '@/components/history/HistorySidebar';
+import ToastNotification from '@/components/feedback/ToastNotification';
 
 export default function VideoSessionsPage() {
   const params = useParams();
@@ -904,7 +904,7 @@ export default function VideoSessionsPage() {
 
           <div className="flex-1 h-[calc(100vh-80px)] overflow-hidden">
             {/* 모바일 히스토리 사이드바에 onHistoryRefresh prop 추가 */}
-            <DynamicHistorySidebar
+            <HistorySidebar
               onSelectHistory={handleSelectHistory}
               onClose={handleCloseHistory}
               onHistoryRefresh={handleHistoryRefresh}
@@ -926,7 +926,7 @@ export default function VideoSessionsPage() {
           }}
         >
           {/* 데스크톱 히스토리 사이드바에도 onHistoryRefresh prop 추가 */}
-          <DynamicHistorySidebar
+          <HistorySidebar
             onSelectHistory={handleSelectHistory}
             onClose={handleCloseHistory}
             onHistoryRefresh={handleHistoryRefresh}

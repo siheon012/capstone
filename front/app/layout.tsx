@@ -2,8 +2,8 @@ import type React from 'react';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { ThemeProvider } from '@/components/theme-provider';
-import ScrollbarProvider from '@/components/scrollbar-provider';
+import { ThemeProvider } from '@/components/common/ThemeProvider';
+import ScrollbarProvider from '@/components/common/ScrollbarProvider';
 import { logEnvironmentInfo } from '@/lib/env-config';
 
 const inter = Inter({ subsets: ['latin'] });

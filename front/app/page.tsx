@@ -20,21 +20,27 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import DynamicHistorySidebar from '@/components/dynamic-history-sidebar';
-import DraggableTooltip from '@/components/draggable-tooltip';
-import ToastNotification, { type Toast } from '@/components/toast-notification';
-import VideoMinimap from '@/components/video-minimap';
-import DragDropZone from '@/components/drag-drop-zone';
-import SmartHeader from '@/components/smart-header';
+import HistorySidebar from '@/components/history/HistorySidebar';
+import DraggableTooltip from '@/components/feedback/DraggableTooltip';
+import ToastNotification, {
+  type Toast,
+} from '@/components/feedback/ToastNotification';
+import VideoMinimap from '@/components/video/VideoMinimap';
+import DragDropZone from '@/components/upload/DragDropZone';
+import SmartHeader from '@/components/layout/SmartHeader';
 import { saveHistory, getHistoryList } from '@/app/actions/history-service';
-import JQueryCounterAnimation from '@/components/jquery-counter-animation';
+import JQueryCounterAnimation from '@/components/legacy/JQueryCounterAnimation';
 import { saveVideoFile } from '@/app/actions/video-service';
 import { getUploadedVideos } from '@/app/actions/video-service-client';
 import { uploadVideoToS3 } from '@/app/actions/s3-upload-service';
 import type { ChatSession } from '@/app/types/session';
 import type { UploadedVideo } from '@/app/types/video';
-import EventTimeline from '@/components/event-timeline';
-
+import EventTimeline from '@/components/video/EventTimeline';
+import VideoPlayer from '@/components/video/VideoPlayer';
+import UploadSection from '@/components/upload/UploadSection';
+import ChatInterface from '@/components/chat/ChatInterface';
+import SummaryButton from '@/components/video/SummaryButton';
+import { useSummary } from '@/hooks/useSummary';
 // HTML5 Video API를 사용하여 비디오 duration 추출 함수
 const getVideoDurationFromFile = (file: File): Promise<number> => {
   return new Promise((resolve, reject) => {
@@ -132,6 +138,35 @@ export default function CCTVAnalysis() {
   // 분석 상태와 진행도를 관리하는 새로운 state 추가:
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+
+  const { isGenerating, generateSummary, formatSummary } = useSummary({
+    onSuccess: (summary) => {
+      const formattedSummary = formatSummary(summary);
+      const summaryMessage = {
+        role: 'assistant' as const,
+        content: `📋 **영상 요약**\n\n${formattedSummary}`,
+      };
+      setMessages((prev) => [...prev, summaryMessage]);
+      addToast({
+        type: 'success',
+        title: 'Summary 출력 완료',
+        message: '영상 요약이 채팅에 출력되었습니다.',
+        duration: 2000,
+      });
+    },
+    onError: (error) => {
+      addToast({
+        type: 'error',
+        title: 'Summary 출력 실패',
+        message: error,
+        duration: 3000,
+      });
+    },
+  });
+
+  const handleGenerateSummary = async () => {
+    await generateSummary(video, setVideo);
+  };
 
   // 디버깅을 위한 분석 상태 추적 (개발 환경에서만)
   useEffect(() => {
@@ -2337,884 +2372,107 @@ export default function CCTVAnalysis() {
         >
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6">
             <div className="lg:col-span-3" ref={videoSectionRef}>
-              <Card className="mb-4 md:mb-6 bg-[#242a38] border-0 shadow-lg">
-                <CardContent className="p-4 md:p-6">
-                  {videoSrc ? (
-                    <div className="relative">
-                      {isUploading ? (
-                        // 업로드 중일 때 보라색 프로그레스 오버레이
-                        <div
-                          className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10"
-                          style={{
-                            animation:
-                              'borderGlowPurple 2s ease-in-out infinite',
-                          }}
-                        >
-                          <div className="relative w-24 h-24 md:w-32 md:h-32 mb-4">
-                            {/* 배경 원 */}
-                            <svg
-                              className="w-full h-full transform -rotate-90"
-                              viewBox="0 0 100 100"
-                            >
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="45"
-                                stroke="#2a3142"
-                                strokeWidth="8"
-                                fill="none"
-                              />
-                              {/* 보라색 진행도 원 */}
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="45"
-                                stroke="#6c5ce7"
-                                strokeWidth="8"
-                                fill="none"
-                                strokeLinecap="round"
-                                strokeDasharray={`${2 * Math.PI * 45}`}
-                                strokeDashoffset={`${
-                                  2 * Math.PI * 45 * (1 - uploadProgress / 100)
-                                }`}
-                                className="transition-all duration-300 ease-out"
-                                style={{
-                                  filter:
-                                    'drop-shadow(0 0 8px rgba(108, 92, 231, 0.6))',
-                                }}
-                              />
-                            </svg>
-                            {/* 진행도 텍스트 */}
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="text-[#6c5ce7] font-bold text-lg md:text-xl">
-                                {Math.round(uploadProgress)}%
-                              </span>
-                            </div>
-                          </div>
-                          <p className="text-white text-sm md:text-base font-medium mb-2">
-                            동영상 업로드 중입니다.
-                          </p>
-                          <p className="text-gray-300 text-xs md:text-sm text-center px-4 mb-4">
-                            {uploadStage || '파일을 처리하고 있습니다...'}
-                          </p>
-                          {/* 취소 버튼 */}
-                          <button
-                            onClick={handleCancelProcess}
-                            className="bg-[#6c5ce7] hover:bg-[#5a4fcf] text-white px-4 py-2 rounded-md transition-colors duration-200 text-sm font-medium border border-[#6c5ce7] hover:border-[#5a4fcf]"
-                          >
-                            취소
-                          </button>
-                        </div>
-                      ) : isAnalyzing ? (
-                        // 분석 중일 때 프로그레스 오버레이
-                        <div
-                          className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex flex-col items-center justify-center z-10"
-                          style={{
-                            animation: 'borderGlow 2s ease-in-out infinite',
-                          }}
-                        >
-                          <div className="relative w-24 h-24 md:w-32 md:h-32 mb-4">
-                            {/* 배경 원 */}
-                            <svg
-                              className="w-full h-full transform -rotate-90"
-                              viewBox="0 0 100 100"
-                            >
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="45"
-                                stroke="#2a3142"
-                                strokeWidth="8"
-                                fill="none"
-                              />
-                              {/* 진행도 원 */}
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="45"
-                                stroke="#00e6b4"
-                                strokeWidth="8"
-                                fill="none"
-                                strokeLinecap="round"
-                                strokeDasharray={`${2 * Math.PI * 45}`}
-                                strokeDashoffset={`${
-                                  2 *
-                                  Math.PI *
-                                  45 *
-                                  (1 - analysisProgress / 100)
-                                }`}
-                                className="transition-all duration-300 ease-out"
-                                style={{
-                                  filter:
-                                    'drop-shadow(0 0 8px rgba(0, 230, 180, 0.6))',
-                                }}
-                              />
-                            </svg>
-                            {/* 진행도 텍스트 */}
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="text-[#00e6b4] font-bold text-lg md:text-xl">
-                                {Math.round(analysisProgress)}%
-                              </span>
-                            </div>
-                          </div>
-                          <p className="text-white text-sm md:text-base font-medium mb-2">
-                            {analysisProgress === 0
-                              ? '영상 분석 준비 중...'
-                              : analysisProgress < 10
-                              ? '영상 분석 시작 중...'
-                              : analysisProgress < 50
-                              ? '영상 분석 중...'
-                              : analysisProgress < 90
-                              ? '영상 분석 중...'
-                              : '영상 분석 완료 중...'}
-                          </p>
-                          <p className="text-gray-300 text-xs md:text-sm text-center px-4 mb-4">
-                            {analysisProgress === 0
-                              ? 'AI 서버에 분석을 요청하고 있습니다. 잠시만 기다려주세요.'
-                              : analysisProgress < 10
-                              ? 'AI가 영상 분석을 시작했습니다.'
-                              : analysisProgress < 50
-                              ? 'AI가 영상의 객체와 동작을 분석하고 있습니다.'
-                              : analysisProgress < 90
-                              ? 'AI가 이벤트를 감지하고 분류하고 있습니다.'
-                              : 'AI가 분석 결과를 정리하고 있습니다.'}
-                          </p>
-                          {/* 취소 버튼 */}
-                          <button
-                            onClick={handleCancelProcess}
-                            className="bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c] px-4 py-2 rounded-md transition-colors duration-200 text-sm font-medium border border-[#00e6b4] hover:border-[#00c49c]"
-                          >
-                            취소
-                          </button>
-                        </div>
-                      ) : null}
+              {videoSrc ? (
+                <>
+                  <VideoPlayer
+                    ref={videoRef}
+                    videoSrc={videoSrc}
+                    videoFileName={videoFileName}
+                    isPlaying={isPlaying}
+                    currentTime={currentTime}
+                    duration={duration}
+                    timeMarkers={timeMarkers}
+                    isAnalyzing={isAnalyzing}
+                    isUploading={isUploading}
+                    uploadProgress={uploadProgress}
+                    uploadStage={uploadStage}
+                    analysisProgress={analysisProgress}
+                    videoLoading={videoLoading}
+                    videoError={videoError}
+                    isMobile={isMobile}
+                    onTogglePlayPause={togglePlayPause}
+                    onSkipForward={skipForward}
+                    onSkipBackward={skipBackward}
+                    onSeekToTime={seekToTime}
+                    onCancelProcess={handleCancelProcess}
+                    onInfoClick={setTooltipData}
+                    onVideoError={setVideoError}
+                    onTimeUpdate={() => {
+                      if (videoRef.current) {
+                        setCurrentTime(videoRef.current.currentTime);
+                      }
+                    }}
+                    formatTime={formatTime}
+                  />
 
-                      {videoLoading && (
-                        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-md flex items-center justify-center z-5">
-                          <div className="text-white text-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00e6b4] mx-auto mb-2"></div>
-                            <p className="text-sm">비디오 로딩 중...</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 비디오 요소 - 업로드 중일 때 숨김 */}
-                      {!isUploading && (
-                        <video
-                          ref={videoRef}
-                          className={`w-full h-auto rounded-md bg-black ${
-                            isAnalyzing || videoLoading
-                              ? 'opacity-50'
-                              : 'opacity-100'
-                          } transition-opacity duration-300`}
-                          src={videoSrc}
-                          muted={isMobile} // 모바일에서 음소거
-                          playsInline={isMobile} // iOS에서 인라인 재생
-                          preload="metadata"
-                          controls={false}
-                          crossOrigin="anonymous" // CORS 설정
-                          style={{
-                            minHeight: isMobile ? '200px' : '300px', // 최소 높이 보장
-                            maxHeight: isMobile ? '300px' : '500px', // 최대 높이 제한
-                          }}
-                          // 비디오 로드 이벤트
-                          onLoadStart={() => {
-                            console.log('🎬 [Video] 로드 시작');
-                            setVideoLoading(true);
-                          }}
-                          onLoadedMetadata={(e) => {
-                            console.log('📊 [Video] 메타데이터 로드 완료');
-                            setVideoLoading(false);
-                            const video = e.target as HTMLVideoElement;
-                            if (
-                              video.duration &&
-                              !isNaN(video.duration) &&
-                              video.duration > 0
-                            ) {
-                              setDuration(video.duration);
-                              console.log(
-                                'Video duration set:',
-                                video.duration
-                              );
-                            }
-                          }}
-                          onCanPlay={() => {
-                            console.log('▶️ [Video] 재생 준비 완료');
-                            setVideoLoading(false);
-                            setVideoError(null);
-                          }}
-                          onWaiting={() => {
-                            console.log('⏳ [Video] 데이터 대기 중');
-                            setVideoLoading(true);
-                          }}
-                          onPlaying={() => {
-                            console.log('🎥 [Video] 재생 중');
-                            setVideoLoading(false);
-                          }}
-                          onError={(e) => {
-                            const target = e.target as HTMLVideoElement;
-                            const error = target.error;
-
-                            // 에러 코드별 메시지 매핑
-                            const errorMessages = {
-                              1: 'MEDIA_ERR_ABORTED: 미디어 재생이 중단됨',
-                              2: 'MEDIA_ERR_NETWORK: 네트워크 오류',
-                              3: 'MEDIA_ERR_DECODE: 미디어 디코딩 오류 (지원되지 않는 형식)',
-                              4: 'MEDIA_ERR_SRC_NOT_SUPPORTED: 지원되지 않는 미디어 형식',
-                            };
-
-                            const errorMessage = error?.code
-                              ? errorMessages[
-                                  error.code as keyof typeof errorMessages
-                                ] || `에러 코드: ${error.code}`
-                              : '알 수 없는 오류';
-
-                            console.error(
-                              '❌ [Video Error] 비디오 재생 오류:',
-                              {
-                                code: error?.code,
-                                message: error?.message,
-                                networkState: target.networkState,
-                                readyState: target.readyState,
-                                src: target.src,
-                                currentSrc: target.currentSrc,
-                                canPlayType: {
-                                  mp4: target.canPlayType('video/mp4'),
-                                  webm: target.canPlayType('video/webm'),
-                                  ogg: target.canPlayType('video/ogg'),
-                                },
-                              }
-                            );
-
-                            // 대용량 파일 또는 코덱 문제 감지
-                            if (error?.code === 3 || error?.code === 4) {
-                              console.warn(
-                                '⚠️ [Video] 코덱/포맷 문제 감지됨. 파일 재처리가 필요할 수 있습니다.'
-                              );
-                            }
-
-                            setVideoError(`비디오 오류: ${errorMessage}`);
-                            setIsPlaying(false);
-                            setVideoLoading(false);
-                          }}
-                          // 모바일에서 터치로 재생 가능하도록
-                          onClick={isMobile ? togglePlayPause : undefined}
-                        />
-                      )}
-
-                      {/* 비디오 에러 표시 */}
-                      {videoError && (
-                        <div className="absolute inset-0 bg-black bg-opacity-75 rounded-md flex items-center justify-center">
-                          <div className="text-center text-white p-4 max-w-md">
-                            <div className="mb-3">
-                              <AlertTriangle className="h-8 w-8 text-red-400 mx-auto mb-2" />
-                              <h3 className="text-lg font-medium mb-2">
-                                비디오 재생 오류
-                              </h3>
-                            </div>
-
-                            <p className="text-sm text-gray-300 mb-3">
-                              {videoError}
-                            </p>
-
-                            {/* 코덱/포맷 문제인 경우 추가 안내 */}
-                            {(videoError.includes('DECODE') ||
-                              videoError.includes('SUPPORTED')) && (
-                              <div className="bg-yellow-900 bg-opacity-50 border border-yellow-600 rounded-md p-3 mb-3">
-                                <p className="text-xs text-yellow-200">
-                                  <strong>
-                                    대용량 파일 또는 특수 코덱 문제:
-                                  </strong>
-                                  <br />
-                                  • 파일이 손상되었거나 지원되지 않는 형식입니다
-                                  <br />
-                                  • Chrome/Edge 브라우저 사용을 권장합니다
-                                  <br />• MP4 (H.264) 형식으로 변환하여 다시
-                                  시도해보세요
-                                </p>
-                              </div>
-                            )}
-
-                            <div className="flex gap-2 justify-center">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="bg-transparent border-gray-500 text-white hover:bg-gray-700"
-                                onClick={() => {
-                                  setVideoError(null);
-                                  // 비디오 컨테이너 초기화
-                                  setVideoSrc('');
-                                  setVideoId(null);
-                                }}
-                              >
-                                닫기
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]"
-                                onClick={() => {
-                                  setVideoError(null);
-                                  if (videoRef.current) {
-                                    console.log('🔄 [Video] 수동 재로드 시도');
-                                    videoRef.current.load();
-                                  }
-                                }}
-                              >
-                                다시 시도
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 비디오 위 정보 버튼 */}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-2 right-2 md:top-4 md:right-4 bg-black bg-opacity-50 text-white hover:bg-opacity-70 h-8 w-8 md:h-10 md:w-10"
-                        onClick={() =>
-                          setTooltipData({
-                            title: '비디오 정보',
-                            content: `파일명: ${videoFileName}\n재생시간: ${formatTime(
-                              duration
-                            )}\n현재 시간: ${formatTime(
-                              currentTime
-                            )}\n모바일: ${isMobile ? '예' : '아니오'}`,
-                          })
-                        }
-                      >
-                        <Info className="h-3 w-3 md:h-4 md:w-4" />
-                      </Button>
-
-                      {/* 모바일에서 재생 안내 */}
-                      {isMobile &&
-                        !isPlaying &&
-                        !isAnalyzing &&
-                        !videoLoading && (
-                          <div className="absolute bottom-2 left-2 right-2 bg-black bg-opacity-70 text-white text-xs p-2 rounded">
-                            화면을 터치하여 비디오를 재생하세요
-                          </div>
-                        )}
-                    </div>
-                  ) : (
-                    <div
-                      ref={uploadAreaRef}
-                      className={`flex flex-col items-center justify-center h-[250px] md:h-[400px] rounded-lg transition-all duration-500 relative ${
-                        isUploading
-                          ? 'bg-[#2a3142] border-2 border-[#6c5ce7] shadow-2xl shadow-[#6c5ce7]/30'
-                          : isDuplicateVideo
-                          ? 'bg-[#2a3142] border-2 border-[#FFB800] shadow-2xl shadow-[#FFB800]/30'
-                          : uploadHighlight
-                          ? 'bg-[#2a3142] border-2 border-[#00e6b4] shadow-2xl shadow-[#00e6b4]/30'
-                          : 'bg-[#2a3142] border-2 border-[#3a4553] hover:border-[#4a5563]'
-                      }`}
-                      style={{
-                        animation: isUploading
-                          ? 'borderGlowPurple 2s ease-in-out infinite'
-                          : isDuplicateVideo
-                          ? 'borderGlowYellow 1s ease-in-out 3'
-                          : uploadHighlight
-                          ? 'borderGlow 0.5s ease-in-out'
-                          : 'none',
-                      }}
-                    >
-                      {/* 업로드 진행 중일 때 보라색 오버레이 */}
-                      {isUploading && (
-                        <div className="absolute inset-0 bg-black bg-opacity-60 rounded-lg flex flex-col items-center justify-center z-10">
-                          <div className="relative w-20 h-20 md:w-24 md:h-24 mb-4">
-                            {/* 배경 원 */}
-                            <svg
-                              className="w-full h-full transform -rotate-90"
-                              viewBox="0 0 100 100"
-                            >
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="45"
-                                stroke="#2a3142"
-                                strokeWidth="8"
-                                fill="none"
-                              />
-                              {/* 보라색 진행도 원 */}
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="45"
-                                stroke="#6c5ce7"
-                                strokeWidth="8"
-                                fill="none"
-                                strokeLinecap="round"
-                                strokeDasharray={`${2 * Math.PI * 45}`}
-                                strokeDashoffset={`${
-                                  2 * Math.PI * 45 * (1 - uploadProgress / 100)
-                                }`}
-                                className="transition-all duration-300 ease-out"
-                                style={{
-                                  filter:
-                                    'drop-shadow(0 0 8px rgba(108, 92, 231, 0.6))',
-                                }}
-                              />
-                            </svg>
-                            {/* 진행도 텍스트 */}
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="text-[#6c5ce7] font-bold text-lg md:text-xl">
-                                {Math.round(uploadProgress)}%
-                              </span>
-                            </div>
-                          </div>
-                          <p className="text-white text-sm md:text-base font-medium mb-2">
-                            동영상 업로드 중입니다.
-                          </p>
-                          <p className="text-gray-300 text-xs md:text-sm text-center px-4 mb-4">
-                            {uploadStage || '파일을 처리하고 있습니다...'}
-                          </p>
-                          {/* 취소 버튼 */}
-                          <button
-                            onClick={handleCancelProcess}
-                            className="bg-[#6c5ce7] hover:bg-[#5a4fcf] text-white px-4 py-2 rounded-md transition-colors duration-200 text-sm font-medium border border-[#6c5ce7] hover:border-[#5a4fcf]"
-                          >
-                            취소
-                          </button>
-                        </div>
-                      )}
-                      {/* 업로드 아이콘 - 업로드 중일 때 숨김, 중복 감지 시 노란색으로 변경 */}
-                      {!isUploading && (
-                        <div className="mb-6">
-                          <div
-                            className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center border-2 ${
-                              isDuplicateVideo
-                                ? 'bg-[#FFB800] bg-opacity-10 border-[#FFB800] border-opacity-30'
-                                : 'bg-[#00e6b4] bg-opacity-10 border-[#00e6b4] border-opacity-30'
-                            }`}
-                          >
-                            <Upload
-                              className={`h-8 w-8 md:h-10 md:w-10 ${
-                                isDuplicateVideo
-                                  ? 'text-[#FFB800]'
-                                  : 'text-[#00e6b4]'
-                              }`}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 메인 텍스트 - 업로드 중일 때 숨김, 중복 감지 시 메시지 변경 */}
-                      {!isUploading && (
-                        <p className="text-gray-300 mb-6 text-base md:text-lg text-center px-4 font-medium">
-                          {isDuplicateVideo
-                            ? '이미 업로드된 동영상입니다. 분석을 시작하세요.'
-                            : '분석을 시작하려면 CCTV 영상을 업로드하세요'}
-                        </p>
-                      )}
-
-                      {/* 업로드 버튼 - 업로드 중일 때 숨김 */}
-                      {!isUploading && (
-                        <Button
-                          disabled={isUploading}
-                          className={`px-8 py-3 text-base font-semibold rounded-lg transition-all duration-200 ${
-                            isUploading
-                              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                              : 'bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c] hover:scale-105'
-                          }`}
-                          onClick={(e) => {
-                            try {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (!isUploading) {
-                                setDragDropVisible(true);
-                              }
-                            } catch (error) {
-                              console.error('Main upload button error:', error);
-                            }
-                          }}
-                        >
-                          {isUploading ? '업로드 중...' : '영상 업로드'}
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {videoSrc && (
-                <Card className="bg-[#242a38] border-0 shadow-lg">
-                  <CardContent className="p-3 md:p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-gray-400 text-sm">
-                        {formatTime(currentTime)}
-                      </span>
-                      <div className="flex items-center gap-1 md:gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="border-[#2a3142] text-gray-300 hover:text-[#00e6b4] hover:border-[#00e6b4] h-8 w-8 md:h-10 md:w-10"
-                          onClick={skipBackward}
-                          disabled={!videoSrc || isAnalyzing || videoLoading}
-                        >
-                          <SkipBack className="h-3 w-3 md:h-4 md:w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="border-[#2a3142] text-gray-300 hover:text-[#00e6b4] hover:border-[#00e6b4] h-8 w-8 md:h-10 md:w-10"
-                          onClick={togglePlayPause}
-                          disabled={!videoSrc || isAnalyzing || videoLoading}
-                        >
-                          {isPlaying ? (
-                            <Pause className="h-3 w-3 md:h-4 md:w-4" />
-                          ) : (
-                            <Play className="h-3 w-3 md:h-4 md:w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="border-[#2a3142] text-gray-300 hover:text-[#00e6b4] hover:border-[#00e6b4] h-8 w-8 md:h-10 md:w-10"
-                          onClick={skipForward}
-                          disabled={!videoSrc || isAnalyzing || videoLoading}
-                        >
-                          <SkipForward className="h-3 w-3 md:h-4 md:w-4" />
-                        </Button>
-                      </div>
-                      <span className="text-gray-400 text-sm">
-                        {formatTime(duration)}
-                      </span>
-                    </div>
-
-                    <div className="relative w-full h-6 md:h-8 bg-[#1a1f2c] rounded-full overflow-hidden cursor-pointer">
-                      {/* 진행 바 */}
-                      <div
-                        className="absolute top-0 left-0 h-full bg-[#00e6b4] opacity-30"
-                        style={{
-                          width: `${
-                            duration > 0 ? (currentTime / duration) * 100 : 0
-                          }%`,
-                        }}
-                      />
-
-                      {/* 시간 마커 */}
-                      {timeMarkers.map((time, index) => (
-                        <div
-                          key={index}
-                          className="absolute top-0 h-full w-1 bg-[#6c5ce7] cursor-pointer"
-                          style={{
-                            left: `${
-                              duration > 0 ? (time / duration) * 100 : 0
-                            }%`,
-                          }}
-                          onClick={() => seekToTime(time)}
-                          title={`${formatTime(time)}로 이동`}
-                        />
-                      ))}
-
-                      {/* 타임라인 클릭 핸들러 */}
-                      <div
-                        className="absolute top-0 left-0 w-full h-full cursor-pointer"
-                        onClick={(e) => {
-                          try {
-                            // 비디오 참조와 소스 유효성 검사
-                            if (!videoRef.current) {
-                              console.warn(
-                                'Video reference not available for timeline click'
-                              );
-                              addToast({
-                                type: 'warning',
-                                title: '비디오 컨트롤',
-                                message: '비디오가 아직 로드되지 않았습니다.',
-                                duration: 2000,
-                              });
-                              return;
-                            }
-
-                            if (!videoSrc) {
-                              console.warn(
-                                'Video source not available for timeline click'
-                              );
-                              addToast({
-                                type: 'warning',
-                                title: '비디오 컨트롤',
-                                message: '비디오 파일을 먼저 업로드해주세요.',
-                                duration: 2000,
-                              });
-                              return;
-                            }
-
-                            if (!duration || duration <= 0) {
-                              console.warn(
-                                'Video duration not available for timeline click'
-                              );
-                              addToast({
-                                type: 'warning',
-                                title: '비디오 정보',
-                                message:
-                                  '비디오 길이 정보를 가져올 수 없습니다.',
-                                duration: 2000,
-                              });
-                              return;
-                            }
-
-                            const video = videoRef.current;
-
-                            // 비디오 준비 상태 검사
-                            const isVideoReady =
-                              video.readyState >= 1 || isMobile;
-
-                            if (!isVideoReady) {
-                              console.warn(
-                                'Video not ready for timeline click, readyState:',
-                                video.readyState
-                              );
-                              addToast({
-                                type: 'info',
-                                title: '비디오 로딩 중',
-                                message:
-                                  '비디오가 로드될 때까지 잠시 기다려주세요.',
-                                duration: 2000,
-                              });
-                              return;
-                            }
-
-                            // 타임라인 클릭 위치 계산
-                            const rect =
-                              e.currentTarget.getBoundingClientRect();
-                            if (rect.width === 0) {
-                              console.warn('Timeline width is zero');
-                              return;
-                            }
-
-                            const clickX = e.clientX - rect.left;
-                            const pos = Math.max(
-                              0,
-                              Math.min(1, clickX / rect.width)
-                            );
-                            const newTime = pos * duration;
-
-                            // 유효한 시간 범위 확인
-                            if (newTime < 0 || newTime > duration) {
-                              console.warn(
-                                'Calculated time is out of bounds:',
-                                newTime
-                              );
-                              return;
-                            }
-
-                            video.currentTime = newTime;
-                            console.log(
-                              `Timeline clicked: seeked to ${newTime.toFixed(
-                                2
-                              )}s (${(pos * 100).toFixed(1)}%)`
-                            );
-
-                            // 모바일에서 타임라인 클릭 시 추가 처리
-                            if (isMobile && videoSectionRef.current) {
-                              try {
-                                videoSectionRef.current.scrollIntoView({
-                                  behavior: 'smooth',
-                                  block: 'start',
-                                  inline: 'nearest',
-                                });
-                              } catch (scrollError) {
-                                console.warn(
-                                  'Scroll to video after timeline click failed:',
-                                  scrollError
-                                );
-                              }
-                            }
-                          } catch (error) {
-                            console.error('Timeline click error:', error);
-                            addToast({
-                              type: 'error',
-                              title: '타임라인 오류',
-                              message:
-                                '타임라인 클릭 처리 중 오류가 발생했습니다.',
-                              duration: 3000,
-                            });
-                          }
-                        }}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Event Timeline - 비디오 아래에 추가 */}
-              {videoSrc && video && (
-                <Card className="bg-[#242a38] border-0 shadow-lg">
-                  <CardContent className="p-3 md:p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm md:text-base font-semibold text-white">
-                        이벤트 타임라인
-                      </h3>
-                      <span className="text-xs text-gray-400">
-                        실시간 이벤트 감지
-                      </span>
-                    </div>
-                    <EventTimeline
+                  {videoSrc && video && (
+                    <SummaryButton
                       video={video}
-                      currentTime={currentTime}
-                      onSeekToEvent={seekToTime}
+                      isLoading={isUploading || isGenerating}
+                      onGenerateSummary={handleGenerateSummary}
                     />
-                  </CardContent>
-                </Card>
+                  )}
+                  {video && (
+                    <Card className="bg-[#242a38] border-0 shadow-lg">
+                      <CardContent className="p-3 md:p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm md:text-base font-semibold text-white">
+                            이벤트 타임라인
+                          </h3>
+                          <span className="text-xs text-gray-400">
+                            실시간 이벤트 감지
+                          </span>
+                        </div>
+                        <EventTimeline
+                          video={video}
+                          currentTime={currentTime}
+                          onSeekToEvent={seekToTime}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              ) : (
+                <UploadSection
+                  ref={uploadAreaRef}
+                  isUploading={isUploading}
+                  uploadProgress={uploadProgress}
+                  uploadStage={uploadStage}
+                  isDuplicateVideo={isDuplicateVideo}
+                  uploadHighlight={uploadHighlight}
+                  onUploadClick={() => setDragDropVisible(true)}
+                  onCancelProcess={handleCancelProcess}
+                />
               )}
             </div>
 
             <div className="lg:col-span-2 flex flex-col">
-              <Card className="flex-1 min-h-[500px] lg:min-h-[600px] max-h-[90vh] lg:max-h-[85vh] bg-[#242a38] border-0 shadow-lg chat-container-flexible overflow-hidden">
-                <CardContent className="p-3 md:p-4 flex flex-col h-full overflow-hidden">
-                  <div className="flex items-center justify-between mb-3 md:mb-4 flex-shrink-0">
-                    <h2 className="text-lg md:text-xl font-semibold text-white">
-                      영상 분석 채팅
-                    </h2>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-[#6c5ce7] text-[#6c5ce7] hover:bg-[#6c5ce7] hover:text-white hover:border-[#6c5ce7] transition-all duration-200"
-                      onClick={handleNewChat}
-                    >
-                      <MessageSquare className="h-4 w-4 mr-2" />새 채팅
-                    </Button>
-                  </div>
-
-                  <div className="flex-1 overflow-hidden mb-3 md:mb-4 border border-[#2a3142] rounded-md chat-messages-area">
-                    <ScrollArea className="h-full pr-2">
-                      <div className="space-y-3 md:space-y-4 p-3 md:p-4 overflow-hidden">
-                        {messages.map((message, index) => (
-                          <div
-                            key={index}
-                            className={`flex ${
-                              message.role === 'user'
-                                ? 'justify-end'
-                                : 'justify-start'
-                            } w-full`}
-                            style={{ minWidth: 0 }}
-                          >
-                            <div
-                              className={`max-w-[80%] sm:max-w-[85%] md:max-w-[80%] rounded-lg p-2 md:p-3 text-sm md:text-base break-words overflow-wrap-anywhere ${
-                                message.role === 'user'
-                                  ? 'bg-[#6c5ce7] text-white'
-                                  : 'bg-[#2a3142] text-gray-200'
-                              }`}
-                              style={{
-                                wordBreak: 'break-word',
-                                overflowWrap: 'anywhere',
-                                hyphens: 'auto',
-                                maxWidth:
-                                  message.role === 'user' ? '85%' : '90%',
-                              }}
-                            >
-                              <div className="break-words whitespace-pre-wrap">
-                                {message.content}
-                              </div>
-                              {message.timestamp && (
-                                <button
-                                  onClick={() => {
-                                    seekToTime(message.timestamp || 0);
-
-                                    // 모바일에서 타임스탬프 클릭 시 안내 토스트
-                                    if (isMobile) {
-                                      addToast({
-                                        type: 'info',
-                                        title: '비디오로 이동',
-                                        message: `${formatTime(
-                                          message.timestamp || 0
-                                        )} 시점으로 이동합니다.`,
-                                        duration: 2000,
-                                      });
-                                    }
-                                  }}
-                                  className="mt-2 text-xs md:text-sm font-medium text-[#00e6b4] hover:underline block break-words"
-                                  style={{ wordBreak: 'break-word' }}
-                                >
-                                  {formatTime(message.timestamp)}로 이동
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </div>
-
-                  <Separator className="my-3 md:my-4 bg-[#2a3142]" />
-
-                  <form
-                    onSubmit={(e) => {
-                      console.log('📝 Form onSubmit 이벤트 발생');
-                      handleSendMessage(e);
-                    }}
-                    className="flex gap-2"
-                  >
-                    <Textarea
-                      placeholder={
-                        isAnalyzing
-                          ? '영상 분석 중입니다. 잠시만 기다려주세요...'
-                          : videoSrc
-                          ? '영상 내용에 대해 질문하세요...'
-                          : '먼저 영상을 업로드해주세요'
-                      }
-                      value={inputMessage}
-                      onChange={(e) => {
-                        console.log('✏️ Input change:', e.target.value);
-                        setInputMessage(e.target.value);
-                      }}
-                      onKeyDown={handleKeyDown}
-                      onClick={handleInputClickWithoutVideo}
-                      onFocus={handleInputClickWithoutVideo}
-                      onMouseDown={handleInputClickWithoutVideo}
-                      onInput={handleInputClickWithoutVideo}
-                      disabled={isAnalyzing}
-                      className={`flex-1 resize-none border-[#2a3142] text-gray-200 placeholder:text-gray-500 text-sm md:text-base transition-all duration-200 bg-[#1a1f2c] hover:border-[#00e6b4] focus:border-[#00e6b4] ${
-                        isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                      rows={2}
-                    />
-                    <Button
-                      type="submit"
-                      disabled={
-                        !inputMessage.trim() ||
-                        isAnalyzing ||
-                        !videoSrc ||
-                        !videoId
-                      }
-                      onClick={(e) => {
-                        console.log(
-                          '🔘 Button click 이벤트 발생, disabled:',
-                          !inputMessage.trim() ||
-                            isAnalyzing ||
-                            !videoSrc ||
-                            !videoId
-                        );
-                        console.log(
-                          '🔘 Button click - inputMessage:',
-                          inputMessage
-                        );
-                        console.log(
-                          '🔘 Button click - isAnalyzing:',
-                          isAnalyzing
-                        );
-                        console.log('🔘 Button click - videoSrc:', !!videoSrc);
-                        console.log('🔘 Button click - videoId:', videoId);
-                      }}
-                      className={`px-3 md:px-4 transition-all duration-200 ${
-                        !inputMessage.trim() ||
-                        isAnalyzing ||
-                        !videoSrc ||
-                        !videoId
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
-                          : 'bg-[#00e6b4] hover:bg-[#00c49c] text-[#1a1f2c]'
-                      }`}
-                    >
-                      {isAnalyzing ? '분석 중...' : '전송'}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
+              <ChatInterface
+                messages={messages}
+                inputMessage={inputMessage}
+                isAnalyzing={isAnalyzing}
+                videoSrc={videoSrc}
+                videoId={videoId}
+                onInputChange={setInputMessage}
+                onSendMessage={handleSendMessage}
+                onNewChat={handleNewChat}
+                onQuickQuestion={(question) => {
+                  setInputMessage(question);
+                  const event = new Event('submit', {
+                    bubbles: true,
+                    cancelable: true,
+                  }) as any;
+                  handleSendMessage(event);
+                }}
+                formatTime={formatTime}
+              />
             </div>
           </div>
 
           {/* 카운터 애니메이션 */}
           <div className="mt-6 md:mt-8">
+            <JQueryCounterAnimation stats={statsData} />
+
             <JQueryCounterAnimation stats={statsData} />
           </div>
         </main>
@@ -3254,7 +2512,7 @@ export default function CCTVAnalysis() {
                   <div className="p-4 text-white">히스토리 로딩 중...</div>
                 }
               >
-                <DynamicHistorySidebar
+                <HistorySidebar
                   onSelectHistory={handleSelectHistory}
                   currentHistoryId={currentHistoryId}
                   onClose={handleCloseHistory}
@@ -3283,7 +2541,7 @@ export default function CCTVAnalysis() {
                 <div className="p-4 text-white">히스토리 로딩 중...</div>
               }
             >
-              <DynamicHistorySidebar
+              <HistorySidebar
                 onSelectHistory={handleSelectHistory}
                 currentHistoryId={currentHistoryId}
                 onClose={handleCloseHistory}

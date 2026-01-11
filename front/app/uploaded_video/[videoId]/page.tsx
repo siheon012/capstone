@@ -18,11 +18,13 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import DynamicHistorySidebar from '@/components/dynamic-history-sidebar';
-import DraggableTooltip from '@/components/draggable-tooltip';
-import ToastNotification, { type Toast } from '@/components/toast-notification';
-import VideoMinimap from '@/components/video-minimap';
-import EventTimeline from '@/components/event-timeline';
+import HistorySidebar from '@/components/history/HistorySidebar';
+import DraggableTooltip from '@/components/feedback/DraggableTooltip';
+import ToastNotification, {
+  type Toast,
+} from '@/components/feedback/ToastNotification';
+import VideoMinimap from '@/components/video/VideoMinimap';
+import EventTimeline from '@/components/video/EventTimeline';
 import type { ChatSession } from '@/app/types/session';
 import { getUploadedVideos } from '@/app/actions/video-service-client';
 import { getSession } from '@/app/actions/session-service';
@@ -30,12 +32,14 @@ import { sendMessage } from '@/app/actions/ai-service';
 import type { UploadedVideo } from '@/app/types/video';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import SmartHeader from '@/components/smart-header';
+import SmartHeader from '@/components/layout/SmartHeader';
 import {
   getVideoMetadataFromUrl,
   waitForVideoReady,
   logVideoState,
 } from '@/utils/video-utils';
+import SummaryButton from '@/components/video/SummaryButton';
+import { useSummary } from '@/hooks/useSummary';
 
 export default function CCTVAnalysis() {
   const params = useParams();
@@ -82,6 +86,35 @@ export default function CCTVAnalysis() {
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  const { isGenerating, generateSummary, formatSummary } = useSummary({
+    onSuccess: (summary) => {
+      const formattedSummary = formatSummary(summary);
+      const summaryMessage = {
+        role: 'assistant' as const,
+        content: `📋 **영상 요약**\n\n${formattedSummary}`,
+      };
+      setMessages((prev) => [...prev, summaryMessage]);
+      addToast({
+        type: 'success',
+        title: 'Summary 출력 완료',
+        message: '영상 요약이 채팅에 출력되었습니다.',
+        duration: 2000,
+      });
+    },
+    onError: (error) => {
+      addToast({
+        type: 'error',
+        title: 'Summary 출력 실패',
+        message: error,
+        duration: 3000,
+      });
+    },
+  });
+
+  const handleGenerateSummary = async () => {
+    await generateSummary(video, setVideo);
+  };
 
   useEffect(() => {
     const checkMobile = () => {
@@ -283,149 +316,6 @@ export default function CCTVAnalysis() {
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  };
-
-  // Summary 출력 함수
-  const handleGenerateSummary = async () => {
-    console.log('🔥 [Summary] 함수 호출됨');
-    console.log('📹 [Summary] video 객체:', video);
-    console.log('📝 [Summary] video.summary:', video?.summary);
-    console.log('🔢 [Summary] video.id:', video?.id);
-
-    if (!video) {
-      console.error('❌ [Summary] video 객체가 없습니다!');
-      addToast({
-        type: 'error',
-        title: '비디오 정보 없음',
-        message: '비디오 정보를 불러올 수 없습니다.',
-        duration: 3000,
-      });
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      console.log('⏳ [Summary] isLoading = true');
-
-      // Summary가 없거나 실패한 경우 자동 생성
-      const shouldRegenerate =
-        !video.summary ||
-        video.summary.includes('분석할 이벤트가 없습니다') ||
-        video.summary.includes('감지된 이벤트가 없습니다') ||
-        (video.summary.includes('총 ') &&
-          video.summary.includes('개의 이벤트가 감지되었습니다')) || // fallback summary 감지
-        video.summary.includes('실패') ||
-        video.summary.trim().length < 100; // 너무 짧은 summary (100자 미만)
-
-      console.log('📋 [Summary] shouldRegenerate:', shouldRegenerate);
-      console.log('📋 [Summary] 기존 summary:', video.summary);
-
-      if (shouldRegenerate) {
-        addToast({
-          type: 'info',
-          title: 'Summary 생성 중',
-          message: 'AI가 영상 요약을 생성하고 있습니다... (약 10-30초 소요)',
-          duration: 5000,
-        });
-
-        console.log('📦 [Summary] ai-service 임포트 중...');
-        const { generateVideoSummary } = await import(
-          '@/app/actions/ai-service'
-        );
-        console.log('📞 [Summary] generateVideoSummary 호출:', video.id);
-        const result = await generateVideoSummary(video.id);
-        console.log('✅ [Summary] API 응답:', result);
-
-        if (!result.success || !result.summary) {
-          throw new Error(result.error || 'Summary 생성 실패');
-        }
-
-        console.log(
-          '[Summary] Summary 생성 완료:',
-          result.summary.substring(0, 100)
-        );
-
-        // 비디오 정보 새로고침
-        const videosResponse = await getUploadedVideos();
-        if (videosResponse.success) {
-          const updatedVideo = videosResponse.data.find(
-            (v) => v.id === video.id
-          );
-          if (updatedVideo) {
-            setVideo(updatedVideo);
-            video.summary = updatedVideo.summary;
-          }
-        }
-
-        addToast({
-          type: 'success',
-          title: 'Summary 생성 완료',
-          message: 'AI가 영상 요약을 생성했습니다.',
-          duration: 3000,
-        });
-
-        // 생성된 summary가 없으면 결과에서 직접 사용
-        if (!video.summary) {
-          console.log('📝 [Summary] result.summary를 video.summary에 할당');
-          video.summary = result.summary;
-        }
-      } else {
-        console.log('✅ [Summary] Summary가 이미 있음, 바로 출력');
-      }
-
-      console.log('📤 [Summary] Summary 출력 시작');
-      console.log('📄 [Summary] video.summary 길이:', video.summary?.length);
-
-      // summary가 없으면 에러
-      if (!video.summary) {
-        throw new Error('Summary가 생성되지 않았습니다.');
-      }
-
-      // 요약을 채팅으로 출력 (포맷팅 개선)
-      const formattedSummary = video.summary
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .map((line) => {
-          // 번호가 있는 항목 처리 (1., 2., 등)
-          if (/^\d+\./.test(line)) {
-            return `\n${line}`;
-          }
-          // 대시로 시작하는 항목 처리 (-, •, 등)
-          if (/^[-•*]/.test(line)) {
-            return `  ${line}`;
-          }
-          // 일반 텍스트
-          return line;
-        })
-        .join('\n');
-
-      const summaryMessage = {
-        role: 'assistant' as const,
-        content: `📋 **영상 요약**\n\n${formattedSummary}`,
-      };
-
-      console.log('[Summary] 메시지 생성:', summaryMessage);
-      setMessages((prev) => [...prev, summaryMessage]);
-
-      addToast({
-        type: 'success',
-        title: 'Summary 출력 완료',
-        message: '영상 요약이 채팅에 출력되었습니다.',
-        duration: 2000,
-      });
-      console.log('[Summary] Summary 출력 완료');
-    } catch (error) {
-      console.error('Summary 출력 오류:', error);
-      addToast({
-        type: 'error',
-        title: 'Summary 출력 실패',
-        message: '요약을 출력하는 중 오류가 발생했습니다.',
-        duration: 3000,
-      });
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const togglePlayPause = async () => {
@@ -1131,36 +1021,12 @@ export default function CCTVAnalysis() {
                   </Card>
                 )}
 
-                {/* Video Summary Card - 새로 추가 */}
                 {videoSrc && video && (
-                  <Card className="mb-3 md:mb-6 bg-[#242a38] border-0 shadow-lg">
-                    <CardContent className="p-3 md:p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-[#6c5ce7]/20 rounded-lg flex items-center justify-center">
-                            <MessageSquare className="h-5 w-5 text-[#6c5ce7]" />
-                          </div>
-                          <div>
-                            <h3 className="text-sm md:text-base font-semibold text-white">
-                              AI 영상 요약
-                            </h3>
-                            <p className="text-xs text-gray-400">
-                              전체 영상 내용을 AI가 분석한 요약 정보
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          className="border-[#00e6b4] text-[#00e6b4] hover:bg-[#00e6b4] hover:text-[#1a1f2c] transition-all duration-200"
-                          onClick={handleGenerateSummary}
-                          disabled={isLoading || !video}
-                        >
-                          <MessageSquare className="h-4 w-4 mr-2" />
-                          {isLoading ? '출력 중...' : 'Summary 출력'}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <SummaryButton
+                    video={video}
+                    isLoading={isLoading || isGenerating}
+                    onGenerateSummary={handleGenerateSummary}
+                  />
                 )}
 
                 {/* Event Timeline - 비디오 아래에 추가 */}
@@ -1324,7 +1190,7 @@ export default function CCTVAnalysis() {
             </div>
 
             <div className="flex-1 h-[calc(100vh-80px)] overflow-hidden">
-              <DynamicHistorySidebar
+              <HistorySidebar
                 onSelectHistory={handleSelectHistory}
                 currentHistoryId={currentSession?.id}
                 onClose={() => setHistoryOpen(false)}
@@ -1346,7 +1212,7 @@ export default function CCTVAnalysis() {
               minWidth: '400px',
             }}
           >
-            <DynamicHistorySidebar
+            <HistorySidebar
               onSelectHistory={handleSelectHistory}
               currentHistoryId={currentSession?.id}
               onClose={() => setHistoryOpen(false)}

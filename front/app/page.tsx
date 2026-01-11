@@ -479,7 +479,11 @@ export default function CCTVAnalysis() {
   // API 헬스 체크 함수
   const checkApiHealth = async () => {
     const checkTime = new Date();
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
+    if (API_URL === undefined || API_URL === null) {
+      console.error('❌ NEXT_PUBLIC_API_URL 환경변수가 설정되지 않았습니다.');
+      return;
+    }
 
     try {
       console.log('🏥 [Health Check] API 상태 확인 시작');
@@ -1011,11 +1015,13 @@ export default function CCTVAnalysis() {
                             실시간 이벤트 감지
                           </span>
                         </div>
-                        <EventTimeline
-                          video={video}
-                          currentTime={currentTime}
-                          onSeekToEvent={seekToTime}
-                        />
+                        {video && (
+                          <EventTimeline
+                            video={video}
+                            currentTime={currentTime}
+                            onSeekToEvent={seekToTime}
+                          />
+                        )}
                       </CardContent>
                     </Card>
                   )}

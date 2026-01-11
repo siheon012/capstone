@@ -601,7 +601,10 @@ export async function queryChatbot(
       video_id: videoId, // video_id 추가
     };
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
+    if (API_URL === undefined || API_URL === null) {
+      throw new Error('NEXT_PUBLIC_API_URL 환경변수가 설정되지 않았습니다.');
+    }
 
     console.log('🔄 API 호출 시작:', {
       videoId,
@@ -877,7 +880,10 @@ export async function getAnalysisProgress(videoId: string): Promise<{
   is_completed: boolean;
   is_failed: boolean;
 }> {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
+  if (API_URL === undefined || API_URL === null) {
+    throw new Error('NEXT_PUBLIC_API_URL 환경변수가 설정되지 않았습니다.');
+  }
 
   try {
     console.log('🔍 [AI Service] 진행률 조회 시작:', {
@@ -979,7 +985,10 @@ export async function generateVideoSummary(videoId: string): Promise<{
   error?: string;
 }> {
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8088';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (apiUrl === undefined || apiUrl === null) {
+      throw new Error('NEXT_PUBLIC_API_URL 환경변수가 설정되지 않았습니다.');
+    }
 
     console.log('🔄 비디오 요약 생성 API 호출:', {
       videoId,

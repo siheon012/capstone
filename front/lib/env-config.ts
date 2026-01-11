@@ -81,12 +81,14 @@ export const getCurrentEnvironment = (): Environment => {
 
 // API 엔드포인트 설정
 export const getApiEndpoints = (): ApiEndpoints => {
-  // 프로덕션 환경에서는 환경변수, 개발 환경에서는 localhost
-  const defaultUrl =
-    getCurrentEnvironment() === 'production'
-      ? getEnvVar('NEXT_PUBLIC_PRODUCTION_API_URL', '')
-      : 'http://localhost:8001';
-  const baseUrl = getEnvVar('NEXT_PUBLIC_API_URL', defaultUrl);
+  // 환경변수에서 API URL 가져오기 (빈 문자열도 허용 - production 상대 경로)
+  const baseUrl = getEnvVar('NEXT_PUBLIC_API_URL', '');
+
+  if (baseUrl === null || baseUrl === undefined) {
+    throw new Error(
+      'NEXT_PUBLIC_API_URL 환경변수가 설정되지 않았습니다. .env 파일을 확인해주세요.'
+    );
+  }
 
   return {
     baseUrl,

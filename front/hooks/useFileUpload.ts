@@ -380,7 +380,7 @@ export const useFileUpload = ({
         setCurrentHistoryId(undefined);
         setCurrentSession(null);
         setTimeMarkers([]);
-        
+
         // Duration 설정 (추출한 값이 있으면 사용, 없으면 0)
         if (videoDuration && videoDuration > 0) {
           setDuration(videoDuration);

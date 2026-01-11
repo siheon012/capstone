@@ -691,17 +691,20 @@ export default function UploadedVideoPage() {
                                       : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
                                   }`}
                                 >
-                                  {eventText === '특이 사건 없음' ? eventText : `주요 사건: ${eventText}`}
+                                  {eventText === '특이 사건 없음'
+                                    ? eventText
+                                    : `주요 사건: ${eventText}`}
                                 </Badge>
                               );
                             }
 
                             // 비디오의 majorEvent가 있으면 표시
                             if (video.majorEvent) {
-                              const majorEventText = video.majorEvent === 'interaction' 
-                                ? '특이 사건 없음' 
-                                : video.majorEvent;
-                              
+                              const majorEventText =
+                                video.majorEvent === 'interaction'
+                                  ? '특이 사건 없음'
+                                  : video.majorEvent;
+
                               return (
                                 <Badge
                                   className={`flex-shrink-0 text-xs whitespace-nowrap ${
@@ -716,7 +719,9 @@ export default function UploadedVideoPage() {
                                       : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
                                   }`}
                                 >
-                                  {majorEventText === '특이 사건 없음' ? majorEventText : `주요 사건: ${majorEventText}`}
+                                  {majorEventText === '특이 사건 없음'
+                                    ? majorEventText
+                                    : `주요 사건: ${majorEventText}`}
                                 </Badge>
                               );
                             }

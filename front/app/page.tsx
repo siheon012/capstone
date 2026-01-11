@@ -126,6 +126,7 @@ export default function CCTVAnalysis() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dragDropVisible, setDragDropVisible] = useState(false);
   const [uploadHighlight, setUploadHighlight] = useState(false); // 업로드 영역 강조 상태 추가
+  const [showWarning, setShowWarning] = useState(false); // 경고 애니메이션 상태
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoSectionRef = useRef<HTMLDivElement>(null); // 새로 추가
@@ -2158,6 +2159,32 @@ export default function CCTVAnalysis() {
     }
   };
 
+  // 채팅창 클릭 시 경고 표시
+  const handleChatWarning = () => {
+    if (!videoSrc) {
+      setShowWarning(true);
+      addToast({
+        type: 'warning',
+        title: '영상을 먼저 업로드하세요',
+        message: '채팅을 사용하려면 먼저 영상을 업로드해주세요.',
+        duration: 3000,
+      });
+      
+      // 업로드 영역으로 스크롤
+      if (uploadAreaRef.current) {
+        uploadAreaRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      }
+      
+      // 3초 후 경고 애니메이션 제거
+      setTimeout(() => {
+        setShowWarning(false);
+      }, 3000);
+    }
+  };
+
   const handleInputClickWithoutVideo = (
     e: React.MouseEvent | React.FocusEvent | React.FormEvent
   ) => {
@@ -2440,6 +2467,7 @@ export default function CCTVAnalysis() {
                   uploadStage={uploadStage}
                   isDuplicateVideo={isDuplicateVideo}
                   uploadHighlight={uploadHighlight}
+                  showWarning={showWarning}
                   onUploadClick={() => setDragDropVisible(true)}
                   onCancelProcess={handleCancelProcess}
                 />
@@ -2464,6 +2492,7 @@ export default function CCTVAnalysis() {
                   }) as any;
                   handleSendMessage(event);
                 }}
+                onTextareaClick={handleChatWarning}
                 formatTime={formatTime}
               />
             </div>
@@ -2471,8 +2500,6 @@ export default function CCTVAnalysis() {
 
           {/* 카운터 애니메이션 */}
           <div className="mt-6 md:mt-8">
-            <JQueryCounterAnimation stats={statsData} />
-
             <JQueryCounterAnimation stats={statsData} />
           </div>
         </main>

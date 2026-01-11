@@ -11,6 +11,7 @@ interface UploadSectionProps {
   uploadStage: string;
   isDuplicateVideo: boolean;
   uploadHighlight: boolean;
+  showWarning: boolean;
   onUploadClick: () => void;
   onCancelProcess: () => void;
 }
@@ -23,6 +24,7 @@ const UploadSection = forwardRef<HTMLDivElement, UploadSectionProps>(
       uploadStage,
       isDuplicateVideo,
       uploadHighlight,
+      showWarning,
       onUploadClick,
       onCancelProcess,
     },
@@ -36,6 +38,8 @@ const UploadSection = forwardRef<HTMLDivElement, UploadSectionProps>(
             className={`flex flex-col items-center justify-center h-[250px] md:h-[400px] rounded-lg transition-all duration-500 relative ${
               isUploading
                 ? 'bg-[#2a3142] border-2 border-[#6c5ce7] shadow-2xl shadow-[#6c5ce7]/30'
+                : showWarning
+                ? 'bg-[#2a3142] border-2 border-[#FFB800] shadow-2xl shadow-[#FFB800]/30'
                 : isDuplicateVideo
                 ? 'bg-[#2a3142] border-2 border-[#FFB800] shadow-2xl shadow-[#FFB800]/30'
                 : uploadHighlight
@@ -45,6 +49,8 @@ const UploadSection = forwardRef<HTMLDivElement, UploadSectionProps>(
             style={{
               animation: isUploading
                 ? 'borderGlowPurple 2s ease-in-out infinite'
+                : showWarning
+                ? 'borderGlowYellow 1s ease-in-out 3'
                 : isDuplicateVideo
                 ? 'borderGlowYellow 1s ease-in-out 3'
                 : uploadHighlight

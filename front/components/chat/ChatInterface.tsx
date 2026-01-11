@@ -23,6 +23,7 @@ interface ChatInterfaceProps {
   onSendMessage: (e: React.FormEvent) => void;
   onNewChat: () => void;
   onQuickQuestion: (question: string) => void;
+  onTextareaClick?: () => void;
   formatTime: (seconds: number) => string;
 }
 
@@ -36,6 +37,7 @@ export default function ChatInterface({
   onSendMessage,
   onNewChat,
   onQuickQuestion,
+  onTextareaClick,
   formatTime,
 }: ChatInterfaceProps) {
   return (
@@ -128,6 +130,7 @@ export default function ChatInterface({
           <Textarea
             value={inputMessage}
             onChange={(e) => onInputChange(e.target.value)}
+            onClick={onTextareaClick}
             placeholder={
               !videoSrc
                 ? '먼저 영상을 업로드해주세요'
@@ -138,7 +141,6 @@ export default function ChatInterface({
                 : '영상에 대해 질문하세요...'
             }
             className="flex-1 bg-[#2a3142] border-[#3a4553] text-white placeholder-gray-500 text-sm md:text-base resize-none min-h-[60px] md:min-h-[80px]"
-            disabled={!videoSrc || isAnalyzing || !videoId}
             onKeyDown={(e) => {
               if (
                 e.key === 'Enter' &&

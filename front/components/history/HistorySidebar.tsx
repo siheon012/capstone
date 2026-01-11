@@ -344,16 +344,7 @@ export default function DynamicHistorySidebar({
   };
 
   if (loading) {
-    return (
-      <div className="w-full bg-[#242a38] border-r border-[#2a3142] p-4">
-        <div className="animate-pulse space-y-4">
-          <div className="h-6 bg-[#2a3142] rounded"></div>
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-20 bg-[#2a3142] rounded"></div>
-          ))}
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // 모바일에서 안전한 높이 계산
@@ -518,15 +509,15 @@ export default function DynamicHistorySidebar({
                         {/* 메시지 미리보기 */}
                         <div className="text-sm text-gray-300 space-y-1">
                           <div className="flex items-start gap-1">
-                            <span className="text-[#6c5ce7] flex-shrink-0">Q:</span>
-                            <span className="truncate" title={item.messages[0]?.content || '질문 없음'}>
+                            <span className="text-[#6c5ce7] flex-shrink-0 leading-tight">Q:</span>
+                            <span className="truncate leading-tight" title={item.messages[0]?.content || '질문 없음'}>
                               {item.messages[0]?.content || '질문 없음'}
                             </span>
                           </div>
                           {item.messages[1] && (
                             <div className="flex items-start gap-1">
-                              <span className="text-[#00e6b4] flex-shrink-0">A:</span>
-                              <span className="truncate" title={item.messages[1].content}>
+                              <span className="text-[#00e6b4] flex-shrink-0 leading-tight">A:</span>
+                              <span className="truncate leading-tight" title={item.messages[1].content}>
                                 {item.messages[1].content}
                               </span>
                             </div>
@@ -597,11 +588,12 @@ export default function DynamicHistorySidebar({
                           if (!events) return null;
 
                           return (
-                            <div className="flex items-center gap-1 mt-2">
+                            <div className="flex items-center gap-1" style={{ minHeight: '28px' }}>
                               <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium inline-block max-w-full ${getEventBadgeStyle(
+                                className={`px-2 py-1 rounded-full text-xs font-medium ${getEventBadgeStyle(
                                   events
                                 )}`}
+                                style={{ maxWidth: '200px', display: 'inline-block' }}
                                 title={`찾은 사건: ${events}`}
                               >
                                 <span className="truncate block">찾은 사건: {events}</span>
@@ -696,17 +688,17 @@ export default function DynamicHistorySidebar({
                       )}
 
                       {/* 메시지 미리보기 */}
-                      <div className="text-xs sm:text-sm text-gray-300 space-y-1 overflow-hidden">
-                        <div className="flex items-start gap-1">
+                      <div className="text-xs sm:text-sm text-gray-300 space-y-1" style={{ minHeight: '40px', maxHeight: '40px' }}>
+                        <div className="flex items-start gap-1 overflow-hidden" style={{ maxHeight: '18px' }}>
                           <span className="text-[#6c5ce7] flex-shrink-0">Q:</span>
-                          <span className="truncate" title={item.messages[0]?.content || '질문 없음'}>
+                          <span className="truncate block" title={item.messages[0]?.content || '질문 없음'}>
                             {item.messages[0]?.content || '질문 없음'}
                           </span>
                         </div>
                         {item.messages[1] && (
-                          <div className="flex items-start gap-1">
+                          <div className="flex items-start gap-1 overflow-hidden" style={{ maxHeight: '18px' }}>
                             <span className="text-[#00e6b4] flex-shrink-0">A:</span>
-                            <span className="truncate" title={item.messages[1].content}>
+                            <span className="truncate block" title={item.messages[1].content}>
                               {item.messages[1].content}
                             </span>
                           </div>

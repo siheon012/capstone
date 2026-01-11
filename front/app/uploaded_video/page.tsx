@@ -305,6 +305,8 @@ export default function UploadedVideoPage() {
         return '쓰러짐';
       case 'sitting':
         return '점거';
+      case 'interaction':
+        return '특이 사건 없음';
       default:
         return eventType;
     }
@@ -665,54 +667,63 @@ export default function UploadedVideoPage() {
                         </div>
 
                         {/* 주요 사건 배지 - Event 테이블에서 가져온 통계 또는 비디오의 majorEvent */}
-                        {(() => {
-                          const mostFrequentEvent =
-                            getMostFrequentEventForVideo(video.id);
+                        <div className="flex-shrink-0">
+                          {(() => {
+                            const mostFrequentEvent =
+                              getMostFrequentEventForVideo(video.id);
 
-                          // Event 테이블에서 분석된 이벤트가 있으면 우선 표시
-                          if (mostFrequentEvent) {
-                            const eventText = translateEventType(
-                              mostFrequentEvent.type
-                            );
-                            return (
-                              <Badge
-                                className={`flex-shrink-0 text-xs whitespace-nowrap ${
-                                  eventText === '도난'
-                                    ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
-                                    : eventText === '쓰러짐'
-                                    ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                    : eventText === '점거'
-                                    ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
-                                    : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
-                                }`}
-                              >
-                                주요 사건: {eventText}({mostFrequentEvent.count}{' '}
-                                times)
-                              </Badge>
-                            );
-                          }
+                            // Event 테이블에서 분석된 이벤트가 있으면 우선 표시
+                            if (mostFrequentEvent) {
+                              const eventText = translateEventType(
+                                mostFrequentEvent.type
+                              );
+                              return (
+                                <Badge
+                                  className={`flex-shrink-0 text-xs whitespace-nowrap ${
+                                    eventText === '도난'
+                                      ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
+                                      : eventText === '쓰러짐'
+                                      ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
+                                      : eventText === '점거'
+                                      ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
+                                      : eventText === '특이 사건 없음'
+                                      ? 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30'
+                                      : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
+                                  }`}
+                                >
+                                  {eventText === '특이 사건 없음' ? eventText : `주요 사건: ${eventText}`}
+                                </Badge>
+                              );
+                            }
 
-                          // 비디오의 majorEvent가 있으면 표시
-                          if (video.majorEvent) {
-                            return (
-                              <Badge
-                                className={`flex-shrink-0 text-xs whitespace-nowrap ${
-                                  video.majorEvent === '도난'
-                                    ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
-                                    : video.majorEvent === '쓰러짐'
-                                    ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                    : video.majorEvent === '점거'
-                                    ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
-                                    : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
-                                }`}
-                              >
-                                주요 사건: {video.majorEvent}
-                              </Badge>
-                            );
-                          }
+                            // 비디오의 majorEvent가 있으면 표시
+                            if (video.majorEvent) {
+                              const majorEventText = video.majorEvent === 'interaction' 
+                                ? '특이 사건 없음' 
+                                : video.majorEvent;
+                              
+                              return (
+                                <Badge
+                                  className={`flex-shrink-0 text-xs whitespace-nowrap ${
+                                    video.majorEvent === '도난'
+                                      ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
+                                      : video.majorEvent === '쓰러짐'
+                                      ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
+                                      : video.majorEvent === '점거'
+                                      ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
+                                      : video.majorEvent === 'interaction'
+                                      ? 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30'
+                                      : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
+                                  }`}
+                                >
+                                  {majorEventText === '특이 사건 없음' ? majorEventText : `주요 사건: ${majorEventText}`}
+                                </Badge>
+                              );
+                            }
 
-                          return null;
-                        })()}
+                            return null;
+                          })()}
+                        </div>
                       </div>
 
                       {/* 메타데이터 */}

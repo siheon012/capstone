@@ -219,7 +219,7 @@ resource "aws_batch_job_definition" "video_analysis_processor" {
   container_properties = jsonencode({
     # Use specific digest for production stability
     # Latest pushed: 2025-12-16
-    image = "${data.aws_ecr_repository.ai_batch.repository_url}@sha256:9563dd8058b55fd473a52e5d93d9d3425f09d2b007230167a619bacf6d6bed71"
+    image = "${data.aws_ecr_repository.ai_batch.repository_url}@sha256:afdb302c3dd89f36a76c81f7716aaa1c7b3ae63a8fcefc854e9daa6bb3891916"
 
     resourceRequirements = [
       {

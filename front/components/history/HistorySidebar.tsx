@@ -446,7 +446,7 @@ export default function DynamicHistorySidebar({
                 historyList.map((item, index) => (
                   <Card
                     key={item.id}
-                    className={`cursor-pointer transition-all duration-200 border-0 overflow-hidden ${
+                    className={`w-full cursor-pointer transition-all duration-200 border-0 overflow-hidden ${
                       currentHistoryId === item.id
                         ? 'bg-[#00e6b4] bg-opacity-10 border-[#00e6b4] border'
                         : 'bg-[#1a1f2c] hover:bg-[#2a3142]'
@@ -454,8 +454,8 @@ export default function DynamicHistorySidebar({
                     onClick={() => handleCardClick(item)}
                   >
                     <CardContent className="p-3 overflow-hidden">
-                      <div className="flex items-start justify-between mb-2 gap-2">
-                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                      <div className="flex items-start justify-between mb-2 gap-2 min-w-0 overflow-hidden">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden">
                           {/* 날짜 썸네일 */}
                           <div className="flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-[#00e6b4] bg-opacity-20 rounded-lg border border-[#00e6b4] border-opacity-30 flex-shrink-0">
                             <Calendar className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-[#00e6b4] mb-0.5 sm:mb-1" />
@@ -464,10 +464,10 @@ export default function DynamicHistorySidebar({
                             </span>
                           </div>
 
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 overflow-hidden">
                             {/* 제목을 "prompt_id"에서 "{동영상 이름}의 몇번째 채팅" 형식으로 변경 */}
                             <h3
-                              className="font-medium text-white text-xs sm:text-sm truncate"
+                              className="font-medium text-white text-xs sm:text-sm truncate max-w-full"
                               title={generateSessionTitle(
                                 item,
                                 historyList.indexOf(item)
@@ -478,7 +478,7 @@ export default function DynamicHistorySidebar({
                                 historyList.indexOf(item)
                               )}
                             </h3>
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="text-xs text-gray-400 mt-1 truncate max-w-full">
                               {formatTime(getSafeDate(item))}
                             </p>
                           </div>
@@ -509,19 +509,31 @@ export default function DynamicHistorySidebar({
                         {/* 메시지 미리보기 */}
                         <div className="text-sm text-gray-300 space-y-1 overflow-hidden">
                           <div className="flex items-start gap-1 overflow-hidden">
-                            <span className="text-[#6c5ce7] flex-shrink-0">Q:</span>
-                            <span className="truncate overflow-hidden" title={item.messages[0]?.content || '질문 없음'}>
+                            <span className="text-[#6c5ce7] flex-shrink-0">
+                              Q:
+                            </span>
+                            <span
+                              className="truncate overflow-hidden"
+                              title={item.messages[0]?.content || '질문 없음'}
+                            >
                               {item.messages[0]?.content || '질문 없음'}
                             </span>
                           </div>
                           {item.messages[1] && (
                             <div className="flex items-start gap-1 overflow-hidden">
-                              <span className="text-[#00e6b4] flex-shrink-0">A:</span>
-                              <span className="truncate overflow-hidden" title={item.messages[1].content}>
+                              <span className="text-[#00e6b4] flex-shrink-0">
+                                A:
+                              </span>
+                              <span
+                                className="truncate overflow-hidden"
+                                title={item.messages[1].content}
+                              >
                                 {item.messages[1].content}
                               </span>
                             </div>
-                          )}\n                        </div>
+                          )}
+                          \n{' '}
+                        </div>
 
                         {/* 메시지 개수 */}
                         <div className="flex items-center text-xs text-gray-500 gap-2">
@@ -578,7 +590,6 @@ export default function DynamicHistorySidebar({
                                 </span>
                               )}
                           </div>
-
                         </div>
 
                         {/* 찾은 사건 뱃지 */}
@@ -587,7 +598,12 @@ export default function DynamicHistorySidebar({
                           if (!events) return null;
                           return (
                             <div className="w-full overflow-hidden">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium inline-block truncate max-w-full ${getEventBadgeStyle(events)}`} title={`찾은 사건: ${events}`}>
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs font-medium inline-block truncate max-w-full ${getEventBadgeStyle(
+                                  events
+                                )}`}
+                                title={`찾은 사건: ${events}`}
+                              >
                                 찾은 사건: {events}
                               </span>
                             </div>
@@ -619,15 +635,15 @@ export default function DynamicHistorySidebar({
               historyList.map((item, index) => (
                 <Card
                   key={item.id}
-                  className={`cursor-pointer transition-all duration-200 border-0 overflow-hidden ${
+                  className={`w-full cursor-pointer transition-all duration-200 border-0 overflow-hidden ${
                     currentHistoryId === item.id
                       ? 'bg-[#00e6b4] bg-opacity-10 border-[#00e6b4] border'
                       : 'bg-[#1a1f2c] hover:bg-[#2a3142]'
                   }`}
                   onClick={() => handleCardClick(item)}
                 >
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-start justify-between mb-2 gap-2">
+                  <CardContent className="p-3 overflow-hidden">
+                    <div className="flex items-start justify-between mb-2 gap-2 overflow-hidden">
                       <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
                         {/* 날짜 썸네일 */}
                         <div className="flex flex-col items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-[#00e6b4] bg-opacity-20 rounded-lg border border-[#00e6b4] border-opacity-30 flex-shrink-0">
@@ -671,26 +687,45 @@ export default function DynamicHistorySidebar({
                     <div className="space-y-2 overflow-hidden">
                       {/* 비디오 정보 */}
                       {item.videoInfo && (
-                        <div className="flex items-center gap-2 text-xs text-gray-400 min-w-0">
+                        <div className="flex items-center gap-2 text-xs text-gray-400 min-w-0 overflow-hidden">
                           <Video className="h-3 w-3 flex-shrink-0" />
-                          <span className="truncate overflow-hidden">
+                          <span className="truncate max-w-full block">
                             {item.videoInfo.name}
                           </span>
                         </div>
                       )}
 
                       {/* 메시지 미리보기 */}
-                      <div className="text-xs sm:text-sm text-gray-300 space-y-1" style={{ minHeight: '40px', maxHeight: '40px' }}>
-                        <div className="flex items-start gap-1 overflow-hidden" style={{ maxHeight: '18px' }}>
-                          <span className="text-[#6c5ce7] flex-shrink-0">Q:</span>
-                          <span className="truncate block" title={item.messages[0]?.content || '질문 없음'}>
+                      <div
+                        className="text-xs sm:text-sm text-gray-300 space-y-1 overflow-hidden"
+                        style={{ minHeight: '40px', maxHeight: '40px' }}
+                      >
+                        <div
+                          className="flex items-start gap-1 overflow-hidden min-w-0"
+                          style={{ maxHeight: '18px' }}
+                        >
+                          <span className="text-[#6c5ce7] flex-shrink-0">
+                            Q:
+                          </span>
+                          <span
+                            className="truncate block max-w-full"
+                            title={item.messages[0]?.content || '질문 없음'}
+                          >
                             {item.messages[0]?.content || '질문 없음'}
                           </span>
                         </div>
                         {item.messages[1] && (
-                          <div className="flex items-start gap-1 overflow-hidden" style={{ maxHeight: '18px' }}>
-                            <span className="text-[#00e6b4] flex-shrink-0">A:</span>
-                            <span className="truncate block" title={item.messages[1].content}>
+                          <div
+                            className="flex items-start gap-1 overflow-hidden min-w-0"
+                            style={{ maxHeight: '18px' }}
+                          >
+                            <span className="text-[#00e6b4] flex-shrink-0">
+                              A:
+                            </span>
+                            <span
+                              className="truncate block max-w-full"
+                              title={item.messages[1].content}
+                            >
                               {item.messages[1].content}
                             </span>
                           </div>
@@ -698,8 +733,8 @@ export default function DynamicHistorySidebar({
                       </div>
 
                       {/* 메시지 개수 */}
-                      <div className="flex items-center text-xs text-gray-500 gap-2">
-                        <div className="flex items-center gap-2 flex-shrink-0 min-w-0">
+                      <div className="flex items-center text-xs text-gray-500 gap-2 overflow-hidden">
+                        <div className="flex items-center gap-2 flex-shrink-0 min-w-0 overflow-hidden">
                           <span className="whitespace-nowrap">
                             {item.interactionCount || item.messages.length}개
                             메시지
@@ -756,14 +791,14 @@ export default function DynamicHistorySidebar({
                           if (!events) return null;
 
                           return (
-                            <div className="flex items-center gap-1 mt-2">
+                            <div className="flex items-center gap-1 mt-2 overflow-hidden min-w-0">
                               <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium inline-block max-w-full ${getEventBadgeStyle(
+                                className={`px-2 py-1 rounded-full text-xs font-medium truncate max-w-full inline-block ${getEventBadgeStyle(
                                   events
                                 )}`}
                                 title={`찾은 사건: ${events}`}
                               >
-                                <span className="truncate block">찾은 사건: {events}</span>
+                                찾은 사건: {events}
                               </span>
                             </div>
                           );

@@ -19,8 +19,8 @@ def process_prompt(request):
     logger.debug(f"📝 Request data: {request.data}")
     
     try:
-        # process_prompt_logic을 views/__init__.py에서 import
-        from ..processors import process_prompt_logic
+        # process_prompt_logic을 같은 views/ 폴더의 processors.py에서 import
+        from .processors import process_prompt_logic
         
         prompt_text = request.data.get('prompt')
         session_id = request.data.get('session_id')

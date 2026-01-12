@@ -163,7 +163,7 @@ export const useChatMessage = ({
                 setCurrentSession(result.session);
                 console.log('🔄 새 세션 생성됨:', result.session);
               }
-              
+
               // 성공 토스트 (여기로 이동)
               addToast({
                 type: 'success',
@@ -178,7 +178,7 @@ export const useChatMessage = ({
                 content:
                   result.error || '응답을 생성하는 중 오류가 발생했습니다.',
               };
-              
+
               // 에러 토스트
               addToast({
                 type: 'error',

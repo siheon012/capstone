@@ -315,6 +315,8 @@ export default function VideoSessionsPage() {
         return '쓰러짐';
       case 'sitting':
         return '점거';
+      case 'interaction':
+        return '없음'
       default:
         return eventType;
     }
@@ -354,11 +356,28 @@ export default function VideoSessionsPage() {
     const translatedEvents = eventTypes.map((eventType) =>
       translateEventType(eventType)
     );
-    return translatedEvents.join(', ');
+    
+    // interaction만 있는 경우 "없음"으로 표시
+    if (translatedEvents.length === 1 && translatedEvents[0] === '특이 사건 없음') {
+      return '없음';
+    }
+    
+    // interaction 제외한 실제 사건들만 표시
+    const actualEvents = translatedEvents.filter(event => event !== '특이 사건 없음');
+    if (actualEvents.length === 0) {
+      return '없음';
+    }
+    
+    return actualEvents.join(', ');
   };
 
   // 이벤트 뱃지 스타일 가져오기 함수
-  const getEventBadgeStyle = (eventType: string) => {
+  const getEventBadgeStyle = (eventType: string, formattedText?: string) => {
+    // formattedText가 "없음"이면 파란색
+    if (formattedText === '없음') {
+      return 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30';
+    }
+    
     switch (eventType) {
       case 'theft':
       case '도난':
@@ -369,6 +388,7 @@ export default function VideoSessionsPage() {
       case 'sitting':
       case '점거':
         return 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30';
+      case 'interaction':
       case '없음':
         return 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30';
       default:
@@ -832,7 +852,8 @@ export default function VideoSessionsPage() {
                                       <div className="flex items-center gap-1 sm:gap-2 col-span-2">
                                         <Badge
                                           className={`text-xs flex-shrink-0 whitespace-nowrap ${getEventBadgeStyle(
-                                            detectedEvents[0]
+                                            detectedEvents[0],
+                                            formattedEvents
                                           )}`}
                                         >
                                           찾은 사건: {formattedEvents}

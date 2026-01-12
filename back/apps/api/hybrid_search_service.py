@@ -9,7 +9,7 @@ import json
 from typing import List, Dict, Optional, Tuple
 from django.db import connection
 from apps.db.models import Event
-from apps.db.search_service import RAGSearchService
+from apps.api.services.search_service import RAGSearchService
 from apps.api.bedrock_service import get_bedrock_service
 from apps.api.bedrock_reranker import get_reranker_service  # Reranker 임포트 수정
 from apps.api.event_windowing_service import EventWindowingService  # Windowing 추가

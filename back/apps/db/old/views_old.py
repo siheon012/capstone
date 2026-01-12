@@ -14,7 +14,7 @@ from datetime import datetime
 import logging
 
 from apps.db.models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData, VideoAnalysis, AnalysisJob
-from apps.api.services import get_video_service
+from apps.api.services import get_video_service, get_event_service
 from .serializers import (
     VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer,
     DepthDataSerializer, DisplayDataSerializer, DepthDataBulkCreateSerializer, DisplayDataBulkCreateSerializer,
@@ -268,7 +268,7 @@ class EventViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], url_path='video-stats')
     def video_stats(self, request):
-        """비디오별 이벤트 타입 통계"""
+        """비디오별 이벤트 타입 통계 - EventService 사용"""
         video_id = request.query_params.get('video_id')
         if not video_id:
             return Response(
@@ -277,37 +277,12 @@ class EventViewSet(viewsets.ModelViewSet):
             )
         
         try:
-            # 해당 비디오의 이벤트들을 이벤트 타입별로 그룹화하여 카운트
-            from django.db.models import Count
-            
-            event_stats = (
-                Event.objects
-                .filter(video_id=video_id)
-                .values('event_type')
-                .annotate(count=Count('event_type'))
-                .order_by('-count')
-            )
-            
-            if not event_stats:
-                return Response({
-                    'video_id': video_id,
-                    'most_frequent_event': None,
-                    'stats': []
-                })
-            
-            # 가장 많이 발생한 이벤트 타입
-            most_frequent = event_stats[0]
-            
-            return Response({
-                'video_id': video_id,
-                'most_frequent_event': {
-                    'event_type': most_frequent['event_type'],
-                    'count': most_frequent['count']
-                },
-                'stats': list(event_stats)
-            })
+            event_service = get_event_service()
+            stats = event_service.get_video_event_stats(video_id)
+            return Response(stats)
             
         except Exception as e:
+            logger.error(f"통계 조회 실패: {str(e)}")
             return Response(
                 {'error': f'통계 조회 중 오류가 발생했습니다: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -316,7 +291,7 @@ class EventViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='generate-embeddings')
     def generate_embeddings(self, request):
         """
-        이벤트들의 embedding 일괄 생성
+        이벤트들의 embedding 일괄 생성 - EventService 사용
         
         POST /db/events/generate-embeddings/
         Body: {
@@ -329,74 +304,30 @@ class EventViewSet(viewsets.ModelViewSet):
         limit = request.data.get('limit')
         force = request.data.get('force', False)
         
-        # 처리할 이벤트 쿼리
-        queryset = Event.objects.all()
-        
-        if video_id:
-            queryset = queryset.filter(video_id=video_id)
-        
-        if not force:
-            queryset = queryset.filter(embedding__isnull=True)
-        
-        if limit:
-            queryset = queryset[:limit]
-        
-        total_count = queryset.count()
-        
-        if total_count == 0:
+        try:
+            event_service = get_event_service()
+            result = event_service.generate_embeddings(
+                video_id=video_id,
+                limit=limit,
+                force=force
+            )
+            
+            if result['total'] == 0:
+                message = '처리할 이벤트가 없습니다.'
+            else:
+                message = 'Embedding 생성 완료'
+            
             return Response({
-                'message': '처리할 이벤트가 없습니다.',
-                'success': 0,
-                'failed': 0,
-                'skipped': 0
+                'message': message,
+                **result
             })
-        
-        # Bedrock 서비스 초기화
-        from apps.api.bedrock_service import get_bedrock_service
-        import time
-        
-        bedrock = get_bedrock_service()
-        
-        success_count = 0
-        fail_count = 0
-        skip_count = 0
-        
-        for event in queryset:
-            # searchable_text가 없으면 생성
-            if not event.searchable_text:
-                event.generate_searchable_text()
-                event.save(update_fields=['searchable_text', 'keywords'])
             
-            # searchable_text가 여전히 비어있으면 건너뛰기
-            if not event.searchable_text or not event.searchable_text.strip():
-                skip_count += 1
-                continue
-            
-            try:
-                # Embedding 생성
-                embedding = bedrock.generate_embedding(event.searchable_text)
-                
-                if embedding:
-                    event.embedding = embedding
-                    event.save(update_fields=['embedding'])
-                    success_count += 1
-                else:
-                    fail_count += 1
-                
-                # API Rate limit 방지
-                time.sleep(0.1)
-                
-            except Exception as e:
-                fail_count += 1
-                logger.error(f"❌ Event {event.id} embedding 생성 실패: {str(e)}")
-        
-        return Response({
-            'message': f'Embedding 생성 완료',
-            'total': total_count,
-            'success': success_count,
-            'failed': fail_count,
-            'skipped': skip_count
-        })
+        except Exception as e:
+            logger.error(f"Embedding 생성 실패: {str(e)}")
+            return Response(
+                {'error': f'Embedding 생성 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class PromptSessionViewSet(viewsets.ModelViewSet):
     queryset = PromptSession.objects.all()

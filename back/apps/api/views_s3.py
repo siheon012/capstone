@@ -300,6 +300,7 @@ def delete_video(request, video_id):
         video = Video.objects.get(video_id=video_id)
         
         # S3에서 파일 삭제
+        s3_key = video.get_current_s3_key()  # 현재 티어의 S3 키 가져오기
         s3_deleted = s3_service.delete_video(s3_key)
         
         # DB에서 비디오 삭제

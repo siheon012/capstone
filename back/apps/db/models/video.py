@@ -40,11 +40,13 @@ class Video(models.Model):
     width = models.IntegerField(null=True, blank=True, help_text="Video width (duplicate)")
     height = models.IntegerField(null=True, blank=True, help_text="Video height (duplicate)")
     
-    # S3 스토리지 (db_column으로 기존 컬럼명 유지)
+    # S3 스토리지 (원본 필드명 유지 - DB 스키마 변경 없음)
     s3_bucket = models.CharField(max_length=63, default='capstone-video-bucket')
-    s3_video_key = models.CharField(max_length=1024, help_text="Raw video S3 key", db_column='s3_raw_key')  # DB: s3_raw_key
-    s3_result_key = models.CharField(max_length=500, null=True, blank=True, help_text="Analysis result S3 key")
-    s3_thumbnail_key = models.CharField(max_length=500, null=True, blank=True, help_text="Thumbnail S3 key")
+    s3_key = models.CharField(max_length=1024, help_text="Primary S3 object key")
+    s3_raw_key = models.CharField(max_length=500, help_text="S3 raw video key")
+    s3_result_key = models.CharField(max_length=500, null=True, blank=True, help_text="S3 analysis result key")
+    thumbnail_s3_key = models.CharField(max_length=1024, blank=True)
+    s3_thumbnail_key = models.CharField(max_length=500, null=True, blank=True, help_text="S3 thumbnail key")
     
     # 메타데이터 추출 상태
     metadata_extracted = models.BooleanField(default=False)
@@ -99,7 +101,7 @@ class Video(models.Model):
     
     def increment_search_count(self):
         """검색 횟수 증가 및 hotness 점수 업데이트"""
-        from apps.db.tier_manager import TierManager
+        from apps.api.services.tier_manager import TierManager
         self.search_count += 1
         self.total_searches += 1
         self.last_accessed = timezone.now()

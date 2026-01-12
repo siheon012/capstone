@@ -5,11 +5,14 @@ Claude 3 Vision을 활용한 프레임 분석 및 요약 생성
 import json
 import base64
 import boto3
+import logging
 from typing import List, Dict, Optional
 from django.conf import settings
 from apps.db.models import Event, Video
 import cv2
 import os
+
+logger = logging.getLogger(__name__)
 
 
 class BedrockVLMService:
@@ -129,10 +132,10 @@ class BedrockVLMService:
         print(f"📁 파일 존재 여부: {os.path.exists(video_path) if video_path else False}")
         
         if not video_path or not os.path.exists(video_path):
-            print(f"⚠️ 비디오 파일을 찾을 수 없음: {video_path}")
-            print(f"⚠️ video.s3_raw_key: {getattr(video, 's3_raw_key', None)}")
-            print(f"⚠️ video.filename: {getattr(video, 'filename', None)}")
-            print(f"⚠️ video.video_file: {getattr(video, 'video_file', None)}")
+            logger.warning(f"비디오 파일을 찾을 수 없음: {video_path}")
+            logger.warning(f"video.s3_raw_key: {getattr(video, 's3_raw_key', None)}")
+            logger.warning(f"video.filename: {getattr(video, 'filename', None)}")
+            logger.warning(f"video.video_file: {getattr(video, 'video_file', None)}")
             return frames
         
         # OpenCV로 비디오 열기

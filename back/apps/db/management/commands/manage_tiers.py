@@ -2,7 +2,7 @@
 데이터 계층 관리 명령어
 """
 from django.core.management.base import BaseCommand
-from apps.db.tier_manager import get_tier_manager
+from apps.api.services.tier_manager import get_tier_manager
 
 class Command(BaseCommand):
     help = 'Manage data tiers (Hot/Warm/Cold)'

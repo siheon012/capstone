@@ -163,6 +163,14 @@ export const useChatMessage = ({
                 setCurrentSession(result.session);
                 console.log('🔄 새 세션 생성됨:', result.session);
               }
+              
+              // 성공 토스트 (여기로 이동)
+              addToast({
+                type: 'success',
+                title: '분석 완료',
+                message: 'AI 분석이 완료되었습니다.',
+                duration: 3000,
+              });
             } else {
               // 에러 응답 처리
               assistantMessage = {
@@ -170,6 +178,14 @@ export const useChatMessage = ({
                 content:
                   result.error || '응답을 생성하는 중 오류가 발생했습니다.',
               };
+              
+              // 에러 토스트
+              addToast({
+                type: 'error',
+                title: '분석 실패',
+                message: result.error || 'AI 분석 중 오류가 발생했습니다.',
+                duration: 3000,
+              });
             }
           } else {
             console.log(
@@ -195,14 +211,6 @@ export const useChatMessage = ({
               timestamp: timestamp,
             });
           }
-
-          // 성공 토스트
-          addToast({
-            type: 'success',
-            title: '분석 완료',
-            message: 'AI 분석이 완료되었습니다.',
-            duration: 3000,
-          });
 
           // 새로운 대화가 시작된 경우 히스토리 저장
           if (!currentHistoryId && videoSrc) {

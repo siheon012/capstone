@@ -762,11 +762,11 @@ export async function sendMessage(
     return {
       success: true,
       reply: result.response,
-      timestamp: result.event?.timestamp,
+      timestamp: result.event?.timestamp || null,
       session: result.session_id
         ? {
             id: result.session_id,
-            title: result.session_title || `비디오 ${videoId}의 채팅`,
+            title: result.session_title || `프롬프트 세션`,
             videoId: videoId,
             createdAt: new Date(),
             messages: [],

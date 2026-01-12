@@ -473,8 +473,14 @@ export default function DynamicHistorySidebar({
                         tableLayout: 'fixed',
                       }}
                     >
-                      <div className="flex items-start justify-between mb-2 gap-2 min-w-0 overflow-hidden" style={{ width: '100%', maxWidth: '100%' }}>
-                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden" style={{ maxWidth: 'calc(100% - 40px)' }}>
+                      <div
+                        className="flex items-start justify-between mb-2 gap-2 min-w-0 overflow-hidden"
+                        style={{ width: '100%', maxWidth: '100%' }}
+                      >
+                        <div
+                          className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden"
+                          style={{ maxWidth: 'calc(100% - 40px)' }}
+                        >
                           {/* 날짜 썸네일 */}
                           <div className="flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-[#00e6b4] bg-opacity-20 rounded-lg border border-[#00e6b4] border-opacity-30 flex-shrink-0">
                             <Calendar className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-[#00e6b4] mb-0.5 sm:mb-1" />
@@ -558,7 +564,12 @@ export default function DynamicHistorySidebar({
                             </span>
                             <span
                               className="truncate block"
-                              style={{ width: '100%', maxWidth: '100%', flex: 1, minWidth: 0 }}
+                              style={{
+                                width: '100%',
+                                maxWidth: '100%',
+                                flex: 1,
+                                minWidth: 0,
+                              }}
                               title={item.messages[0]?.content || '질문 없음'}
                             >
                               {item.messages[0]?.content || '질문 없음'}
@@ -574,14 +585,18 @@ export default function DynamicHistorySidebar({
                               </span>
                               <span
                                 className="truncate block"
-                                style={{ width: '100%', maxWidth: '100%', flex: 1, minWidth: 0 }}
+                                style={{
+                                  width: '100%',
+                                  maxWidth: '100%',
+                                  flex: 1,
+                                  minWidth: 0,
+                                }}
                                 title={item.messages[1].content}
                               >
                                 {item.messages[1].content}
                               </span>
                             </div>
                           )}
-                          \n{' '}
                         </div>
 
                         {/* 메시지 개수 */}
@@ -712,8 +727,14 @@ export default function DynamicHistorySidebar({
                       tableLayout: 'fixed',
                     }}
                   >
-                    <div className="flex items-start justify-between mb-2 gap-2 overflow-hidden" style={{ width: '100%', maxWidth: '100%' }}>
-                      <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden" style={{ maxWidth: 'calc(100% - 30px)' }}>
+                    <div
+                      className="flex items-start justify-between mb-2 gap-2 overflow-hidden"
+                      style={{ width: '100%', maxWidth: '100%' }}
+                    >
+                      <div
+                        className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden"
+                        style={{ maxWidth: 'calc(100% - 30px)' }}
+                      >
                         {/* 날짜 썸네일 */}
                         <div className="flex flex-col items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-[#00e6b4] bg-opacity-20 rounded-lg border border-[#00e6b4] border-opacity-30 flex-shrink-0">
                           <Calendar className="h-2 w-2 sm:h-2.5 sm:w-2.5 text-[#00e6b4] mb-0.5" />

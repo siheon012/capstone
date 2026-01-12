@@ -305,6 +305,8 @@ export default function UploadedVideoPage() {
         return '쓰러짐';
       case 'sitting':
         return '점거';
+      case 'violence':
+        return '폭행';
       case 'interaction':
         return '특이 사건 없음';
       default:
@@ -558,6 +560,7 @@ export default function UploadedVideoPage() {
                     <SelectItem value="도난">도난</SelectItem>
                     <SelectItem value="쓰러짐">쓰러짐</SelectItem>
                     <SelectItem value="점거">점거</SelectItem>
+                    <SelectItem value="폭행">폭행</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -666,67 +669,66 @@ export default function UploadedVideoPage() {
                           )}
                         </div>
 
-                        {/* 주요 사건 배지 - Event 테이블에서 가져온 통계 또는 비디오의 majorEvent */}
+                        {/* 주요 사건 배지 - 실제 사건(점거/도난/쓰러짐/폭행) 우선, 없으면 특이 사건 없음 */}
                         <div className="flex-shrink-0">
                           {(() => {
                             const mostFrequentEvent =
                               getMostFrequentEventForVideo(video.id);
 
-                            // Event 테이블에서 분석된 이벤트가 있으면 우선 표시
+                            // 1순위: Event 테이블에서 분석된 실제 사건 (interaction 제외)
                             if (mostFrequentEvent) {
-                              const eventText = translateEventType(
-                                mostFrequentEvent.type
-                              );
-                              return (
-                                <Badge
-                                  className={`flex-shrink-0 text-xs whitespace-nowrap ${
-                                    eventText === '도난'
-                                      ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
-                                      : eventText === '쓰러짐'
-                                      ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                      : eventText === '점거'
-                                      ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
-                                      : eventText === '특이 사건 없음'
-                                      ? 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30'
-                                      : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
-                                  }`}
-                                >
-                                  {eventText === '특이 사건 없음'
-                                    ? eventText
-                                    : `주요 사건: ${eventText}`}
-                                </Badge>
-                              );
+                              const eventType = mostFrequentEvent.type;
+                              
+                              // theft, collapse, sitting, violence 등 실제 사건만 표시
+                              if (eventType === 'theft' || eventType === 'collapse' || eventType === 'sitting' || eventType === 'violence') {
+                                const eventText = translateEventType(eventType);
+                                return (
+                                  <Badge
+                                    className={`flex-shrink-0 text-xs whitespace-nowrap ${
+                                      eventText === '도난'
+                                        ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
+                                        : eventText === '쓰러짐'
+                                        ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
+                                        : eventText === '점거'
+                                        ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
+                                        : eventText === '폭행'
+                                        ? 'bg-purple-500 bg-opacity-20 text-purple-400 border border-purple-500 border-opacity-30'
+                                        : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
+                                    }`}
+                                  >
+                                    주요 사건: {eventText}
+                                  </Badge>
+                                );
+                              }
                             }
 
-                            // 비디오의 majorEvent가 있으면 표시
+                            // 2순위: 비디오의 majorEvent (실제 사건만)
                             if (video.majorEvent) {
-                              const majorEventText =
-                                video.majorEvent === 'interaction'
-                                  ? '특이 사건 없음'
-                                  : video.majorEvent;
-
-                              return (
-                                <Badge
-                                  className={`flex-shrink-0 text-xs whitespace-nowrap ${
-                                    video.majorEvent === '도난'
-                                      ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
-                                      : video.majorEvent === '쓰러짐'
-                                      ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                      : video.majorEvent === '점거'
-                                      ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
-                                      : video.majorEvent === 'interaction'
-                                      ? 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30'
-                                      : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
-                                  }`}
-                                >
-                                  {majorEventText === '특이 사건 없음'
-                                    ? majorEventText
-                                    : `주요 사건: ${majorEventText}`}
-                                </Badge>
-                              );
+                              const majorEvent = video.majorEvent;
+                              
+                              // 한글로 저장된 실제 사건만 표시 (interaction 제외)
+                              if (majorEvent === '도난' || majorEvent === '쓰러짐' || majorEvent === '점거' || majorEvent === '폭행') {
+                                return (
+                                  <Badge
+                                    className={`flex-shrink-0 text-xs whitespace-nowrap ${
+                                      majorEvent === '도난'
+                                        ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
+                                        : majorEvent === '쓰러짐'
+                                        ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
+                                        : majorEvent === '점거'
+                                        ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
+                                        : majorEvent === '폭행'
+                                        ? 'bg-purple-500 bg-opacity-20 text-purple-400 border border-purple-500 border-opacity-30'
+                                        : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
+                                    }`}
+                                  >
+                                    주요 사건: {majorEvent}
+                                  </Badge>
+                                );
+                              }
                             }
 
-                            // 둘 다 없으면 기본 배지 표시
+                            // 3순위: 실제 사건이 없으면 "특이 사건 없음" (interaction 또는 데이터 없음)
                             return (
                               <Badge className="flex-shrink-0 text-xs whitespace-nowrap bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30">
                                 특이 사건 없음

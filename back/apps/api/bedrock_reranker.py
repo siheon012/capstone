@@ -93,8 +93,9 @@ class BedrockReranker:
                 "query": query,
                 "documents": doc_texts,
                 "top_n": top_k,
-                "return_documents": False  # 원본 문서는 이미 가지고 있음
+                "api_version": 2  # 원본 문서는 이미 가지고 있음
             }
+            # AS-IS (현재 문제 있는 코드 예상)
             
             response = self.bedrock.invoke_model(
                 modelId=self.rerank_model,
@@ -187,6 +188,8 @@ class BedrockReranker:
                 "messages": messages,
                 "temperature": 0.1
             }
+
+            
             
             response = self.bedrock.invoke_model(
                 modelId='anthropic.claude-3-5-sonnet-20241022-v2:0',

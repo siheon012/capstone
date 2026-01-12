@@ -726,7 +726,12 @@ export default function UploadedVideoPage() {
                               );
                             }
 
-                            return null;
+                            // 둘 다 없으면 기본 배지 표시
+                            return (
+                              <Badge className="flex-shrink-0 text-xs whitespace-nowrap bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30">
+                                특이 사건 없음
+                              </Badge>
+                            );
                           })()}
                         </div>
                       </div>

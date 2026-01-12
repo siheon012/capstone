@@ -434,7 +434,11 @@ export default function DynamicHistorySidebar({
             className="h-full history-scrollbar"
             onScrollCapture={handleScroll}
           >
-            <div ref={scrollAreaRef} className="p-3 sm:p-4 space-y-3 w-full" style={{ maxWidth: '100%', boxSizing: 'border-box' }}>
+            <div
+              ref={scrollAreaRef}
+              className="p-3 sm:p-4 space-y-3 w-full"
+              style={{ maxWidth: '100%', boxSizing: 'border-box' }}
+            >
               {historyList.length === 0 ? (
                 <div className="text-center py-8">
                   <MessageSquare className="h-12 w-12 text-gray-500 mx-auto mb-3" />
@@ -452,14 +456,25 @@ export default function DynamicHistorySidebar({
                         : 'bg-[#1a1f2c] hover:bg-[#2a3142]'
                     }`}
                     onClick={() => handleCardClick(item)}
-                    style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', display: 'block' }}
+                    style={{
+                      width: '100%',
+                      maxWidth: '100%',
+                      boxSizing: 'border-box',
+                      display: 'block',
+                    }}
                   >
                     <CardContent
                       className="p-3 overflow-hidden"
-                      style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+                      style={{
+                        width: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        display: 'table',
+                        tableLayout: 'fixed',
+                      }}
                     >
-                      <div className="flex items-start justify-between mb-2 gap-2 min-w-0 overflow-hidden">
-                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden">
+                      <div className="flex items-start justify-between mb-2 gap-2 min-w-0 overflow-hidden" style={{ width: '100%', maxWidth: '100%' }}>
+                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden" style={{ maxWidth: 'calc(100% - 40px)' }}>
                           {/* 날짜 썸네일 */}
                           <div className="flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-[#00e6b4] bg-opacity-20 rounded-lg border border-[#00e6b4] border-opacity-30 flex-shrink-0">
                             <Calendar className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-[#00e6b4] mb-0.5 sm:mb-1" />
@@ -470,14 +485,14 @@ export default function DynamicHistorySidebar({
 
                           <div
                             className="flex-1 min-w-0 overflow-hidden"
-                            style={{ maxWidth: '100%' }}
+                            style={{ width: 0, flexGrow: 1 }}
                           >
                             {/* 제목을 "prompt_id"에서 "{동영상 이름}의 몇번째 채팅" 형식으로 변경 */}
                             <h3
                               className="font-medium text-white text-xs sm:text-sm truncate"
                               style={{
+                                width: '100%',
                                 maxWidth: '100%',
-                                wordBreak: 'break-all',
                               }}
                               title={generateSessionTitle(
                                 item,
@@ -536,14 +551,14 @@ export default function DynamicHistorySidebar({
                         >
                           <div
                             className="flex items-start gap-1 min-w-0"
-                            style={{ maxWidth: '100%' }}
+                            style={{ width: '100%', maxWidth: '100%' }}
                           >
                             <span className="text-[#6c5ce7] flex-shrink-0">
                               Q:
                             </span>
                             <span
                               className="truncate block"
-                              style={{ maxWidth: '100%' }}
+                              style={{ width: '100%', maxWidth: '100%', flex: 1, minWidth: 0 }}
                               title={item.messages[0]?.content || '질문 없음'}
                             >
                               {item.messages[0]?.content || '질문 없음'}
@@ -552,14 +567,14 @@ export default function DynamicHistorySidebar({
                           {item.messages[1] && (
                             <div
                               className="flex items-start gap-1 min-w-0"
-                              style={{ maxWidth: '100%' }}
+                              style={{ width: '100%', maxWidth: '100%' }}
                             >
                               <span className="text-[#00e6b4] flex-shrink-0">
                                 A:
                               </span>
                               <span
                                 className="truncate block"
-                                style={{ maxWidth: '100%' }}
+                                style={{ width: '100%', maxWidth: '100%', flex: 1, minWidth: 0 }}
                                 title={item.messages[1].content}
                               >
                                 {item.messages[1].content}
@@ -680,14 +695,25 @@ export default function DynamicHistorySidebar({
                       : 'bg-[#1a1f2c] hover:bg-[#2a3142]'
                   }`}
                   onClick={() => handleCardClick(item)}
-                  style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', display: 'block' }}
+                  style={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    display: 'block',
+                  }}
                 >
                   <CardContent
                     className="p-3 overflow-hidden"
-                    style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+                    style={{
+                      width: '100%',
+                      maxWidth: '100%',
+                      boxSizing: 'border-box',
+                      display: 'table',
+                      tableLayout: 'fixed',
+                    }}
                   >
-                    <div className="flex items-start justify-between mb-2 gap-2 overflow-hidden">
-                      <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+                    <div className="flex items-start justify-between mb-2 gap-2 overflow-hidden" style={{ width: '100%', maxWidth: '100%' }}>
+                      <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden" style={{ maxWidth: 'calc(100% - 30px)' }}>
                         {/* 날짜 썸네일 */}
                         <div className="flex flex-col items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-[#00e6b4] bg-opacity-20 rounded-lg border border-[#00e6b4] border-opacity-30 flex-shrink-0">
                           <Calendar className="h-2 w-2 sm:h-2.5 sm:w-2.5 text-[#00e6b4] mb-0.5" />

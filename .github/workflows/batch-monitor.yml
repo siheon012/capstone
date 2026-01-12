@@ -205,6 +205,13 @@ jobs:
           echo "✅ ECS services scheduled (night/weekend shutdown)"
           echo "📌 Consider: Reserved Instances for RDS"
           echo "📌 Consider: S3 Lifecycle policies for old data"
+          echo "📌 Review: Batch job efficiency and duration"
+
+  summary:
+    name: 📋 Monitoring Summary
+    runs-on: ubuntu-latest
+    needs: [monitor-batch, cost-report]
+    if: always()
     permissions:
       issues: write
     

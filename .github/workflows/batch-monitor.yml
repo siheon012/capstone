@@ -284,10 +284,3 @@ jobs:
               body: issueBody,
               labels: ['aws', 'batch', 'alert', 'automated']
             });
-            echo "Action required: Review failed jobs in AWS Console"
-          else
-            echo "✅ All systems operational"
-          fi
-          
-          echo ""
-          echo "Next scheduled run: $(date -d 'tomorrow 9:00' '+%Y-%m-%d %H:%M KST')"

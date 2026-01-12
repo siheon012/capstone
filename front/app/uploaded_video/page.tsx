@@ -678,9 +678,14 @@ export default function UploadedVideoPage() {
                             // 1순위: Event 테이블에서 분석된 실제 사건 (interaction 제외)
                             if (mostFrequentEvent) {
                               const eventType = mostFrequentEvent.type;
-                              
+
                               // theft, collapse, sitting, violence 등 실제 사건만 표시
-                              if (eventType === 'theft' || eventType === 'collapse' || eventType === 'sitting' || eventType === 'violence') {
+                              if (
+                                eventType === 'theft' ||
+                                eventType === 'collapse' ||
+                                eventType === 'sitting' ||
+                                eventType === 'violence'
+                              ) {
                                 const eventText = translateEventType(eventType);
                                 return (
                                   <Badge
@@ -705,9 +710,14 @@ export default function UploadedVideoPage() {
                             // 2순위: 비디오의 majorEvent (실제 사건만)
                             if (video.majorEvent) {
                               const majorEvent = video.majorEvent;
-                              
+
                               // 한글로 저장된 실제 사건만 표시 (interaction 제외)
-                              if (majorEvent === '도난' || majorEvent === '쓰러짐' || majorEvent === '점거' || majorEvent === '폭행') {
+                              if (
+                                majorEvent === '도난' ||
+                                majorEvent === '쓰러짐' ||
+                                majorEvent === '점거' ||
+                                majorEvent === '폭행'
+                              ) {
                                 return (
                                   <Badge
                                     className={`flex-shrink-0 text-xs whitespace-nowrap ${

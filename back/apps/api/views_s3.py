@@ -16,7 +16,6 @@ import uuid
 
 from datetime import datetime
 from .services.s3_service import s3_service
-# from .services.auth_service import jwt_required  # TODO: 임시 비활성화 (개발용)
 from .services.sqs_service import sqs_service
 from apps.db.models import Video
 from apps.db.serializers import VideoSerializer
@@ -25,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
-# @jwt_required  # TODO: 임시 비활성화 (개발용)
 def request_upload_url(request):
     """
     Step 1: 업로드 토큰 및 Pre-signed URL 요청
@@ -74,9 +72,8 @@ def request_upload_url(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # JWT에서 사용자 ID 추출 (임시: 하드코딩)
-        # user_id = request.user_payload['user_id']  # JWT 사용 시
-        user_id = 'demo_user'  # TODO: 임시 사용자 ID
+        # 사용자 ID (로그인 기능 없음 - 관리자 모드)
+        user_id = 'admin'
         
         # 업로드 토큰 생성 (video_id 없이, UUID만 포함)
         upload_token = s3_service.generate_upload_token(
@@ -115,14 +112,13 @@ def request_upload_url(request):
 
 
 @api_view(['POST'])
-# @jwt_required  # TODO: 임시 비활성화 (개발용)
+# @jwt_required  # FIXME: USE_JWT_AUTH=true로 설정 후 데코레이터 활성화
 def confirm_upload(request):
     """
     Step 2: 업로드 완료 확인 및 비디오 메타데이터 저장
     
     Request Body:
     {
-        "upload_token": "jwt_token",
         "s3_key": "videos/2024/01/15/uuid_video.mp4",
         "duration": 120.5,
         "thumbnail_url": "optional_thumbnail_url"
@@ -185,8 +181,8 @@ def confirm_upload(request):
                 'name': token_payload['file_name'],
                 'filename': token_payload['file_name'],
                 'original_filename': token_payload['file_name'],
-                's3_key': s3_key,  # Primary S3 object key
-                's3_raw_key': s3_key,  # S3 raw video key
+                's3_key': s3_key,
+                's3_raw_key': s3_key,
                 'file_size': token_payload['file_size'],
                 'duration': duration,
                 's3_thumbnail_key': thumbnail_s3_key,
@@ -258,14 +254,13 @@ def confirm_upload(request):
 
 
 @api_view(['GET'])
-# @jwt_required  # TODO: 임시 비활성화 (개발용)
+# @jwt_required  # FIXME: USE_JWT_AUTH=true로 설정 후 데코레이터 활성화
 def get_video_download_url(request, video_id):
     """
     비디오 다운로드/스트리밍 URL 생성
     
     Response:
     {
-        "download_url": "https://s3.amazonaws.com/...",
         "expires_in": 3600
     }
     """
@@ -296,14 +291,13 @@ def get_video_download_url(request, video_id):
 
 
 @api_view(['DELETE'])
-# @jwt_required  # TODO: 임시 비활성화 (개발용)
+# @jwt_required  # FIXME: USE_JWT_AUTH=true로 설정 후 데코레이터 활성화
 def delete_video(request, video_id):
     """
     비디오 삭제 (DB + S3)
     """
     try:
         video = Video.objects.get(video_id=video_id)
-        s3_key = video.video_file
         
         # S3에서 파일 삭제
         s3_deleted = s3_service.delete_video(s3_key)

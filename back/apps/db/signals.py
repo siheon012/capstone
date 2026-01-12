@@ -5,7 +5,7 @@ Django signals for Event and Video models
 """
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from .models import Event, Video
+from apps.db.models import Event, Video
 import logging
 
 logger = logging.getLogger(__name__)

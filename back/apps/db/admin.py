@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData
+from apps.db.models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData
 
 @admin.register(Video)
 class VideoAdmin(admin.ModelAdmin):

@@ -4,9 +4,8 @@ from . import views
 from .summary_views import generate_video_summary, check_summary_status
 from . import views_s3
 
-# DRF Router 설정
+# DRF Router 설정 (현재 비어있음 - 필요시 ViewSet 추가)
 router = DefaultRouter()
-router.register(r'prompt-sessions', views.PromptSessionViewSet)
 
 urlpatterns = [
     # 헬스체크 엔드포인트 (최상단에 위치)
@@ -23,12 +22,9 @@ urlpatterns = [
     # VLM 채팅 API (새로 추가)
     path('vlm-chat/', views.process_vlm_chat, name='process_vlm_chat'),
     
-    # 비디오 API
-    path('videos/', views.video_list_create, name='video_list_create'),
-    path('videos/<str:video_id>/', views.video_detail, name='video_detail'),
+    # 비디오 Summary API (비디오 CRUD는 /db/videos/ 사용)
     path('videos/<str:video_id>/summary/', generate_video_summary, name='generate_video_summary'),
     path('videos/<str:video_id>/summary/status/', check_summary_status, name='check_summary_status'),
-    path('videos/check-duplicate/', views.check_duplicate_video, name='check_duplicate_video'),
     
     # S3 업로드 API
     path('s3/upload/request/', views_s3.request_upload_url, name='request_upload_url'),

@@ -10,14 +10,18 @@ from django.utils.decorators import method_decorator
 from django.conf import settings
 import os
 import json
-import boto3
 from datetime import datetime
-from .models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData, VideoAnalysis, AnalysisJob
+import logging
+
+from apps.db.models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData, VideoAnalysis, AnalysisJob
+from apps.api.services import get_video_service
 from .serializers import (
     VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer,
     DepthDataSerializer, DisplayDataSerializer, DepthDataBulkCreateSerializer, DisplayDataBulkCreateSerializer,
     VideoAnalysisSerializer, AnalysisJobSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 @method_decorator(csrf_exempt, name='dispatch')
 class VideoViewSet(viewsets.ModelViewSet):
@@ -26,50 +30,28 @@ class VideoViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def create(self, request, *args, **kwargs):
-        """비디오 생성 - 클라우드 지원 추가"""
-        print(f"🎬 [VideoViewSet CREATE] 요청 시작")
-        print(f"📦 [VideoViewSet CREATE] Request method: {request.method}")
-        print(f"📂 [VideoViewSet CREATE] Request headers: {dict(request.headers)}")
-        print(f"📝 [VideoViewSet CREATE] Request data: {request.data}")
-        print(f"📁 [VideoViewSet CREATE] Request FILES: {request.FILES}")
-        print(f"🔍 [VideoViewSet CREATE] Content type: {request.content_type}")
-        
+        """비디오 생성"""
         try:
-            # 요청 데이터 유효성 검사
             if not request.data:
-                print("❌ [VideoViewSet CREATE] 요청 데이터가 비어있음")
                 return Response(
                     {'error': '요청 데이터가 비어있습니다.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # 기본 create 메서드 호출
             response = super().create(request, *args, **kwargs)
             
-            # 생성된 비디오에 대해 검색 통계 초기화
             if response.status_code == status.HTTP_201_CREATED:
                 video_id = response.data.get('video_id')
                 if video_id:
                     video = Video.objects.get(video_id=video_id)
-                    # 클라우드 필드 초기화
-                    if hasattr(video, 'increment_search_count'):
-                        # 새 비디오는 hot 티어로 시작
-                        video.data_tier = 'hot'
-                        video.hotness_score = 100.0
-                        video.save()
-            
-            print(f"✅ [VideoViewSet CREATE] 생성 성공")
-            print(f"📋 [VideoViewSet CREATE] Response status: {response.status_code}")
-            print(f"📄 [VideoViewSet CREATE] Response data: {response.data}")
+                    video.data_tier = 'hot'
+                    video.hotness_score = 100.0
+                    video.save(update_fields=['data_tier', 'hotness_score'])
             
             return response
             
         except Exception as e:
-            print(f"❌ [VideoViewSet CREATE] 오류 발생: {str(e)}")
-            print(f"🔥 [VideoViewSet CREATE] Exception type: {type(e).__name__}")
-            import traceback
-            print(f"📚 [VideoViewSet CREATE] Traceback: {traceback.format_exc()}")
-            
+            logger.error(f"Video creation failed: {e}", exc_info=True)
             return Response(
                 {'error': f'비디오 생성 중 오류가 발생했습니다: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -77,41 +59,29 @@ class VideoViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], url_path='upload')
     def upload_video(self, request):
-        """비디오 파일 업로드 - S3 지원 + 메타데이터 추출 + 분석 트리거"""
+        """비디오 파일 업로드 - VideoService 사용"""
         from .utils import extract_video_metadata
         
         try:
             video_file = request.FILES.get('video')
             if not video_file:
-                return Response(
-                    {'error': '비디오 파일이 필요합니다.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({'error': '비디오 파일이 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # 파일 타입 검증
             if not video_file.content_type.startswith('video/'):
-                return Response(
-                    {'error': '비디오 파일만 업로드 가능합니다.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({'error': '비디오 파일만 업로드 가능합니다.'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # 파일 크기 제한 (10GB)
-            max_size = 10 * 1024 * 1024 * 1024
+            max_size = 10 * 1024 * 1024 * 1024  # 10GB
             if video_file.size > max_size:
-                return Response(
-                    {'error': '파일 크기는 10GB를 초과할 수 없습니다.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({'error': '파일 크기는 10GB를 초과할 수 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
             
-            print(f"📹 [Video Upload] 1단계: 메타데이터 추출 시작 - {video_file.name}")
+            logger.info(f"Uploading video: {video_file.name}")
             
-            # ✨ 1단계: 메타데이터 추출
+            # 메타데이터 추출
             metadata = extract_video_metadata(video_file)
+            logger.info(f"Metadata: duration={metadata['duration']}s, fps={metadata['fps']}")
             
-            print(f"✅ [Video Upload] 메타데이터 추출 완료: duration={metadata['duration']}s, fps={metadata['fps']}")
-            
-            # ✨ 2단계: 임시 Video 객체 생성 (video_id 획득용)
-            temp_video = Video.objects.create(
+            # Video 객체 생성
+            video = Video.objects.create(
                 name=video_file.name,
                 filename=video_file.name,
                 original_filename=video_file.name,
@@ -130,55 +100,19 @@ class VideoViewSet(viewsets.ModelViewSet):
                 analysis_progress=0,
             )
             
-            print(f"✅ [Video Upload] 임시 Video 객체 생성: video_id={temp_video.video_id}")
+            logger.info(f"Video created: video_id={video.video_id}")
             
-            # ✨ 3단계: S3 업로드 (video_id를 경로에 포함)
-            s3_key = None
-            s3_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-video-bucket')
+            # S3 업로드 (VideoService 사용)
+            video_service = get_video_service()
+            s3_key = video_service._upload_to_s3(video, video_file)
             
-            if getattr(settings, 'USE_S3', False):
-                try:
-                    print(f"☁️ [Video Upload] S3 업로드 시작 - {s3_bucket}")
-                    
-                    s3_client = boto3.client('s3')
-                    # video_id를 경로에 포함: videos/{video_id}/{filename}
-                    s3_key = f"videos/{temp_video.video_id}/{video_file.name}"
-                    
-                    s3_client.upload_fileobj(
-                        video_file,
-                        s3_bucket,
-                        s3_key,
-                        ExtraArgs={'ContentType': video_file.content_type}
-                    )
-                    print(f"✅ [Video Upload] S3 업로드 성공: s3://{s3_bucket}/{s3_key}")
-                except Exception as e:
-                    print(f"❌ [Video Upload] S3 업로드 실패: {str(e)}")
-                    # S3 실패시 로컬 저장으로 폴백
-                    s3_key = None
-            
-            # ✨ 4단계: S3 키로 Video 객체 업데이트
-            print(f"💾 [Video Upload] Video 객체 업데이트: S3 경로 설정")
-            
-            # S3 또는 로컬 경로 설정
             if s3_key:
-                temp_video.s3_key = s3_key
-                temp_video.s3_raw_key = s3_key
-                temp_video.s3_bucket = s3_bucket
-                temp_video.save(update_fields=['s3_key', 's3_raw_key', 's3_bucket'])
-            else:
-                # 로컬 저장
-                temp_video.video_file = video_file
-                temp_video.save(update_fields=['video_file'])
+                video.s3_key = s3_key
+                video.s3_raw_key = s3_key
+                video.s3_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-video-bucket')
+                video.save(update_fields=['s3_key', 's3_raw_key', 's3_bucket'])
+                logger.info(f"S3 upload complete: s3://{video.s3_bucket}/{s3_key}")
             
-            video = temp_video
-            print(f"✅ [Video Upload] Video 객체 업데이트 완료: video_id={video.video_id}")
-            
-            # ✨ 5단계: S3 Event Notification이 자동으로 SQS → Lambda → Batch 트리거
-            # S3 업로드 완료 후 자동으로 분석이 시작됨 (추가 API 호출 불필요)
-            if s3_key:
-                print(f"✅ [Video Upload] S3 업로드 완료. S3 Event Notification이 자동으로 분석을 시작합니다.")
-            
-            # 시리얼라이저로 응답 데이터 생성
             serializer = self.get_serializer(video)
             
             return Response({
@@ -191,10 +125,7 @@ class VideoViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
-            import traceback
-            print(f"❌ [Video Upload] 오류 발생: {str(e)}")
-            print(f"📚 [Video Upload] Traceback: {traceback.format_exc()}")
-            
+            logger.error(f"Video upload failed: {e}", exc_info=True)
             return Response(
                 {'error': f'업로드 중 오류가 발생했습니다: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -252,7 +183,7 @@ class VideoViewSet(viewsets.ModelViewSet):
                     events = Event.objects.filter(video=video).order_by('timestamp')
                     
                     if events.exists():
-                        print(f"🤖 [Auto-Summary] 자동 요약 생성 시작: video_id={video.video_id}, events={events.count()}개")
+                        logger.info(f"🤖 [Auto-Summary] 자동 요약 생성 시작: video_id={video.video_id}, events={events.count()}개")
                         
                         vlm_service = get_vlm_service()
                         summary = vlm_service.generate_video_summary(
@@ -265,12 +196,12 @@ class VideoViewSet(viewsets.ModelViewSet):
                         video.summary = summary
                         video.save(update_fields=['summary'])
                         
-                        print(f"✅ [Auto-Summary] 자동 요약 생성 완료: video_id={video.video_id}")
+                        logger.info(f"✅ [Auto-Summary] 자동 요약 생성 완료: video_id={video.video_id}")
                     else:
-                        print(f"⚠️ [Auto-Summary] 이벤트가 없어 요약 생성 생략: video_id={video.video_id}")
+                        logger.warning(f"⚠️ [Auto-Summary] 이벤트가 없어 요약 생성 생략: video_id={video.video_id}")
                         
                 except Exception as e:
-                    print(f"❌ [Auto-Summary] 자동 요약 생성 실패: {str(e)}")
+                    logger.error(f"❌ [Auto-Summary] 자동 요약 생성 실패: {str(e)}")
                     # 요약 생성 실패해도 진행률 업데이트는 성공으로 처리
             
             return Response({
@@ -457,7 +388,7 @@ class EventViewSet(viewsets.ModelViewSet):
                 
             except Exception as e:
                 fail_count += 1
-                print(f"❌ Event {event.id} embedding 생성 실패: {str(e)}")
+                logger.error(f"❌ Event {event.id} embedding 생성 실패: {str(e)}")
         
         return Response({
             'message': f'Embedding 생성 완료',
@@ -496,13 +427,13 @@ class PromptSessionViewSet(viewsets.ModelViewSet):
         sessions_without_id = PromptSession.objects.filter(session_id='') | PromptSession.objects.filter(session_id__isnull=True)
         if sessions_without_id.exists():
             count = sessions_without_id.count()
-            print(f"⚠️ [AUTO-FIX] {count}개의 세션에 session_id가 없습니다. 자동으로 UUID를 할당합니다...")
+            logger.warning(f"⚠️ [AUTO-FIX] {count}개의 세션에 session_id가 없습니다. 자동으로 UUID를 할당합니다...")
             
             for session in sessions_without_id:
                 session.session_id = str(uuid.uuid4())
                 session.save(update_fields=['session_id'])
             
-            print(f"✅ [AUTO-FIX] {count}개의 세션 ID를 성공적으로 업데이트했습니다!")
+            logger.info(f"✅ [AUTO-FIX] {count}개의 세션 ID를 성공적으로 업데이트했습니다!")
         
         # 2. related_videos가 비어있지만 상호작용이 있는 세션 수정
         # video 필터가 있는 경우에만 처리
@@ -525,13 +456,13 @@ class PromptSessionViewSet(viewsets.ModelViewSet):
                                     session.related_videos = video
                                     session.save()
                                     fixed_count += 1
-                                    print(f"✅ [AUTO-FIX] 세션 {session.session_id[:8]}에 비디오 {video.name} 연결")
+                                    logger.info(f"✅ [AUTO-FIX] 세션 {session.session_id[:8]}에 비디오 {video.name} 연결")
                                     break
                             if session.related_videos:
                                 break
                 
                 if fixed_count > 0:
-                    print(f"✅ [AUTO-FIX] {fixed_count}개의 세션에 related_videos를 연결했습니다!")
+                    logger.info(f"✅ [AUTO-FIX] {fixed_count}개의 세션에 related_videos를 연결했습니다!")
             except Video.DoesNotExist:
                 pass
         
@@ -553,21 +484,21 @@ class PromptSessionViewSet(viewsets.ModelViewSet):
                     first_event = first_interaction.related_events.first()
                     if first_event and first_event.video:
                         video = first_event.video
-                        print(f"ℹ️ [DELETE] related_videos 없음, 인터랙션 이벤트에서 비디오 찾음")
+                        logger.info(f"ℹ️ [DELETE] related_videos 없음, 인터랙션 이벤트에서 비디오 찾음")
             
             if video:
                 video_name = video.name or video.filename or f"Video-{video.video_id}"
-                print(f"🔥 [DELETE] 세션 삭제 요청: session_id={session_id}, video={video_name} (ID: {video.video_id})")
+                logger.info(f"🔥 [DELETE] 세션 삭제 요청: session_id={session_id}, video={video_name} (ID: {video.video_id})")
             else:
-                print(f"🔥 [DELETE] 세션 삭제 요청: session_id={session_id}, video=연결된 비디오 없음")
-                print(f"⚠️ [DELETE] 경고: 세션에 비디오 정보를 찾을 수 없습니다.")
+                logger.info(f"🔥 [DELETE] 세션 삭제 요청: session_id={session_id}, video=연결된 비디오 없음")
+                logger.warning(f"⚠️ [DELETE] 경고: 세션에 비디오 정보를 찾을 수 없습니다.")
             
-            print(f"📊 [DELETE] 세션 상호작용 수: {instance.interactions.count()}")
+            logger.info(f"📊 [DELETE] 세션 상호작용 수: {instance.interactions.count()}")
             
             # 삭제 수행
             self.perform_destroy(instance)
             
-            print(f"✅ [DELETE] 세션 삭제 완료: session_id={session_id}")
+            logger.info(f"✅ [DELETE] 세션 삭제 완료: session_id={session_id}")
             
             return Response(
                 {
@@ -578,7 +509,7 @@ class PromptSessionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_204_NO_CONTENT
             )
         except Exception as e:
-            print(f"❌ [DELETE] 세션 삭제 실패: {str(e)}")
+            logger.error(f"❌ [DELETE] 세션 삭제 실패: {str(e)}")
             import traceback
             traceback.print_exc()
             return Response(

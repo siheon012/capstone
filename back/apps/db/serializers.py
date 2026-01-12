@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.conf import settings
 import boto3
 from botocore.exceptions import ClientError
-from .models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData, VideoAnalysis, AnalysisJob
+from apps.db.models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData, VideoAnalysis, AnalysisJob
 
 class VideoSerializer(serializers.ModelSerializer):
     # 기존 호환성 필드들

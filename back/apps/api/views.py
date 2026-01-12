@@ -12,6 +12,9 @@ from apps.api.vlm_service import get_vlm_service
 import json
 import requests
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 헬스체크 엔드포인트
 @api_view(['GET'])
@@ -98,21 +101,21 @@ def health_check(request):
 @api_view(['POST'])
 def process_prompt(request):
     """프롬프트를 처리하고 응답을 반환하는 API 뷰"""
-    print(f"🔥 API 호출 받음: {request.method} {request.path}")
-    print(f"📦 Request headers: {dict(request.headers)}")
-    print(f"📝 Request data: {request.data}")
+    logger.info(f"🔥 API 호출 받음: {request.method} {request.path}")
+    logger.debug(f"📦 Request headers: {dict(request.headers)}")
+    logger.debug(f"📝 Request data: {request.data}")
     
     try:
         prompt_text = request.data.get('prompt')
         session_id = request.data.get('session_id')
         video_id = request.data.get('video_id')  # 비디오 ID 추가
         
-        print(f"💭 프롬프트: {prompt_text}")
-        print(f"🆔 세션 ID: {session_id}")
-        print(f"🎥 비디오 ID: {video_id}")
+        logger.info(f"💭 프롬프트: {prompt_text}")
+        logger.info(f"🆔 세션 ID: {session_id}")
+        logger.info(f"🎥 비디오 ID: {video_id}")
         
         if not prompt_text:
-            print("❌ 프롬프트가 비어있음")
+            logger.warning("❌ 프롬프트가 비어있음")
             return Response({"error": "프롬프트가 비어있습니다."}, status=status.HTTP_400_BAD_REQUEST)
         
         # 1. 세션 생성 또는 조회
@@ -149,7 +152,7 @@ def process_prompt(request):
         try:
             response_text, relevant_event = process_prompt_logic(prompt_text, video)
         except Exception as e:
-            print(f"⚠️ process_prompt_logic 에러: {str(e)}")
+            logger.warning(f"⚠️ process_prompt_logic 에러: {str(e)}")
             # Bedrock 실패 시 기본 응답 사용
             response_text = f"죄송합니다. AI 처리 중 오류가 발생했습니다. 다시 시도해 주세요. (에러: {str(e)})"
             relevant_event = None
@@ -161,7 +164,7 @@ def process_prompt(request):
                 history.main_event = relevant_event
                 history.save()
             else:
-                print(f"⚠️ 경고: 다른 비디오의 이벤트가 반환됨. 세션 비디오: {video.name if video else 'None'}, 이벤트 비디오: {relevant_event.video.name}")
+                logger.warning(f"⚠️ 경고: 다른 비디오의 이벤트가 반환됨. 세션 비디오: {video.name if video else 'None'}, 이벤트 비디오: {relevant_event.video.name}")
                 relevant_event = None  # 잘못된 이벤트는 무시
         
         # 4. 상호작용 저장 (찾은 이벤트 포함)
@@ -195,14 +198,21 @@ def process_prompt(request):
                 "location": relevant_event.location
             }
         
-        print(f"✅ API 응답 성공: {result}")
+        logger.info(f"✅ API 응답 성공: {result}")
         return Response(result)
         
     except Exception as e:
-        print(f"❌ API 처리 오류: {str(e)}")
+        logger.error(f"❌ API 처리 오류: {str(e)}")
         import traceback
-        print(f"🔍 오류 스택: {traceback.format_exc()}")
+        logger.error(f"🔍 오류 스택: {traceback.format_exc()}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ============================================
+# PromptSession ViewSet은 apps/db/views.py로 이동되었습니다.
+# URL: /db/prompt-sessions/
+# ============================================
+
 
 @api_view(['GET'])
 def get_prompt_history(request):
@@ -300,16 +310,16 @@ def process_vlm_chat(request):
     - 특정 타임라인 추출
     - 위치별 행동 분석 (왼쪽/중간/오른쪽)
     """
-    print(f"🎥 VLM 채팅 API 호출: {request.method}")
+    logger.info(f"🎥 VLM 채팅 API 호출: {request.method}")
     
     try:
         prompt_text = request.data.get('prompt')
         session_id = request.data.get('session_id')
         video_id = request.data.get('video_id')
         
-        print(f"💭 프롬프트: {prompt_text}")
-        print(f"🆔 세션 ID: {session_id}")
-        print(f"🎥 비디오 ID: {video_id}")
+        logger.info(f"💭 프롬프트: {prompt_text}")
+        logger.info(f"🆔 세션 ID: {session_id}")
+        logger.info(f"🎥 비디오 ID: {video_id}")
         
         if not prompt_text:
             return Response({"error": "프롬프트가 비어있습니다."}, status=status.HTTP_400_BAD_REQUEST)
@@ -375,11 +385,11 @@ def process_vlm_chat(request):
             end_sec = int(time_matches[1][1]) if time_matches[1][1] else 0
             end_seconds = end_min * 60 + end_sec
             
-            print(f"⏰ 시간 범위 감지: {start_seconds}초 ~ {end_seconds}초")
+            logger.info(f"⏰ 시간 범위 감지: {start_seconds}초 ~ {end_seconds}초")
         
         # 장면 묘사 요청
         if any(keyword in prompt_text.lower() for keyword in ['장면', '묘사', '무슨 일', '설명', '상황']):
-            print("📸 장면 묘사 요청 감지")
+            logger.info("📸 장면 묘사 요청 감지")
             analysis_type = "scene_description"
             
             if start_seconds is not None and end_seconds is not None:
@@ -401,13 +411,13 @@ def process_vlm_chat(request):
         
         # 타임라인 추출 요청
         elif any(keyword in prompt_text.lower() for keyword in ['타임라인', '시간', '언제', '몇 분', '몇 초']):
-            print("⏰ 타임라인 추출 요청 감지")
+            logger.info("⏰ 타임라인 추출 요청 감지")
             analysis_type = "timeline"
             response_text = _generate_timeline_response(prompt_text, events, video)
         
         # 위치별 분석 요청
         elif any(keyword in prompt_text.lower() for keyword in ['위치', '어디', '왼쪽', '중간', '오른쪽', '장소']):
-            print("📍 위치별 분석 요청 감지")
+            logger.info("📍 위치별 분석 요청 감지")
             analysis_type = "location_analysis"
             
             if start_seconds is not None and end_seconds is not None:
@@ -425,7 +435,7 @@ def process_vlm_chat(request):
         
         # 행동 분석 요청
         elif any(keyword in prompt_text.lower() for keyword in ['행동', '무엇을', '어떤', '활동']):
-            print("🏃 행동 분석 요청 감지")
+            logger.info("🏃 행동 분석 요청 감지")
             analysis_type = "behavior_analysis"
             
             if start_seconds is not None and end_seconds is not None:
@@ -443,7 +453,7 @@ def process_vlm_chat(request):
         
         # 일반 질문 - 하이브리드 RAG 사용
         else:
-            print("💬 일반 질문 처리")
+            logger.info("💬 일반 질문 처리")
             analysis_type = "general"
             hybrid_search = get_hybrid_search_service()
             response_text = hybrid_search.search_and_generate(
@@ -498,13 +508,13 @@ def process_vlm_chat(request):
                 for event in events[:5]  # 최대 5개
             ]
         
-        print(f"✅ VLM 채팅 처리 완료: {analysis_type}")
+        logger.info(f"✅ VLM 채팅 처리 완료: {analysis_type}")
         return Response(result)
         
     except Exception as e:
-        print(f"❌ VLM 채팅 오류: {str(e)}")
+        logger.error(f"❌ VLM 채팅 오류: {str(e)}")
         import traceback
-        print(f"🔍 오류 스택: {traceback.format_exc()}")
+        logger.error(f"🔍 오류 스택: {traceback.format_exc()}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -661,86 +671,16 @@ def _analyze_behaviors(events, video: Video) -> str:
     return "\n".join(response_parts)
 
 
-# Video API Views
-@api_view(['GET', 'POST'])
-def video_list_create(request):
-    """비디오 목록 조회 및 생성"""
-    print(f"🎬 [API video_list_create] ===== 요청 수신 =====")
-    print(f"🎬 [API video_list_create] 요청: {request.method}")
-    print(f"📦 [API video_list_create] Headers: {dict(request.headers)}")
-    print(f"📝 [API video_list_create] Data: {request.data}")
-    print(f"🔍 [API video_list_create] Content type: {request.content_type}")
-    print(f"📏 [API video_list_create] Content length: {request.META.get('CONTENT_LENGTH', 'Unknown')}")
-    print(f"🌐 [API video_list_create] Remote addr: {request.META.get('REMOTE_ADDR', 'Unknown')}")
-    print(f"🎬 [API video_list_create] =============================")
-    
-    if request.method == 'GET':
-        videos = Video.objects.all().order_by('-upload_date')
-        serializer = VideoSerializer(videos, many=True)
-        print(f"✅ [API video_list_create] GET 성공: {len(videos)}개 비디오 반환")
-        return Response(serializer.data)
-    
-    elif request.method == 'POST':
-        print(f"🏗️ [API video_list_create] POST 시작")
-        try:
-            serializer = VideoSerializer(data=request.data)
-            print(f"📋 [API video_list_create] Serializer created")
-            
-            if serializer.is_valid():
-                print(f"✅ [API video_list_create] Serializer valid")
-                instance = serializer.save()
-                print(f"🎯 [API video_list_create] 저장 성공: video_id={instance.video_id}")
-                print(f"📄 [API video_list_create] Response data: {serializer.data}")
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            else:
-                print(f"❌ [API video_list_create] Serializer invalid: {serializer.errors}")
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-                
-        except Exception as e:
-            print(f"❌ [API video_list_create] 예외 발생: {str(e)}")
-            import traceback
-            print(f"📚 [API video_list_create] Traceback: {traceback.format_exc()}")
-            return Response({"error": f"서버 오류: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# ============================================
+# Video CRUD API는 apps/db/views.py의 VideoViewSet으로 통합되었습니다.
+# URL: /db/videos/
+# - GET /db/videos/ - 목록 조회
+# - POST /db/videos/ - 생성
+# - GET /db/videos/{id}/ - 상세 조회
+# - PUT/PATCH /db/videos/{id}/ - 수정
+# - DELETE /db/videos/{id}/ - 삭제
+# ============================================
 
-@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-def video_detail(request, video_id):
-    """비디오 상세 조회, 수정, 삭제"""
-    try:
-        video = Video.objects.get(video_id=video_id)
-    except Video.DoesNotExist:
-        return Response({"error": "비디오를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)
-    
-    if request.method == 'GET':
-        serializer = VideoSerializer(video)
-        return Response(serializer.data)
-    
-    elif request.method in ['PUT', 'PATCH']:
-        partial = request.method == 'PATCH'
-        serializer = VideoSerializer(video, data=request.data, partial=partial)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    elif request.method == 'DELETE':
-        video.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-@api_view(['GET'])
-def check_duplicate_video(request):
-    """비디오 중복 체크"""
-    name = request.GET.get('name')
-    size = request.GET.get('size')
-    
-    if not name or not size:
-        return Response({"error": "name과 size 파라미터가 필요합니다."}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        size = int(size)
-        exists = Video.objects.filter(name=name, size=size).exists()
-        return Response({"exists": exists})
-    except ValueError:
-        return Response({"error": "size는 숫자여야 합니다."}, status=status.HTTP_400_BAD_REQUEST)
 
 def process_prompt_logic(prompt_text, video=None):
     """
@@ -763,7 +703,7 @@ def process_prompt_logic(prompt_text, video=None):
         # 하이브리드 RAG: Text2SQL + pgvector
         # ============================================
         if use_bedrock and use_hybrid_search:
-            print(f"🚀 하이브리드 RAG 검색 사용 (Text2SQL + pgvector)")
+            logger.info(f"🚀 하이브리드 RAG 검색 사용 (Text2SQL + pgvector)")
             hybrid_service = get_hybrid_search_service()
             
             found_events, response_text = hybrid_service.hybrid_search(
@@ -780,7 +720,7 @@ def process_prompt_logic(prompt_text, video=None):
         # 1. Text2SQL: 프롬프트 → SQL 변환 (Bedrock Only)
         # ============================================
         elif use_bedrock:
-            print(f"🤖 Bedrock Text2SQL 사용")
+            logger.info(f"🤖 Bedrock Text2SQL 사용")
             bedrock_service = get_bedrock_service()
             
             video_id = video.video_id if video else None
@@ -793,7 +733,7 @@ def process_prompt_logic(prompt_text, video=None):
                 return f"SQL 생성 오류: {text2sql_result['error']}", None
             
             sql_query = text2sql_result.get('sql')
-            print(f"✅ Bedrock이 생성한 SQL: {sql_query}")
+            logger.info(f"✅ Bedrock이 생성한 SQL: {sql_query}")
             
         else:
             # Bedrock이 비활성화된 경우 에러 반환
@@ -811,15 +751,15 @@ def process_prompt_logic(prompt_text, video=None):
                 cursor.execute(sql_query)
                 query_results = cursor.fetchall()
         except Exception as sql_error:
-            print(f"❌ SQL 실행 오류: {sql_error}")
-            print(f"📝 실패한 SQL: {sql_query}")
+            logger.error(f"❌ SQL 실행 오류: {sql_error}")
+            logger.error(f"📝 실패한 SQL: {sql_query}")
             # SQL 오류 시 pgvector 검색으로 폴백
             return "SQL 실행 오류가 발생했습니다. 다른 방식으로 검색해주세요.", None
             
         if not query_results:
             return "요청하신 조건에 해당하는 이벤트를 찾을 수 없습니다.", None
             
-        print(f"✅ 쿼리 결과: {len(query_results)}개 발견")
+        logger.info(f"✅ 쿼리 결과: {len(query_results)}개 발견")
         
         # ============================================
         # 3. 이벤트 객체 조회 및 정리
@@ -848,21 +788,21 @@ def process_prompt_logic(prompt_text, video=None):
                         if relevant_event is None:
                             relevant_event = event
                     except Event.DoesNotExist:
-                        print(f"⚠️ Event ID {event_id} not found")
+                        logger.warning(f"⚠️ Event ID {event_id} not found")
                         
             except Exception as e:
-                print(f"⚠️ 이벤트 매핑 오류: {e}")
+                logger.warning(f"⚠️ 이벤트 매핑 오류: {e}")
         
         if not found_events and not query_results_data:
             return "요청하신 조건에 해당하는 이벤트를 찾을 수 없습니다.", None
         
-        print(f"✅ Event 객체: {len(found_events)}개, 쿼리 결과: {len(query_results_data)}개")
+        logger.info(f"✅ Event 객체: {len(found_events)}개, 쿼리 결과: {len(query_results_data)}개")
         
         # ============================================
         # 4. Bedrock RAG: 자연어 응답 생성
         # ============================================
         if use_bedrock:
-            print(f"🤖 Bedrock RAG를 통해 응답 생성")
+            logger.info(f"🤖 Bedrock RAG를 통해 응답 생성")
             bedrock_service = get_bedrock_service()
             
             # Event 객체와 쿼리 결과를 결합하여 데이터 구성
@@ -904,7 +844,7 @@ def process_prompt_logic(prompt_text, video=None):
             
         else:
             # 기존 질문 타입별 처리 (폴백)
-            print(f"🔄 기존 질문 분류 방식 사용 (폴백)")
+            logger.info(f"🔄 기존 질문 분류 방식 사용 (폴백)")
             question_type = classify_question_type(prompt_text, sql_query)
             
             if question_type == 'ABNORMAL_BEHAVIOR':
@@ -915,30 +855,17 @@ def process_prompt_logic(prompt_text, video=None):
         return response_text, relevant_event
         
     except Exception as e:
-        print(f"❌ 처리 중 오류 발생: {str(e)}")
+        logger.error(f"❌ 처리 중 오류 발생: {str(e)}")
         import traceback
         traceback.print_exc()
         return f"처리 중 오류 발생: {str(e)}", None
 
 
-class PromptSessionViewSet(viewsets.ModelViewSet):
-    """PromptSession ViewSet - 세션 CRUD 작업용"""
-    queryset = PromptSession.objects.all().order_by('created_at')
-    serializer_class = PromptSessionSerializer
-    
-    def get_queryset(self):
-        """쿼리셋 필터링"""
-        queryset = super().get_queryset()
-        
-        # orphan 세션 제외 (related_videos가 삭제된 세션)
-        queryset = queryset.filter(related_videos__isnull=False)
-        
-        # 비디오 ID로 필터링 (related_videos ForeignKey)
-        video_id = self.request.query_params.get('video', None)
-        if video_id:
-            queryset = queryset.filter(related_videos__video_id=video_id)
-            
-        return queryset
+# ============================================
+# PromptSession ViewSet은 apps/db/views.py로 이동되었습니다.
+# URL: /db/prompt-sessions/
+# ============================================
+
 
 def classify_question_type(prompt_text, sql_query):
     """
@@ -982,14 +909,14 @@ def process_abnormal_behavior_query(found_events):
     if not found_events:
         return "해당하는 이상행동을 찾을 수 없습니다.", None
     
-    print(f"🚨 이상행동 질문 처리: {len(found_events)}개 이벤트")
+    logger.info(f"🚨 이상행동 질문 처리: {len(found_events)}개 이벤트")
     
     # 1단계: 시간순 정렬
     found_events.sort(key=lambda x: x.timestamp)
     
     # 2단계: 개인별 그룹화 (성별, 나이, 위치 기준)
     person_groups = group_events_by_person_abnormal(found_events)
-    print(f"👥 개인별 그룹화: {len(person_groups)}명")
+    logger.info(f"👥 개인별 그룹화: {len(person_groups)}명")
     
     # 3단계: 각 개인별로 시나리오 그룹화 (event_type + 시간 연속성)
     scenario_groups = []
@@ -1001,10 +928,10 @@ def process_abnormal_behavior_query(found_events):
                 'gender': person_group['gender'],
                 'age': person_group['age'],
                 'location': person_group['location']
-            }
+}
             scenario_groups.append(scenario)
     
-    print(f"🎬 그룹화된 시나리오: {len(scenario_groups)}개")
+    logger.info(f"🎬 그룹화된 시나리오: {len(scenario_groups)}개")
     
     response_parts = []
     relevant_event = None
@@ -1081,7 +1008,7 @@ def process_marketing_query(found_events):
     if not found_events:
         return "해당하는 정보를 찾을 수 없습니다.", None
     
-    print(f"📊 마케팅 질문 처리: {len(found_events)}개 이벤트")
+    logger.info(f"📊 마케팅 질문 처리: {len(found_events)}개 이벤트")
     
     # 시간순 정렬 (오름차순 - 빠른 시간 순)
     found_events.sort(key=lambda x: x.timestamp)
@@ -1089,7 +1016,7 @@ def process_marketing_query(found_events):
     # 개인별 그룹화 (성별, 위치, 비슷한 나이)
     person_groups = group_events_by_person(found_events)
     
-    print(f"👥 그룹화된 개인: {len(person_groups)}명")
+    logger.info(f"👥 그룹화된 개인: {len(person_groups)}명")
     
     relevant_event = found_events[0]
     

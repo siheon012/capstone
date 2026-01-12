@@ -369,7 +369,7 @@ export default function VideoSessionsPage() {
       case 'sitting':
       case '점거':
         return 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30';
-      case 'interaction':
+      case '없음':
         return 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30';
       default:
         return 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30';
@@ -819,24 +819,6 @@ export default function VideoSessionsPage() {
                                     )}
                                     )
                                   </span>
-                                </div>
-                              )}
-
-                              {session.eventType && (
-                                <div className="flex items-center gap-1 sm:gap-2 col-span-2 sm:col-span-1">
-                                  <Badge
-                                    className={`text-xs ${
-                                      session.eventType === 'theft'
-                                        ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
-                                        : session.eventType === 'collapse'
-                                        ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                        : session.eventType === 'violence'
-                                        ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
-                                        : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
-                                    }`}
-                                  >
-                                    {translateEventType(session.eventType)}
-                                  </Badge>
                                 </div>
                               )}
 

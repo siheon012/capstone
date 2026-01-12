@@ -95,7 +95,33 @@ export async function getVideoEventStats(videoId: string): Promise<{
       throw new Error(`API 호출 실패: ${response.status}`);
     }
 
-    const data = await response.json();
+    const rawData = await response.json();
+    
+    // 특이 사건 타입 정의 (interaction 제외)
+    const specialEventTypes = ['theft', 'collapse', 'sitting', 'violence'];
+    
+    // stats 배열에서 특이 사건만 필터링
+    const specialEvents = (rawData.stats || []).filter((stat: any) => 
+      specialEventTypes.includes(stat.event_type)
+    );
+    
+    // 특이 사건 중 가장 많이 발생한 이벤트 찾기
+    let mostFrequentSpecialEvent = null;
+    if (specialEvents.length > 0) {
+      // count 기준으로 내림차순 정렬 후 첫 번째 항목 선택
+      const sortedEvents = specialEvents.sort((a: any, b: any) => b.count - a.count);
+      mostFrequentSpecialEvent = {
+        eventType: sortedEvents[0].event_type,
+        count: sortedEvents[0].count,
+      };
+    }
+    
+    // 백엔드 snake_case를 프론트엔드 camelCase로 변환
+    const data = {
+      mostFrequentEvent: mostFrequentSpecialEvent,
+      totalEvents: rawData.stats?.length || 0,
+    };
+    
     return { success: true, data };
   } catch (error) {
     console.error('❌ 이벤트 통계 가져오기 오류:', error);

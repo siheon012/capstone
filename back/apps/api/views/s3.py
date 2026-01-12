@@ -15,7 +15,7 @@ import logging
 import os
 import uuid
 from datetime import datetime
-from .services import s3_service, sqs_service, get_video_service
+from ..services import s3_service, sqs_service, get_video_service
 from apps.db.models import Video
 from apps.db.serializers import VideoSerializer
 

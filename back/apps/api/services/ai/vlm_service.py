@@ -684,7 +684,7 @@ class BedrockVLMService:
             # S3에서 임시 파일로 다운로드
             try:
                 s3_client = boto3.client('s3', region_name=settings.AWS_S3_REGION_NAME)
-                bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-dev-raw')
+                bucket = settings.AWS_STORAGE_BUCKET_NAME
                 
                 # 임시 파일 생성
                 temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')

@@ -41,7 +41,7 @@ class Video(models.Model):
     height = models.IntegerField(null=True, blank=True, help_text="Video height (duplicate)")
     
     # S3 스토리지 (원본 필드명 유지 - DB 스키마 변경 없음)
-    s3_bucket = models.CharField(max_length=63, default='capstone-video-bucket')
+    s3_bucket = models.CharField(max_length=63, default='')
     s3_key = models.CharField(max_length=1024, help_text="Primary S3 object key")
     s3_raw_key = models.CharField(max_length=500, help_text="S3 raw video key")
     s3_result_key = models.CharField(max_length=500, null=True, blank=True, help_text="S3 analysis result key")
@@ -136,7 +136,7 @@ class Video(models.Model):
                 aws_secret_access_key=getattr(settings, 'AWS_SECRET_ACCESS_KEY', None)
             )
             
-            bucket_name = self.s3_bucket or getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-dev-raw')
+            bucket_name = self.s3_bucket or settings.AWS_STORAGE_BUCKET_NAME
             
             presigned_url = s3_client.generate_presigned_url(
                 'get_object',
@@ -153,11 +153,11 @@ class Video(models.Model):
         """썸네일 경로 - S3 Presigned URL"""
         if self.s3_thumbnail_key:
             try:
-                s3_client = boto3.client('s3', region_name='ap-northeast-2')
+                s3_client = boto3.client('s3', region_name=settings.AWS_S3_REGION_NAME)
                 return s3_client.generate_presigned_url(
                     'get_object',
                     Params={
-                        'Bucket': getattr(settings, 'AWS_THUMBNAILS_BUCKET_NAME', 'capstone-dev-thumbnails'),
+                        'Bucket': settings.AWS_THUMBNAILS_BUCKET_NAME,
                         'Key': self.s3_thumbnail_key
                     },
                     ExpiresIn=3600
@@ -192,7 +192,7 @@ class Video(models.Model):
             # 1. Raw 비디오 삭제
             if self.s3_raw_key:
                 try:
-                    bucket = getattr(settings, 'AWS_RAW_BUCKET_NAME', 'capstone-dev-raw')
+                    bucket = settings.AWS_RAW_BUCKET_NAME
                     s3_client.delete_object(Bucket=bucket, Key=self.s3_raw_key)
                     logger.info(f"Deleted raw video: s3://{bucket}/{self.s3_raw_key}")
                 except Exception as e:
@@ -201,7 +201,7 @@ class Video(models.Model):
             # 2. 썸네일 삭제
             if self.s3_thumbnail_key:
                 try:
-                    thumbnail_bucket = getattr(settings, 'AWS_THUMBNAILS_BUCKET_NAME', 'capstone-dev-thumbnails')
+                    thumbnail_bucket = settings.AWS_THUMBNAILS_BUCKET_NAME
                     s3_client.delete_object(Bucket=thumbnail_bucket, Key=self.s3_thumbnail_key)
                     logger.info(f"Deleted thumbnail: s3://{thumbnail_bucket}/{self.s3_thumbnail_key}")
                 except Exception as e:
@@ -209,7 +209,7 @@ class Video(models.Model):
             
             # 3. 하이라이트 삭제
             try:
-                highlights_bucket = getattr(settings, 'AWS_HIGHLIGHTS_BUCKET_NAME', 'capstone-dev-highlights')
+                highlights_bucket = settings.AWS_HIGHLIGHTS_BUCKET_NAME
                 video_prefix = f"highlights/{self.video_id}/"
                 response = s3_client.list_objects_v2(Bucket=highlights_bucket, Prefix=video_prefix)
                 if 'Contents' in response:
@@ -220,7 +220,7 @@ class Video(models.Model):
                 logger.error(f"Failed to delete highlights: {e}")
             
             # 4. Warm/Cold 티어 파일 삭제
-            bucket = getattr(settings, 'AWS_RAW_BUCKET_NAME', 'capstone-dev-raw')
+            bucket = settings.AWS_RAW_BUCKET_NAME
             for tier_key in [self.warm_s3_key, self.cold_s3_key]:
                 if tier_key:
                     try:

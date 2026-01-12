@@ -655,7 +655,7 @@ JSON 형식으로만 응답하세요."""
         try:
             # Titan Embeddings V2 - 다중 차원(Matryoshka) 지원, 문맥 이해도 향상
             # 1024 dimensions (v2 권장 차원, 속도와 정확도 최적화)
-            embedding_model_id = "amazon.titan-embed-text-v2:0"
+            embedding_model_id = settings.AWS_BEDROCK_EMBEDDING_MODEL_ID
             
             # 텍스트 길이 제한 (Titan v2: 8192 토큰)
             max_chars = 30000  # 안전 마진

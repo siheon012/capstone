@@ -9,8 +9,10 @@ import json
 from typing import List, Dict, Optional, Tuple
 from django.db import connection
 from apps.db.models import Event
-from apps.api.services import RAGSearchService, get_bedrock_service, get_reranker_service
-from apps.api.services.ai.event_windowing_service import EventWindowingService
+from .search_service import RAGSearchService
+from .bedrock_service import get_bedrock_service
+from .bedrock_reranker import get_reranker_service
+from .event_windowing_service import EventWindowingService
 
 
 class HybridSearchService:

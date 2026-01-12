@@ -30,7 +30,7 @@ class VideoService:
         try:
             self.s3_client = boto3.client(
                 's3',
-                region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'ap-northeast-2'),
+                region_name=settings.AWS_S3_REGION_NAME,
                 aws_access_key_id=getattr(settings, 'AWS_ACCESS_KEY_ID', None),
                 aws_secret_access_key=getattr(settings, 'AWS_SECRET_ACCESS_KEY', None)
             )
@@ -79,7 +79,7 @@ class VideoService:
         if s3_key:
             video.s3_key = s3_key
             video.s3_raw_key = s3_key
-            video.s3_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-video-bucket')
+            video.s3_bucket = settings.AWS_STORAGE_BUCKET_NAME
             video.save(update_fields=['s3_key', 's3_raw_key', 's3_bucket'])
             logger.info(f"Video uploaded to S3: s3://{video.s3_bucket}/{s3_key}")
         
@@ -100,7 +100,7 @@ class VideoService:
             S3 키 또는 None
         """
         try:
-            bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-video-bucket')
+            bucket_name = settings.AWS_STORAGE_BUCKET_NAME
             s3_key = f"videos/{video.video_id}/{video_file.name}"
             
             self.s3_client.upload_fileobj(
@@ -202,7 +202,7 @@ class VideoService:
             return None
         
         try:
-            bucket_name = video.s3_bucket or getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-video-bucket')
+            bucket_name = video.s3_bucket or settings.AWS_STORAGE_BUCKET_NAME
             url = self.s3_client.generate_presigned_url(
                 'get_object',
                 Params={

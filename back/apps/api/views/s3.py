@@ -9,11 +9,11 @@ from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.http import JsonResponse
+from django.conf import settings
 import json
 import logging
 import os
 import uuid
-
 from datetime import datetime
 from .services import s3_service, sqs_service, get_video_service
 from apps.db.models import Video
@@ -163,7 +163,6 @@ def confirm_upload(request):
             thumbnail_s3_key = ''
             if thumbnail_url:
                 # URL에서 버킷명 이후의 키만 추출
-                # 예: https://capstone-dev-thumbnails.s3.ap-northeast-2.amazonaws.com/thumbnails/2025/10/28/xxx.png
                 # -> thumbnails/2025/10/28/xxx.png
                 if 's3' in thumbnail_url and '.amazonaws.com/' in thumbnail_url:
                     thumbnail_s3_key = thumbnail_url.split('.amazonaws.com/')[-1]
@@ -361,7 +360,7 @@ def upload_thumbnail(request):
         s3_key = f"thumbnails/{now.year}/{now.month:02d}/{now.day:02d}/{uuid.uuid4()}_{file_name}"
         
         # thumbnails 버킷 설정
-        thumbnails_bucket = os.environ.get('AWS_S3_THUMBNAILS_BUCKET', 'capstone-dev-thumbnails')
+        thumbnails_bucket = settings.AWS_THUMBNAILS_BUCKET_NAME
         
         # S3에 업로드
         s3_client = s3_service.s3_client

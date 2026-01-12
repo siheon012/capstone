@@ -37,8 +37,8 @@ class VideoSerializer(serializers.ModelSerializer):
             # Fallback: S3 공개 URL (presigned URL 실패 시)
             s3_key = getattr(obj, 's3_key', None) or getattr(obj, 's3_raw_key', None)
             if s3_key:
-                bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-dev-raw')
-                region = getattr(settings, 'AWS_S3_REGION_NAME', 'ap-northeast-2')
+                bucket_name = settings.AWS_STORAGE_BUCKET_NAME
+                region = settings.AWS_S3_REGION_NAME
                 return f"https://{bucket_name}.s3.{region}.amazonaws.com/{s3_key}"
         except Exception as e:
             print(f"⚠️ current_s3_url 생성 실패: {e}")
@@ -53,8 +53,8 @@ class VideoSerializer(serializers.ModelSerializer):
                 if s3_url:
                     return s3_url
                 # Fallback: S3 공개 URL
-                bucket_name = 'capstone-dev-thumbnails'
-                region = getattr(settings, 'AWS_S3_REGION_NAME', 'ap-northeast-2')
+                bucket_name = settings.AWS_THUMBNAILS_BUCKET_NAME
+                region = settings.AWS_S3_REGION_NAME
                 return f"https://{bucket_name}.s3.{region}.amazonaws.com/{thumbnail_key}"
         except Exception as e:
             print(f"⚠️ thumbnail_url 생성 실패: {e}")
@@ -85,13 +85,13 @@ class VideoSerializer(serializers.ModelSerializer):
             # AWS credentials와 region 명시적으로 설정
             s3_client = boto3.client(
                 's3',
-                region_name=getattr(settings, 'AWS_S3_REGION_NAME', 'ap-northeast-2'),
+                region_name=settings.AWS_S3_REGION_NAME,
                 aws_access_key_id=getattr(settings, 'AWS_ACCESS_KEY_ID', None),
                 aws_secret_access_key=getattr(settings, 'AWS_SECRET_ACCESS_KEY', None)
             )
             
             # 썸네일은 별도 버킷 사용
-            bucket_name = 'capstone-dev-thumbnails' if is_thumbnail else getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-dev-raw')
+            bucket_name = settings.AWS_THUMBNAILS_BUCKET_NAME if is_thumbnail else settings.AWS_STORAGE_BUCKET_NAME
             
             presigned_url = s3_client.generate_presigned_url(
                 'get_object',

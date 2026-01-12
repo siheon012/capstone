@@ -3,7 +3,7 @@ S3 업로드 관련 URL 패턴
 """
 
 from django.urls import path
-from .views import s3
+from ..views import s3
 
 app_name = 'api_s3'
 

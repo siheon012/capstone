@@ -130,7 +130,7 @@ class VideoViewSet(viewsets.ModelViewSet):
             if s3_key:
                 video.s3_key = s3_key
                 video.s3_raw_key = s3_key
-                video.s3_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-video-bucket')
+                video.s3_bucket = settings.AWS_STORAGE_BUCKET_NAME
                 video.save(update_fields=['s3_key', 's3_raw_key', 's3_bucket'])
                 logger.info(f"S3 upload complete: s3://{video.s3_bucket}/{s3_key}")
             

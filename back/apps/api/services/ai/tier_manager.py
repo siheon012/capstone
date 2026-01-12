@@ -154,10 +154,11 @@ class TierManager:
     def regenerate_embedding(self, text):
         """Bedrock으로 임베딩 재생성"""
         try:
-            bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+            from django.conf import settings
+            bedrock = boto3.client('bedrock-runtime', region_name=settings.AWS_BEDROCK_REGION)
             
             response = bedrock.invoke_model(
-                modelId='amazon.titan-embed-text-v1',
+                modelId=settings.AWS_BEDROCK_EMBEDDING_MODEL_ID,
                 body=json.dumps({
                     "inputText": text
                 })

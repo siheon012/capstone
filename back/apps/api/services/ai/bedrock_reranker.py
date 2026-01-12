@@ -17,11 +17,8 @@ class BedrockReranker:
     
     def __init__(self):
         """Bedrock 클라이언트 초기화"""
-        # Cohere Rerank는 특정 리전에서만 지원됨
-        # ap-northeast-2 (서울) - 미지원 ❌
-        # ap-northeast-1 (도쿄) - 지원 ✅
-        # us-east-1, us-west-2 등도 지원
-        self.region = 'ap-northeast-1'  # Tokyo 리전 강제 설정 (Cohere Rerank 지원)
+
+        self.region = settings.AWS_BEDROCK_RERANKER_REGION
         
         # AWS 자격증명 설정
         aws_access_key = getattr(settings, 'AWS_ACCESS_KEY_ID', None)
@@ -40,12 +37,11 @@ class BedrockReranker:
             logger.info("🔑 IAM Role 또는 환경 자격증명 사용 (Reranker)")
         
         self.bedrock = boto3.client(**client_kwargs)
-        self.rerank_model = 'cohere.rerank-v3-5:0'  # Cohere Rerank v3.5
+        self.rerank_model = settings.AWS_BEDROCK_RERANK_MODEL_ID
         
         logger.info(f"✅ Bedrock Reranker 초기화 완료:")
         logger.info(f"   Model: {self.rerank_model}")
         logger.info(f"   Region: {self.region} (Tokyo - Cohere 지원)")
-        logger.info(f"   Note: Seoul(ap-northeast-2)에서는 Cohere Rerank 미지원")
     
     def rerank(
         self, 
@@ -192,7 +188,7 @@ class BedrockReranker:
             
             
             response = self.bedrock.invoke_model(
-                modelId='anthropic.claude-3-5-sonnet-20241022-v2:0',
+                modelId=settings.AWS_BEDROCK_MODEL_ID,
                 body=json.dumps(body)
             )
             

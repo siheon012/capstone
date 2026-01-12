@@ -188,6 +188,18 @@ AWS_RAW_BUCKET_NAME = env('AWS_RAW_BUCKET_NAME', default='capstone-dev-raw')
 AWS_THUMBNAILS_BUCKET_NAME = env('AWS_THUMBNAILS_BUCKET_NAME', default='capstone-dev-thumbnails')
 AWS_HIGHLIGHTS_BUCKET_NAME = env('AWS_HIGHLIGHTS_BUCKET_NAME', default='capstone-dev-highlights')
 
+# AWS Bedrock 설정
+AWS_BEDROCK_REGION = env('AWS_BEDROCK_REGION', default='ap-northeast-2')
+AWS_BEDROCK_RERANKER_REGION = env('AWS_BEDROCK_RERANKER_REGION', default='ap-northeast-1')  # Cohere 지원 리전
+AWS_BEDROCK_MODEL_ID = env('AWS_BEDROCK_MODEL_ID', default='anthropic.claude-3-5-sonnet-20241022-v2:0')
+AWS_BEDROCK_VLM_MODEL_ID = env('AWS_BEDROCK_VLM_MODEL_ID', default='anthropic.claude-3-5-sonnet-20241022-v2:0')
+AWS_BEDROCK_EMBEDDING_MODEL_ID = env('AWS_BEDROCK_EMBEDDING_MODEL_ID', default='amazon.titan-embed-text-v2:0')
+AWS_BEDROCK_RERANK_MODEL_ID = env('AWS_BEDROCK_RERANK_MODEL_ID', default='cohere.rerank-v3-5:0')
+
+# AWS SQS 설정
+AWS_SQS_QUEUE_URL = env('AWS_SQS_QUEUE_URL', default='')
+AWS_SQS_REGION = env('AWS_SQS_REGION', default='ap-northeast-2')
+
 # 파일 저장소 설정 (AWS S3 vs 로컬)
 USE_S3 = bool(AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME)
 

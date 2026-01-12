@@ -22,9 +22,9 @@ class SQSVideoProcessingService:
     
     def __init__(self):
         """SQS 클라이언트 및 설정 초기화"""
-        self.use_localstack = self._get_env_var('USE_LOCALSTACK', 'false').lower() == 'true'
-        self.queue_url = self._get_env_var('AWS_SQS_QUEUE_URL')
-        self.region = self._get_env_var('AWS_DEFAULT_REGION', 'ap-northeast-2')
+        self.use_localstack = getattr(settings, 'USE_LOCALSTACK', False)
+        self.queue_url = settings.AWS_SQS_QUEUE_URL
+        self.region = settings.AWS_SQS_REGION
         
         # LocalStack 또는 실제 AWS SQS 클라이언트 설정
         if self.use_localstack:

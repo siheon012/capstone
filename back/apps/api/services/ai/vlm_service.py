@@ -94,7 +94,7 @@ class BedrockVLMService:
             client_kwargs['aws_secret_access_key'] = aws_secret_key
         
         self.bedrock_runtime = boto3.client(**client_kwargs)
-        print(f"✅ Bedrock VLM 서비스 초기화: region={self.region}")
+        logger.info(f"✅ Bedrock VLM 서비스 초기화: region={self.region}")
     
     def extract_event_frames(
         self, 
@@ -123,13 +123,13 @@ class BedrockVLMService:
             reverse=True
         )[:max_frames]
         
-        print(f"🔍 프레임 추출 시작: sorted_events={len(sorted_events)}개")
+        logger.info(f"🔍 프레임 추출 시작: sorted_events={len(sorted_events)}개")
         
         # S3에서 비디오 다운로드 또는 로컬 경로 사용
         video_path = self._get_video_path(video)
         
-        print(f"📁 비디오 경로: {video_path}")
-        print(f"📁 파일 존재 여부: {os.path.exists(video_path) if video_path else False}")
+        logger.info(f"📁 비디오 경로: {video_path}")
+        logger.info(f"📁 파일 존재 여부: {os.path.exists(video_path) if video_path else False}")
         
         if not video_path or not os.path.exists(video_path):
             logger.warning(f"비디오 파일을 찾을 수 없음: {video_path}")
@@ -163,7 +163,7 @@ class BedrockVLMService:
                     'description': getattr(event, 'action_detected', '알 수 없음')
                 })
                 
-                print(f"✅ 프레임 추출: {event.timestamp}초 ({event.event_type})")
+                logger.info(f"✅ 프레임 추출: {event.timestamp}초 ({event.event_type})")
         
         cap.release()
         return frames
@@ -202,14 +202,14 @@ class BedrockVLMService:
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         video_duration = total_frames / fps
         
-        print(f"📹 비디오 정보: FPS={fps}, 총 프레임={total_frames}, 길이={video_duration:.2f}초")
+        logger.info(f"📹 비디오 정보: FPS={fps}, 총 프레임={total_frames}, 길이={video_duration:.2f}초")
         
         # 유효한 범위 확인
         end_seconds = min(end_seconds, video_duration)
         start_seconds = max(0, start_seconds)
         
         if start_seconds >= end_seconds:
-            print(f"⚠️ 유효하지 않은 시간 범위: {start_seconds}~{end_seconds}초")
+            logger.warning(f"⚠️ 유효하지 않은 시간 범위: {start_seconds}~{end_seconds}초")
             cap.release()
             return frames
         
@@ -237,12 +237,12 @@ class BedrockVLMService:
                     'frame_number': frame_number
                 })
                 
-                print(f"✅ 프레임 추출: {current_time:.1f}초 (프레임 #{frame_number})")
+                logger.info(f"✅ 프레임 추출: {current_time:.1f}초 (프레임 #{frame_number})")
             
             current_time += interval
         
         cap.release()
-        print(f"✅ 총 {len(frames)}개 프레임 추출 완료 ({start_seconds}~{end_seconds}초)")
+        logger.info(f"✅ 총 {len(frames)}개 프레임 추출 완료 ({start_seconds}~{end_seconds}초)")
         
         return frames
     
@@ -267,7 +267,7 @@ class BedrockVLMService:
         Returns:
             분석 결과 텍스트
         """
-        print(f"🎬 시간 범위 분석 시작: {start_seconds}~{end_seconds}초 ({analysis_type})")
+        logger.info(f"🎬 시간 범위 분석 시작: {start_seconds}~{end_seconds}초 ({analysis_type})")
         
         # 프레임 추출
         frames = self.extract_frames_by_seconds(
@@ -330,7 +330,7 @@ class BedrockVLMService:
                 "temperature": 0.5
             }
             
-            print(f"🤖 Bedrock VLM 호출 중... (이미지 {min(len(frames), 10)}개)")
+            logger.info(f"🤖 Bedrock VLM 호출 중... (이미지 {min(len(frames), 10)}개)")
             
             response = self.bedrock_runtime.invoke_model(
                 modelId=self.model_id,
@@ -340,11 +340,11 @@ class BedrockVLMService:
             response_body = json.loads(response['body'].read())
             analysis_result = response_body['content'][0]['text']
             
-            print(f"✅ Bedrock VLM 분석 완료")
+            logger.info(f"✅ Bedrock VLM 분석 완료")
             return analysis_result
             
         except Exception as e:
-            print(f"❌ VLM 분석 오류: {str(e)}")
+            logger.error(f"❌ VLM 분석 오류: {str(e)}")
             import traceback
             traceback.print_exc()
             
@@ -383,7 +383,7 @@ class BedrockVLMService:
         이벤트 기반 요약 (추천 ✅)
         주요 이벤트 프레임만 추출하여 분석
         """
-        print(f"📊 _generate_event_based_summary 호출: events={len(events)}개")
+        logger.info(f"📊 _generate_event_based_summary 호출: events={len(events)}개")
         
         # 이벤트가 너무 많으면 샘플링 (Claude 입력 길이 제한)
         max_events_for_analysis = 50  # 텍스트만 사용하므로 더 많이 가능
@@ -391,19 +391,19 @@ class BedrockVLMService:
             # 시간 간격을 두고 균등하게 샘플링
             step = len(events) // max_events_for_analysis
             sampled_events = events[::step][:max_events_for_analysis]
-            print(f"⚠️ 이벤트 샘플링: {len(events)}개 → {len(sampled_events)}개")
+            logger.warning(f"⚠️ 이벤트 샘플링: {len(events)}개 → {len(sampled_events)}개")
         else:
             sampled_events = events
         
         # Vision API 대신 텍스트 기반 요약 사용 (DB에 이미 분석 결과가 있음)
-        print("📝 텍스트 기반 요약 사용 (이미지 분석 건너뜀)")
+        logger.info("📝 텍스트 기반 요약 사용 (이미지 분석 건너뛀)")
         return self._generate_text_based_summary(video, sampled_events)
         
-        print(f"🖼️ 프레임 추출 결과: {len(frames) if frames else 0}개")
+        logger.info(f"🖼️ 프레임 추출 결과: {len(frames) if frames else 0}개")
         
         # 프레임이 없으면 텍스트 정보로 요약 생성
         if not frames:
-            print("⚠️ 프레임 추출 실패, 텍스트 정보로 요약 생성")
+            logger.warning("⚠️ 프레임 추출 실패, 텍스트 정보로 요약 생성")
             return self._generate_text_based_summary(video, events)
         
         # 2. 프레임 정보를 텍스트로 구성 (scene_analysis와 action 포함)
@@ -508,7 +508,7 @@ class BedrockVLMService:
             return summary
             
         except Exception as e:
-            print(f"❌ VLM 요약 생성 오류: {str(e)}")
+            logger.error(f"❌ VLM 요약 생성 오류: {str(e)}")
             import traceback
             traceback.print_exc()
             return self._generate_fallback_summary(events)
@@ -529,7 +529,7 @@ class BedrockVLMService:
         if not events:
             return "분석할 이벤트가 없습니다."
         
-        print(f"📝 텍스트 기반 요약 생성 시작 ({len(events)}개 이벤트)")
+        logger.info(f"📝 텍스트 기반 요약 생성 시작 ({len(events)}개 이벤트)")
         
         # 이벤트 정보 수집
         events_info = []
@@ -589,7 +589,7 @@ class BedrockVLMService:
 - 이벤트 정보만 사용 (추측 금지)
 """
             
-            from apps.api.bedrock_service import BedrockService
+            from apps.api.services import BedrockService
             bedrock = BedrockService()
             
             response = bedrock._invoke_claude(
@@ -598,11 +598,11 @@ class BedrockVLMService:
                 max_tokens=1500
             )
             
-            print(f"✅ 텍스트 기반 요약 생성 완료")
+            logger.info(f"✅ 텍스트 기반 요약 생성 완료")
             return response.strip()
             
         except Exception as e:
-            print(f"❌ 텍스트 기반 요약 생성 실패: {str(e)}")
+            logger.error(f"❌ 텍스트 기반 요약 생성 실패: {str(e)}")
             import traceback
             traceback.print_exc()
             return self._generate_fallback_summary(events)
@@ -691,13 +691,13 @@ class BedrockVLMService:
                 temp_path = temp_file.name
                 temp_file.close()
                 
-                print(f"📥 S3에서 다운로드 중: s3://{bucket}/{s3_key} → {temp_path}")
+                logger.info(f"📥 S3에서 다운로드 중: s3://{bucket}/{s3_key} → {temp_path}")
                 s3_client.download_file(bucket, s3_key, temp_path)
-                print(f"✅ S3 다운로드 완료: {temp_path}")
+                logger.info(f"✅ S3 다운로드 완료: {temp_path}")
                 
                 return temp_path
             except Exception as e:
-                print(f"❌ S3 다운로드 실패: {e}")
+                logger.error(f"❌ S3 다운로드 실패: {e}")
         
         # 로컬 경로
         if hasattr(video, 'filename') and video.filename:
@@ -707,7 +707,7 @@ class BedrockVLMService:
                 video.filename
             )
             if os.path.exists(local_path):
-                print(f"✅ 로컬 파일 사용: {local_path}")
+                logger.info(f"✅ 로컬 파일 사용: {local_path}")
                 return local_path
         
         # video_file 필드 확인 (Django FileField)
@@ -715,12 +715,12 @@ class BedrockVLMService:
             try:
                 local_path = video.video_file.path
                 if os.path.exists(local_path):
-                    print(f"✅ Django FileField 경로 사용: {local_path}")
+                    logger.info(f"✅ Django FileField 경로 사용: {local_path}")
                     return local_path
             except Exception:
                 pass
         
-        print(f"❌ 비디오 파일 경로를 찾을 수 없음: video_id={video.video_id}")
+        logger.error(f"❌ 비디오 파일 경로를 찾을 수 없음: video_id={video.video_id}")
         return None
 
 

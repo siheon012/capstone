@@ -6,8 +6,11 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from apps.db.models import Video, Event
-from apps.api.vlm_service import get_vlm_service
+from apps.api.services import get_vlm_service
 import threading
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def generate_summary_async(video_id, summary_type='events'):
@@ -20,7 +23,7 @@ def generate_summary_async(video_id, summary_type='events'):
         video.summary_status = 'generating'
         video.save(update_fields=['summary_status'])
         
-        print(f"🔄 [ASYNC] 요약 생성 시작: video={video.name}")
+        logger.info(f"🔄 [ASYNC] 요약 생성 시작: video={video.name}")
         
         # 이벤트 조회
         events = Event.objects.filter(video=video).order_by('timestamp')
@@ -29,7 +32,7 @@ def generate_summary_async(video_id, summary_type='events'):
             video.summary_status = 'failed'
             video.summary = '분석된 이벤트가 없습니다.'
             video.save(update_fields=['summary_status', 'summary'])
-            print(f"⚠️ [ASYNC] 이벤트 없음: video_id={video_id}")
+            logger.warning(f"⚠️ [ASYNC] 이벤트 없음: video_id={video_id}")
             return
         
         # VLM 서비스로 요약 생성
@@ -44,10 +47,10 @@ def generate_summary_async(video_id, summary_type='events'):
         video.summary = summary
         video.summary_status = 'completed'
         video.save(update_fields=['summary', 'summary_status'])
-        print(f"✅ [ASYNC] 요약 생성 완료: video_id={video_id}")
+        logger.info(f"✅ [ASYNC] 요약 생성 완료: video_id={video_id}")
         
     except Exception as e:
-        print(f"❌ [ASYNC] 요약 생성 오류: {str(e)}")
+        logger.error(f"❌ [ASYNC] 요약 생성 오류: {str(e)}", exc_info=True)
         try:
             video = Video.objects.get(video_id=video_id)
             video.summary_status = 'failed'
@@ -130,16 +133,16 @@ def generate_video_summary(request, video_id):
         # 이벤트 조회
         events = Event.objects.filter(video=video).order_by('timestamp')
         
-        print(f"📊 이벤트 조회 결과: video_id={video_id}, events_count={events.count()}")
+        logger.info(f"📊 이벤트 조회 결과: video_id={video_id}, events_count={events.count()}")
         
         if summary_type == 'events' and not events.exists():
-            print(f"⚠️ 이벤트가 없어 요약 생성 불가")
+            logger.warning(f"⚠️ 이벤트가 없어 요약 생성 불가")
             return Response(
                 {"error": "분석된 이벤트가 없습니다. 먼저 영상 분석을 진행해주세요."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        print(f"📊 요약 생성 시작: video={video.name}, type={summary_type}, events={events.count()}개")
+        logger.info(f"📊 요약 생성 시작: video={video.name}, type={summary_type}, events={events.count()}개")
         
         video.summary_status = 'generating'
         video.save(update_fields=['summary_status'])
@@ -156,11 +159,11 @@ def generate_video_summary(request, video_id):
         video.summary = summary
         video.summary_status = 'completed'
         video.save(update_fields=['summary', 'summary_status'])
-        print(f"💾 Summary DB 저장 완료: video_id={video.video_id}")
+        logger.info(f"💾 Summary DB 저장 완료: video_id={video.video_id}")
         
         processing_time = time.time() - start_time
         
-        print(f"✅ 요약 생성 완료: {processing_time:.2f}초")
+        logger.info(f"✅ 요약 생성 완료: {processing_time:.2f}초")
         
         return Response({
             "success": True,
@@ -174,9 +177,7 @@ def generate_video_summary(request, video_id):
         })
         
     except Exception as e:
-        print(f"❌ 요약 생성 오류: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"❌ 요약 생성 오류: {str(e)}", exc_info=True)
         
         # 실패 상태로 업데이트
         try:
@@ -229,7 +230,7 @@ def check_summary_status(request, video_id):
         return Response(response_data)
         
     except Exception as e:
-        print(f"❌ 요약 상태 확인 오류: {str(e)}")
+        logger.error(f"❌ 요약 상태 확인 오류: {str(e)}", exc_info=True)
         return Response(
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

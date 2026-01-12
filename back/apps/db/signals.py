@@ -31,7 +31,7 @@ def generate_event_embedding(sender, instance, **kwargs):
     
     try:
         # Bedrock 서비스로 embedding 생성
-        from apps.api.bedrock_service import get_bedrock_service
+        from apps.api.services import get_bedrock_service
         
         bedrock = get_bedrock_service()
         embedding = bedrock.generate_embedding(instance.searchable_text)
@@ -81,7 +81,7 @@ def generate_embeddings_on_video_completed(sender, instance, **kwargs):
         logger.info(f"🧠 Video {instance.video_id}: {count}개 이벤트의 embedding 생성 시작...")
         
         # Bedrock 서비스 초기화
-        from apps.api.bedrock_service import get_bedrock_service
+        from apps.api.services import get_bedrock_service
         import time
         
         bedrock = get_bedrock_service()

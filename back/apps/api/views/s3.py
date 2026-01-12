@@ -15,8 +15,7 @@ import os
 import uuid
 
 from datetime import datetime
-from .services.s3_service import s3_service
-from .services.sqs_service import sqs_service
+from .services import s3_service, sqs_service, get_video_service
 from apps.db.models import Video
 from apps.db.serializers import VideoSerializer
 
@@ -295,22 +294,22 @@ def get_video_download_url(request, video_id):
 def delete_video(request, video_id):
     """
     비디오 삭제 (DB + S3)
+    VideoService를 사용하여 VideoViewSet.destroy()와 일관성 유지
     """
     try:
+        # Video 존재 여부 확인
         video = Video.objects.get(video_id=video_id)
+        video_name = video.name
         
-        # S3에서 파일 삭제
-        s3_key = video.get_current_s3_key()  # 현재 티어의 S3 키 가져오기
-        s3_deleted = s3_service.delete_video(s3_key)
+        # VideoService를 통한 삭제 (S3 파일 + DB 포함)
+        video_service = get_video_service()
+        video_service.delete_video(video_id)
         
-        # DB에서 비디오 삭제
-        video.delete()
-        
-        logger.info(f"🗑️ 비디오 삭제 완료: video_id={video_id}, s3_deleted={s3_deleted}")
+        logger.info(f"🗑️ 비디오 삭제 완료: video_id={video_id}, name={video_name}")
         
         return Response({
-            'message': '비디오가 삭제되었습니다.',
-            's3_deleted': s3_deleted
+            'success': True,
+            'message': '비디오가 삭제되었습니다.'
         }, status=status.HTTP_200_OK)
         
     except Video.DoesNotExist:
@@ -319,7 +318,7 @@ def delete_video(request, video_id):
             status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
-        logger.error(f"❌ 비디오 삭제 실패: {e}")
+        logger.error(f"❌ 비디오 삭제 실패: {e}", exc_info=True)
         return Response(
             {'error': '비디오 삭제에 실패했습니다.'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

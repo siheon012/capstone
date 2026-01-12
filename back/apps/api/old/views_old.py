@@ -544,7 +544,7 @@ def _generate_timeline_response(prompt: str, events, video: Video) -> str:
                     'theft': '도난',
                     'collapse': '쓰러짐',
                     'sitting': '점거',
-                    'violence': '폭력'
+                    'violence': '폭행'
                 }.get(event.event_type, event.event_type)
                 
                 response_parts.append(
@@ -561,7 +561,7 @@ def _generate_timeline_response(prompt: str, events, video: Video) -> str:
                 'theft': '도난',
                 'collapse': '쓰러짐',
                 'sitting': '점거',
-                'violence': '폭력'
+                'violence': '폭행'
             }.get(event.event_type, event.event_type)
             
             response_parts.append(
@@ -654,7 +654,7 @@ def _analyze_behaviors(events, video: Video) -> str:
             'theft': '도난',
             'collapse': '쓰러짐',
             'sitting': '점거',
-            'violence': '폭력'
+            'violence': '폭행'
         }.get(event_type, event_type)
         
         response_parts.append(f"- {event_type_kr}: {count}건")

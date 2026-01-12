@@ -200,4 +200,3 @@ backend_logs.txt
 batch_log.json
 temp_log.txt
 memi.zip
-back/apps/api/test_bedrock_views.py

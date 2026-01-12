@@ -254,11 +254,11 @@ export async function uploadThumbnail(
     // 상대 경로 사용 (Next.js rewrites를 통해 ALB로 프록시됨, Mixed Content 해결)
     console.log('🖼️ [Thumbnail Upload] S3 업로드 시작:', {
       fileName: thumbnailFileName,
-      endpoint: '/api/upload-thumbnail',
+      endpoint: '/api/s3/upload/thumbnail/',
       blobSize: thumbnailBlob.size,
     });
 
-    const response = await fetch('/api/upload-thumbnail', {
+    const response = await fetch('/api/s3/upload/thumbnail/', {
       method: 'POST',
       body: formData,
     });

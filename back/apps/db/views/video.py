@@ -198,7 +198,7 @@ class VideoViewSet(viewsets.ModelViewSet):
             # 분석 완료 시 자동으로 Summary 생성
             if analysis_status == 'completed' and progress == 100:
                 try:
-                    from apps.api.vlm_service import get_vlm_service
+                    from apps.api.services import get_vlm_service
                     
                     events = Event.objects.filter(video=video).order_by('timestamp')
                     

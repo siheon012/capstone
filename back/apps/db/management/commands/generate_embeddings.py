@@ -8,7 +8,7 @@
 """
 from django.core.management.base import BaseCommand
 from apps.db.models import Event
-from apps.api.bedrock_service import get_bedrock_service
+from apps.api.services import get_bedrock_service
 import time
 
 

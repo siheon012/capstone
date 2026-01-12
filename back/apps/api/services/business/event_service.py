@@ -84,7 +84,7 @@ class EventService:
         Returns:
             처리 결과 통계
         """
-        from apps.api.bedrock_service import get_bedrock_service
+        from apps.api.services import get_bedrock_service
         import time
         
         # 처리할 이벤트 쿼리

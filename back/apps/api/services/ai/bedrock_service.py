@@ -5,10 +5,13 @@ AWS Bedrock 서비스 모듈
 """
 import json
 import boto3
+import logging
 from typing import Dict, Optional, List, Tuple
 from datetime import datetime
 from django.conf import settings
 from apps.db.models import Event, Video
+
+logger = logging.getLogger(__name__)
 
 
 def get_event_schema() -> str:
@@ -111,9 +114,9 @@ class BedrockService:
         if aws_access_key and aws_secret_key:
             client_kwargs['aws_access_key_id'] = aws_access_key
             client_kwargs['aws_secret_access_key'] = aws_secret_key
-            print(f"🔑 Bedrock: 명시적 자격증명 사용 (로컬 개발)")
+            logger.info(f"🔑 Bedrock: 명시적 자격증명 사용 (로컬 개발)")
         else:
-            print(f"🔐 Bedrock: IAM Role 자동 인증 사용 (ECS/Fargate)")
+            logger.info(f"🔐 Bedrock: IAM Role 자동 인증 사용 (ECS/Fargate)")
         
         self.bedrock_runtime = boto3.client(**client_kwargs)
         
@@ -129,7 +132,7 @@ class BedrockService:
         
         self.bedrock_agent = boto3.client(**agent_kwargs)
         
-        print(f"✅ Bedrock 서비스 초기화: region={self.region}, model={self.model_id}")
+        logger.info(f"✅ Bedrock 서비스 초기화: region={self.region}, model={self.model_id}")
     
     def _invoke_claude(self, prompt: str, system_prompt: str = None, max_tokens: int = 2000) -> str:
         """
@@ -180,7 +183,7 @@ class BedrockService:
             return ""
             
         except Exception as e:
-            print(f"❌ Claude 호출 오류: {str(e)}")
+            logger.error(f"❌ Claude 호출 오류: {str(e)}")
             raise
     
     def text_to_sql(self, prompt: str, video_id: Optional[int] = None) -> Dict[str, any]:
@@ -300,7 +303,7 @@ class BedrockService:
             - sitting: 점거 (오래 앉아있거나 공간 점거)
             - loitering: 배회 (의심스럽게 배회하는 행동)
             - intrusion: 침입 (허가되지 않은 영역 진입)
-            - fighting: 싸움/폭력 (신체적 충돌)
+            - fighting: 싸움/폭력/폭행 (신체적 충돌)
             - vandalism: 기물 파손
             - person_enter: 사람 진입
             - person_exit: 사람 퇴장
@@ -404,7 +407,7 @@ JSON 형식으로만 응답하세요."""
                 max_tokens=1500
             )
             
-            print(f"🤖 Bedrock Text2SQL 응답: {response}")
+            logger.info(f"🤖 Bedrock Text2SQL 응답: {response}")
             
             # JSON 파싱
             # Claude가 ```json ... ``` 형식으로 응답할 수 있으므로 처리
@@ -432,15 +435,15 @@ JSON 형식으로만 응답하세요."""
             }
             
         except json.JSONDecodeError as e:
-            print(f"❌ JSON 파싱 오류: {str(e)}")
-            print(f"응답 내용: {response}")
+            logger.error(f"❌ JSON 파싱 오류: {str(e)}")
+            logger.error(f"응답 내용: {response}")
             return {
                 "sql": None,
                 "explanation": None,
                 "error": f"응답 파싱 실패: {str(e)}"
             }
         except Exception as e:
-            print(f"❌ Text2SQL 오류: {str(e)}")
+            logger.error(f"❌ Text2SQL 오류: {str(e)}")
             return {
                 "sql": None,
                 "explanation": None,
@@ -554,7 +557,7 @@ JSON 형식으로만 응답하세요."""
             return response.strip()
             
         except Exception as e:
-            print(f"❌ RAG 응답 생성 오류: {str(e)}")
+            logger.error(f"❌ RAG 응답 생성 오류: {str(e)}")
             # 오류 시 기본 응답 생성
             return self._generate_default_response(events)
     
@@ -604,7 +607,7 @@ JSON 형식으로만 응답하세요."""
         kb_id = knowledge_base_id or settings.AWS_BEDROCK_KNOWLEDGE_BASE_ID
         
         if not kb_id:
-            print("⚠️ Knowledge Base ID가 설정되지 않았습니다.")
+            logger.warning("⚠️ Knowledge Base ID가 설정되지 않았습니다.")
             return []
         
         try:
@@ -631,7 +634,7 @@ JSON 형식으로만 응답하세요."""
             return results
             
         except Exception as e:
-            print(f"❌ Knowledge Base 검색 오류: {str(e)}")
+            logger.error(f"❌ Knowledge Base 검색 오류: {str(e)}")
             return []
     
     def generate_embedding(self, text: str) -> Optional[List[float]]:
@@ -646,7 +649,7 @@ JSON 형식으로만 응답하세요."""
             실패 시 None
         """
         if not text or not text.strip():
-            print("⚠️ 임베딩할 텍스트가 비어있습니다.")
+            logger.warning("⚠️ 임베딩할 텍스트가 비어있습니다.")
             return None
         
         try:
@@ -658,7 +661,7 @@ JSON 형식으로만 응답하세요."""
             max_chars = 30000  # 안전 마진
             if len(text) > max_chars:
                 text = text[:max_chars]
-                print(f"⚠️ 텍스트가 너무 길어 {max_chars}자로 자릅니다.")
+                logger.warning(f"⚠️ 텍스트가 너무 길어 {max_chars}자로 자릅니다.")
             
             # Bedrock Embeddings API 호출 (v2 형식)
             body = json.dumps({
@@ -683,11 +686,11 @@ JSON 형식으로만 응답하세요."""
             if embedding and len(embedding) == 1024:
                 return embedding
             else:
-                print(f"⚠️ 예상치 못한 임베딩 차원: {len(embedding) if embedding else 0}")
+                logger.warning(f"⚠️ 예상치 못한 임베딩 차원: {len(embedding) if embedding else 0}")
                 return None
             
         except Exception as e:
-            print(f"❌ Embedding 생성 오류: {str(e)}")
+            logger.error(f"❌ Embedding 생성 오류: {str(e)}")
             import traceback
             traceback.print_exc()
             return None

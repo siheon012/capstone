@@ -31,13 +31,32 @@ export default function EventTimeline({
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
 
   const loadEvents = async () => {
+    // video.id가 없거나 이미 로드한 비디오인 경우 로딩 건너뛰기
+    if (!video.id) {
+      console.log('[EventTimeline] ⚠️ No video ID provided, skipping load');
+      setLoading(false);
+      return;
+    }
+
+    // 이미 같은 비디오를 로드한 경우 건너뛰기 (중복 방지)
+    if (currentVideoId === video.id) {
+      console.log(
+        `[EventTimeline] ℹ️ Events already loaded for video ${video.id}, skipping duplicate load`
+      );
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      console.log(`[EventTimeline] Loading events for video ID: ${video.id}`);
+      console.log(
+        `[EventTimeline] 🔄 Loading events for video ID: ${video.id}`
+      );
       console.log(`[EventTimeline] Video object:`, video);
 
       const response = await getEvents(video.id);
@@ -46,8 +65,9 @@ export default function EventTimeline({
 
       if (response.success) {
         setEvents(response.data);
+        setCurrentVideoId(video.id); // 현재 로드된 비디오 ID 저장
         console.log(
-          `[EventTimeline] Loaded ${response.data.length} events for video ${video.id}`
+          `[EventTimeline] ✅ Loaded ${response.data.length} events for video ${video.id}`
         );
       } else {
         const errorMsg = response.error || '이벤트를 불러올 수 없습니다.';
@@ -67,7 +87,13 @@ export default function EventTimeline({
   };
 
   useEffect(() => {
-    loadEvents();
+    // video.id가 변경되었을 때만 로드
+    if (video.id && video.id !== currentVideoId) {
+      console.log(
+        `[EventTimeline] 🎬 Video ID changed from ${currentVideoId} to ${video.id}`
+      );
+      loadEvents();
+    }
   }, [video.id]);
 
   const getEventTypeColor = (eventType: string) => {

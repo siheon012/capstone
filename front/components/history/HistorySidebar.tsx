@@ -434,7 +434,7 @@ export default function DynamicHistorySidebar({
             className="h-full history-scrollbar"
             onScrollCapture={handleScroll}
           >
-            <div ref={scrollAreaRef} className="p-3 sm:p-4 space-y-3">
+            <div ref={scrollAreaRef} className="p-3 sm:p-4 space-y-3 w-full" style={{ maxWidth: '100%', boxSizing: 'border-box' }}>
               {historyList.length === 0 ? (
                 <div className="text-center py-8">
                   <MessageSquare className="h-12 w-12 text-gray-500 mx-auto mb-3" />
@@ -452,8 +452,12 @@ export default function DynamicHistorySidebar({
                         : 'bg-[#1a1f2c] hover:bg-[#2a3142]'
                     }`}
                     onClick={() => handleCardClick(item)}
+                    style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', display: 'block' }}
                   >
-                    <CardContent className="p-3 overflow-hidden">
+                    <CardContent
+                      className="p-3 overflow-hidden"
+                      style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+                    >
                       <div className="flex items-start justify-between mb-2 gap-2 min-w-0 overflow-hidden">
                         <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden">
                           {/* 날짜 썸네일 */}
@@ -464,10 +468,17 @@ export default function DynamicHistorySidebar({
                             </span>
                           </div>
 
-                          <div className="flex-1 min-w-0 overflow-hidden">
+                          <div
+                            className="flex-1 min-w-0 overflow-hidden"
+                            style={{ maxWidth: '100%' }}
+                          >
                             {/* 제목을 "prompt_id"에서 "{동영상 이름}의 몇번째 채팅" 형식으로 변경 */}
                             <h3
-                              className="font-medium text-white text-xs sm:text-sm truncate max-w-full"
+                              className="font-medium text-white text-xs sm:text-sm truncate"
+                              style={{
+                                maxWidth: '100%',
+                                wordBreak: 'break-all',
+                              }}
                               title={generateSessionTitle(
                                 item,
                                 historyList.indexOf(item)
@@ -478,7 +489,10 @@ export default function DynamicHistorySidebar({
                                 historyList.indexOf(item)
                               )}
                             </h3>
-                            <p className="text-xs text-gray-400 mt-1 truncate max-w-full">
+                            <p
+                              className="text-xs text-gray-400 mt-1 truncate"
+                              style={{ maxWidth: '100%' }}
+                            >
                               {formatTime(getSafeDate(item))}
                             </p>
                           </div>
@@ -495,37 +509,57 @@ export default function DynamicHistorySidebar({
                         </Button>
                       </div>
 
-                      <div className="space-y-2 overflow-hidden">
+                      <div
+                        className="space-y-2 overflow-hidden"
+                        style={{ maxWidth: '100%' }}
+                      >
                         {/* 비디오 정보 */}
                         {item.videoInfo && (
-                          <div className="flex items-center gap-2 text-xs text-gray-400 overflow-hidden">
+                          <div
+                            className="flex items-center gap-2 text-xs text-gray-400 min-w-0"
+                            style={{ maxWidth: '100%' }}
+                          >
                             <Video className="h-3 w-3 flex-shrink-0" />
-                            <span className="truncate overflow-hidden">
+                            <span
+                              className="truncate block"
+                              style={{ maxWidth: '100%' }}
+                            >
                               {item.videoInfo.name}
                             </span>
                           </div>
                         )}
 
                         {/* 메시지 미리보기 */}
-                        <div className="text-sm text-gray-300 space-y-1 overflow-hidden">
-                          <div className="flex items-start gap-1 overflow-hidden">
+                        <div
+                          className="text-sm text-gray-300 space-y-1 overflow-hidden"
+                          style={{ maxWidth: '100%' }}
+                        >
+                          <div
+                            className="flex items-start gap-1 min-w-0"
+                            style={{ maxWidth: '100%' }}
+                          >
                             <span className="text-[#6c5ce7] flex-shrink-0">
                               Q:
                             </span>
                             <span
-                              className="truncate overflow-hidden"
+                              className="truncate block"
+                              style={{ maxWidth: '100%' }}
                               title={item.messages[0]?.content || '질문 없음'}
                             >
                               {item.messages[0]?.content || '질문 없음'}
                             </span>
                           </div>
                           {item.messages[1] && (
-                            <div className="flex items-start gap-1 overflow-hidden">
+                            <div
+                              className="flex items-start gap-1 min-w-0"
+                              style={{ maxWidth: '100%' }}
+                            >
                               <span className="text-[#00e6b4] flex-shrink-0">
                                 A:
                               </span>
                               <span
-                                className="truncate overflow-hidden"
+                                className="truncate block"
+                                style={{ maxWidth: '100%' }}
                                 title={item.messages[1].content}
                               >
                                 {item.messages[1].content}
@@ -597,11 +631,15 @@ export default function DynamicHistorySidebar({
                           const events = formatDetectedEvents(item);
                           if (!events) return null;
                           return (
-                            <div className="w-full overflow-hidden">
+                            <div
+                              className="w-full overflow-hidden"
+                              style={{ maxWidth: '100%' }}
+                            >
                               <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium inline-block truncate max-w-full ${getEventBadgeStyle(
+                                className={`px-2 py-1 rounded-full text-xs font-medium inline-block truncate ${getEventBadgeStyle(
                                   events
                                 )}`}
+                                style={{ maxWidth: '100%' }}
                                 title={`찾은 사건: ${events}`}
                               >
                                 찾은 사건: {events}
@@ -619,7 +657,8 @@ export default function DynamicHistorySidebar({
         ) : (
           // 스크롤이 필요없는 경우 일반 div 사용
           <div
-            className="h-full p-3 sm:p-4 space-y-3 overflow-y-auto overflow-x-hidden history-scrollbar"
+            className="h-full p-3 sm:p-4 space-y-3 overflow-y-auto overflow-x-hidden history-scrollbar w-full"
+            style={{ maxWidth: '100%', boxSizing: 'border-box' }}
             onWheel={(e) => {
               e.stopPropagation();
             }}
@@ -641,8 +680,12 @@ export default function DynamicHistorySidebar({
                       : 'bg-[#1a1f2c] hover:bg-[#2a3142]'
                   }`}
                   onClick={() => handleCardClick(item)}
+                  style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', display: 'block' }}
                 >
-                  <CardContent className="p-3 overflow-hidden">
+                  <CardContent
+                    className="p-3 overflow-hidden"
+                    style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+                  >
                     <div className="flex items-start justify-between mb-2 gap-2 overflow-hidden">
                       <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
                         {/* 날짜 썸네일 */}
@@ -653,10 +696,14 @@ export default function DynamicHistorySidebar({
                           </span>
                         </div>
 
-                        <div className="flex-1 min-w-0 overflow-hidden">
+                        <div
+                          className="flex-1 min-w-0 overflow-hidden"
+                          style={{ maxWidth: '100%' }}
+                        >
                           {/* 제목을 "prompt_id"에서 "{동영상 이름}의 몇번째 채팅" 형식으로 변경 */}
                           <h3
-                            className="font-medium text-white text-xs sm:text-sm truncate overflow-hidden"
+                            className="font-medium text-white text-xs sm:text-sm truncate"
+                            style={{ maxWidth: '100%', wordBreak: 'break-all' }}
                             title={generateSessionTitle(
                               item,
                               historyList.indexOf(item)
@@ -667,7 +714,10 @@ export default function DynamicHistorySidebar({
                               historyList.indexOf(item)
                             )}
                           </h3>
-                          <p className="text-xs text-gray-400 mt-1 truncate overflow-hidden">
+                          <p
+                            className="text-xs text-gray-400 mt-1 truncate"
+                            style={{ maxWidth: '100%' }}
+                          >
                             {formatTime(getSafeDate(item))}
                           </p>
                         </div>
@@ -687,9 +737,15 @@ export default function DynamicHistorySidebar({
                     <div className="space-y-2 overflow-hidden">
                       {/* 비디오 정보 */}
                       {item.videoInfo && (
-                        <div className="flex items-center gap-2 text-xs text-gray-400 min-w-0 overflow-hidden">
+                        <div
+                          className="flex items-center gap-2 text-xs text-gray-400 min-w-0"
+                          style={{ maxWidth: '100%' }}
+                        >
                           <Video className="h-3 w-3 flex-shrink-0" />
-                          <span className="truncate max-w-full block">
+                          <span
+                            className="truncate block"
+                            style={{ maxWidth: '100%' }}
+                          >
                             {item.videoInfo.name}
                           </span>
                         </div>
@@ -698,17 +754,22 @@ export default function DynamicHistorySidebar({
                       {/* 메시지 미리보기 */}
                       <div
                         className="text-xs sm:text-sm text-gray-300 space-y-1 overflow-hidden"
-                        style={{ minHeight: '40px', maxHeight: '40px' }}
+                        style={{
+                          minHeight: '40px',
+                          maxHeight: '40px',
+                          maxWidth: '100%',
+                        }}
                       >
                         <div
-                          className="flex items-start gap-1 overflow-hidden min-w-0"
-                          style={{ maxHeight: '18px' }}
+                          className="flex items-start gap-1 min-w-0"
+                          style={{ maxHeight: '18px', maxWidth: '100%' }}
                         >
                           <span className="text-[#6c5ce7] flex-shrink-0">
                             Q:
                           </span>
                           <span
-                            className="truncate block max-w-full"
+                            className="truncate block"
+                            style={{ maxWidth: '100%' }}
                             title={item.messages[0]?.content || '질문 없음'}
                           >
                             {item.messages[0]?.content || '질문 없음'}
@@ -716,14 +777,15 @@ export default function DynamicHistorySidebar({
                         </div>
                         {item.messages[1] && (
                           <div
-                            className="flex items-start gap-1 overflow-hidden min-w-0"
-                            style={{ maxHeight: '18px' }}
+                            className="flex items-start gap-1 min-w-0"
+                            style={{ maxHeight: '18px', maxWidth: '100%' }}
                           >
                             <span className="text-[#00e6b4] flex-shrink-0">
                               A:
                             </span>
                             <span
-                              className="truncate block max-w-full"
+                              className="truncate block"
+                              style={{ maxWidth: '100%' }}
                               title={item.messages[1].content}
                             >
                               {item.messages[1].content}
@@ -791,11 +853,15 @@ export default function DynamicHistorySidebar({
                           if (!events) return null;
 
                           return (
-                            <div className="flex items-center gap-1 mt-2 overflow-hidden min-w-0">
+                            <div
+                              className="flex items-center gap-1 mt-2 overflow-hidden min-w-0"
+                              style={{ maxWidth: '100%' }}
+                            >
                               <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium truncate max-w-full inline-block ${getEventBadgeStyle(
+                                className={`px-2 py-1 rounded-full text-xs font-medium truncate inline-block ${getEventBadgeStyle(
                                   events
                                 )}`}
+                                style={{ maxWidth: '100%' }}
                                 title={`찾은 사건: ${events}`}
                               >
                                 찾은 사건: {events}

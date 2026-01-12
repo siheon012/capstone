@@ -108,6 +108,8 @@ class HybridSearchService:
                 event = doc['original_obj']
                 event_desc = getattr(event, 'description', '') or getattr(event, 'searchable_text', '')[:50]
                 print(f"  #{i+1}: {getattr(event, 'event_type', 'unknown')} (score: {score:.3f}) - {event_desc}")
+            
+            print(f"📊 최종 {len(all_events)}개 이벤트 선택 (✅ Reranking 완료)")
         
         # ============================================
         # 4. 결과 정렬 (Reranking 후에는 이미 순서가 최적화됨)
@@ -115,8 +117,9 @@ class HybridSearchService:
         # Reranking이 안 된 경우에만 timestamp 정렬
         elif all_events:
             all_events.sort(key=lambda e: e.timestamp)
-        
-        print(f"📊 최종 {len(all_events)}개 이벤트 선택 (Reranking 완료)")
+            print(f"📊 최종 {len(all_events)}개 이벤트 선택 (Reranking 미실행 - {len(all_events)}개 ≤ 5)")
+        else:
+            print(f"📊 최종 {len(all_events)}개 이벤트 선택")
         
         # ============================================
         # 4. Bedrock RAG로 자연어 응답 생성

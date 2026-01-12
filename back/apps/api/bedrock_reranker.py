@@ -17,7 +17,11 @@ class BedrockReranker:
     
     def __init__(self):
         """Bedrock 클라이언트 초기화"""
-        self.region = getattr(settings, 'AWS_BEDROCK_REGION', 'us-east-1')
+        # Cohere Rerank는 특정 리전에서만 지원됨
+        # ap-northeast-2 (서울) - 미지원 ❌
+        # ap-northeast-1 (도쿄) - 지원 ✅
+        # us-east-1, us-west-2 등도 지원
+        self.region = 'ap-northeast-1'  # Tokyo 리전 강제 설정 (Cohere Rerank 지원)
         
         # AWS 자격증명 설정
         aws_access_key = getattr(settings, 'AWS_ACCESS_KEY_ID', None)
@@ -31,11 +35,17 @@ class BedrockReranker:
         if aws_access_key and aws_secret_key:
             client_kwargs['aws_access_key_id'] = aws_access_key
             client_kwargs['aws_secret_access_key'] = aws_secret_key
+            logger.info("🔑 명시적 AWS 자격증명 사용 (Reranker)")
+        else:
+            logger.info("🔑 IAM Role 또는 환경 자격증명 사용 (Reranker)")
         
         self.bedrock = boto3.client(**client_kwargs)
         self.rerank_model = 'cohere.rerank-v3-5:0'  # Cohere Rerank v3.5
         
-        logger.info(f"✅ Bedrock Reranker 초기화: model={self.rerank_model}")
+        logger.info(f"✅ Bedrock Reranker 초기화 완료:")
+        logger.info(f"   Model: {self.rerank_model}")
+        logger.info(f"   Region: {self.region} (Tokyo - Cohere 지원)")
+        logger.info(f"   Note: Seoul(ap-northeast-2)에서는 Cohere Rerank 미지원")
     
     def rerank(
         self, 
@@ -105,10 +115,21 @@ class BedrockReranker:
                     reranked_results.append((documents[index], relevance_score))
             
             logger.info(f"✅ Rerank 완료: {len(documents)}개 → {len(reranked_results)}개 (top_k={top_k})")
+            for i, (doc, score) in enumerate(reranked_results[:5]):
+                logger.info(f"   Top {i+1}: score={score:.3f}")
             return reranked_results
             
         except Exception as e:
             logger.error(f"❌ Rerank 실패: {str(e)}")
+            logger.error(f"   Model: {self.rerank_model}")
+            logger.error(f"   Region: {self.region}")
+            logger.error(f"   Documents: {len(documents)}개")
+            if hasattr(e, 'response'):
+                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                error_msg = e.response.get('Error', {}).get('Message', 'Unknown')
+                logger.error(f"   AWS Error Code: {error_code}")
+                logger.error(f"   AWS Error Message: {error_msg}")
+            logger.warning(f"⚠️ Fallback: 원본 순서로 상위 {top_k}개 반환 (score=1.0)")
             # Fallback: 원본 순서 그대로 반환
             return [(doc, 1.0) for doc in documents[:top_k]]
     

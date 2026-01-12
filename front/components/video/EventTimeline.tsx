@@ -33,16 +33,16 @@ export default function EventTimeline({
   const [error, setError] = useState<string | null>(null);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
 
-  const loadEvents = async () => {
-    // video.id가 없거나 이미 로드한 비디오인 경우 로딩 건너뛰기
+  const loadEvents = async (forceRefresh: boolean = false) => {
+    // video.id가 없는 경우 로딩 건너뛰기
     if (!video.id) {
       console.log('[EventTimeline] ⚠️ No video ID provided, skipping load');
       setLoading(false);
       return;
     }
 
-    // 이미 같은 비디오를 로드한 경우 건너뛰기 (중복 방지)
-    if (currentVideoId === video.id) {
+    // 강제 새로고침이 아니고 이미 같은 비디오를 로드한 경우 건너뛰기 (중복 방지)
+    if (!forceRefresh && currentVideoId === video.id) {
       console.log(
         `[EventTimeline] ℹ️ Events already loaded for video ${video.id}, skipping duplicate load`
       );
@@ -161,7 +161,7 @@ export default function EventTimeline({
           </div>
           <div className="flex justify-center mt-4">
             <Button
-              onClick={loadEvents}
+              onClick={() => loadEvents(true)}
               variant="outline"
               className="border-[#00e6b4] text-[#00e6b4] hover:bg-[#00e6b4] hover:text-[#1a1f2c]"
             >
@@ -183,7 +183,7 @@ export default function EventTimeline({
             이벤트 타임라인
           </CardTitle>
           <Button
-            onClick={loadEvents}
+            onClick={() => loadEvents(true)}
             variant="ghost"
             size="sm"
             className="text-gray-400 hover:text-[#00e6b4]"

@@ -6,7 +6,12 @@ on:
   workflow_dispatch: # 수동 실행도 가능
 
 env:
-  AWS_REGION: ap-northeast-2
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_FRONTEND_REPO: ${{ secrets.ECR_FRONTEND_REPO }}
+  ECR_BACKEND_REPO: ${{ secrets.ECR_BACKEND_REPO }}
+  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+  ECS_FRONTEND_SERVICE: ${{ secrets.ECS_FRONTEND_SERVICE }}
+  ECS_BACKEND_SERVICE: ${{ secrets.ECS_BACKEND_SERVICE }}
 
 jobs:
   build-and-deploy:
@@ -46,13 +51,13 @@ jobs:
 
           # 프로덕션 이미지 빌드
           docker build --no-cache --target production \
-            -t $ECR_REGISTRY/capstone-frontend:$IMAGE_TAG \
-            -t $ECR_REGISTRY/capstone-frontend:latest \
+            -t $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:$IMAGE_TAG \
+            -t $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:latest \
             ./front
 
           # ECR에 푸시
-          docker push $ECR_REGISTRY/capstone-frontend:$IMAGE_TAG
-          docker push $ECR_REGISTRY/capstone-frontend:latest
+          docker push $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:latest
 
           echo "Frontend image pushed successfully!"
 
@@ -66,13 +71,13 @@ jobs:
 
           # Backend 이미지 빌드 (Dockerfile이 있다면)
           docker build --no-cache\
-            -t $ECR_REGISTRY/capstone-backend:$IMAGE_TAG \
-            -t $ECR_REGISTRY/capstone-backend:latest \
+            -t $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:$IMAGE_TAG \
+            -t $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:latest \
             ./back
 
           # ECR에 푸시
-          docker push $ECR_REGISTRY/capstone-backend:$IMAGE_TAG
-          docker push $ECR_REGISTRY/capstone-backend:latest
+          docker push $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:latest
 
           echo "Backend image pushed successfully!"
 
@@ -83,8 +88,8 @@ jobs:
         run: |
           echo "Deploying frontend with image tag: $IMAGE_TAG"
           aws ecs update-service \
-            --cluster capstone-cluster \
-            --service capstone-frontend-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_FRONTEND_SERVICE }} \
             --force-new-deployment \
             --region ${{ env.AWS_REGION }}
 
@@ -94,8 +99,8 @@ jobs:
         run: |
           echo "Deploying backend with image tag: $IMAGE_TAG"
           aws ecs update-service \
-            --cluster capstone-cluster \
-            --service capstone-backend-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_BACKEND_SERVICE }} \
             --force-new-deployment \
             --region ${{ env.AWS_REGION }}
 

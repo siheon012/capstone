@@ -1,0 +1,253 @@
+name: ⏰ AWS Services Scheduler (ECS + RDS)
+
+on:
+  schedule:
+    # 매일 오전 8시 (KST 08:00 = UTC 전날 23:00) - 서비스 중지
+    - cron: '0 23 * * *'
+    # 매일 오후 2시 (KST 14:00 = UTC 05:00) - 서비스 시작
+    - cron: '0 5 * * *'
+    # 매주 토요일 오전 (7일 자동 시작 방지)
+    - cron: '0 1 * * 6'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'status'
+        type: choice
+        options:
+          - start
+          - stop
+          - status
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  CLUSTER_NAME: ${{ secrets.ECS_CLUSTER }}
+  FRONTEND_SERVICE: ${{ secrets.ECS_FRONTEND_SERVICE }}
+  BACKEND_SERVICE: ${{ secrets.ECS_BACKEND_SERVICE }}
+  RDS_INSTANCE_ID: ${{ secrets.RDS_INSTANCE_ID }}
+
+jobs:
+  schedule-ecs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Determine action
+        id: determine-action
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ACTION="${{ inputs.action }}"
+          else
+            # Cron 기반 자동 실행
+            HOUR=$(date -u +%H)
+            
+            # UTC 23:00 (KST 08:00) - 서비스 중지
+            if [ "$HOUR" == "23" ]; then
+              ACTION="stop"
+            # UTC 05:00 (KST 14:00) - 서비스 시작
+            elif [ "$HOUR" == "05" ]; then
+              ACTION="start"
+            else
+              ACTION="status"
+            fi
+          fi
+
+          echo "action=$ACTION" >> $GITHUB_OUTPUT
+          echo "🎯 Action determined: $ACTION"
+
+      - name: Get current service status
+        id: status
+        run: |
+          echo "📊 Current Service Status"
+          echo "========================"
+          echo ""
+          echo "[ECS Services]"
+
+          FRONTEND_COUNT=$(aws ecs describe-services \
+            --cluster ${{ env.CLUSTER_NAME }} \
+            --services ${{ env.FRONTEND_SERVICE }} \
+            --query 'services[0].desiredCount' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          BACKEND_COUNT=$(aws ecs describe-services \
+            --cluster ${{ env.CLUSTER_NAME }} \
+            --services ${{ env.BACKEND_SERVICE }} \
+            --query 'services[0].desiredCount' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          echo "Frontend: $FRONTEND_COUNT tasks"
+          echo "Backend: $BACKEND_COUNT tasks"
+
+          echo ""
+          echo "[RDS Database]"
+
+          RDS_STATUS=$(aws rds describe-db-instances \
+            --db-instance-identifier ${{ env.RDS_INSTANCE_ID }} \
+            --query 'DBInstances[0].DBInstanceStatus' \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || echo "not-found")
+
+          echo "RDS Status: $RDS_STATUS"
+
+          echo "frontend_count=$FRONTEND_COUNT" >> $GITHUB_OUTPUT
+          echo "backend_count=$BACKEND_COUNT" >> $GITHUB_OUTPUT
+          echo "rds_status=$RDS_STATUS" >> $GITHUB_OUTPUT
+
+      - name: Stop ECS services (save costs)
+        if: steps.determine-action.outputs.action == 'stop'
+        run: |
+          echo "🛑 Stopping ECS services to save costs..."
+
+          aws ecs update-service \
+            --cluster ${{ env.CLUSTER_NAME }} \
+            --service ${{ env.FRONTEND_SERVICE }} \
+            --desired-count 0 \
+            --region ${{ env.AWS_REGION }}
+
+          aws ecs update-service \
+            --cluster ${{ env.CLUSTER_NAME }} \
+            --service ${{ env.BACKEND_SERVICE }} \
+            --desired-count 0 \
+            --region ${{ env.AWS_REGION }}
+
+          echo "✅ ECS services stopped"
+
+      - name: Stop RRDS instance
+        if: steps.determine-action.outputs.action == 'start'
+        run: |
+          echo "🚀 Starting RDS instance..."
+
+          RDS_STATUS=$(aws rds describe-db-instances \
+            --db-instance-identifier ${{ env.RDS_INSTANCE_ID }} \
+            --query 'DBInstances[0].DBInstanceStatus' \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || echo "not-found")
+
+          if [ "$RDS_STATUS" == "stopped" ]; then
+            aws rds start-db-instance \
+              --db-instance-identifier ${{ env.RDS_INSTANCE_ID }} \
+              --region ${{ env.AWS_REGION }}
+            echo "⏳ RDS starting... (will take 3-5 minutes)"
+            echo "✅ RDS start initiated. All data preserved."
+          elif [ "$RDS_STATUS" == "available" ]; then
+            echo "ℹ️ RDS already running"
+          else
+            echo "⚠️ RDS status: $RDS_STATUS"
+          fi
+
+      - name: Wait for RDS to be available
+        if: steps.determine-action.outputs.action == 'start'
+        run: |
+          echo "⏳ Waiting for RDS to become available..."
+          aws rds wait db-instance-available \
+            --db-instance-identifier ${{ env.RDS_INSTANCE_ID }} \
+            --region ${{ env.AWS_REGION }} || true
+          echo "✅ RDS is now available"
+
+      - name: Start ECS services
+        if: steps.determine-action.outputs.action == 'start'
+        run: |
+          echo "🚀 Starting ECS services..."
+
+          aws ecs update-service \
+            --cluster ${{ env.CLUSTER_NAME }} \
+            --service ${{ env.FRONTEND_SERVICE }} \
+            --desired-count 1 \
+            --region ${{ env.AWS_REGION }}
+
+          aws ecs update-service \
+            --cluster ${{ env.CLUSTER_NAME }} \
+            --service ${{ env.BACKEND_SERVICE }} \
+            --desired-count 1 \
+            --region ${{ env.AWS_REGION }}
+
+          echo "✅ ECS services started
+            echo "ℹ️ RDS already stopped"
+          else
+            echo "⚠️ RDS status: $RDS_STATUS (cannot stop)"
+          fi
+
+      - name: Start ECS services
+        if: steps.determine-action.outputs.action == 'start'
+        run: |
+          echo "🚀 Starting ECS services..."
+
+          aws ecs update-service \
+          echo ""
+
+          echo "[ECS Services]"
+          FRONTEND_COUNT=$(aws ecs describe-services \
+            --cluster ${{ env.CLUSTER_NAME }} \
+            --services ${{ env.FRONTEND_SERVICE }} \
+            --query 'services[0].desiredCount' \
+            --output text)
+
+          BACKEND_COUNT=$(aws ecs describe-services \
+            --cluster ${{ env.CLUSTER_NAME }} \
+            --services ${{ env.BACKEND_SERVICE }} \
+            --query 'services[0].desiredCount' \
+            --output text)
+
+          echo "Frontend tasks: $FRONTEND_COUNT"
+          echo "Backend tasks: $BACKEND_COUNT"
+
+          echo ""
+          echo "[RDS Database]"
+          RDS_STATUS=$(aws rds describe-db-instances \
+            --db-instance-identifier ${{ env.RDS_INSTANCE_ID }} \
+            --query 'DBInstances[0].DBInstanceStatus' \
+            --output text \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || echo "not-found")
+
+          echo "RDS Status: $RDS_STATUS"
+
+          echo ""
+          if [ "$FRONTEND_COUNT" == "0" ] && [ "$BACKEND_COUNT" == "0" ] && [ "$RDS_STATUS" == "stopped" ]; then
+            echo "💰 All services stopped - maximum savings!"
+            echo "📊 Daily savings: ~$4-7 USD"
+          elif [ "$RDS_STATUS" == "available" ]; then
+            echo "🟢 Services running - ready for traffic"
+          else
+            echo "⚠️ Mixed state - check individual services
+            --services ${{ env.FRONTEND_SERVICE }} ${{ env.BACKEND_SERVICE }} \
+            --region ${{ env.AWS_REGION }} || true
+
+          echo "✅ Services are stable"
+
+      - name: Report status
+        run: |
+          echo "📊 Final Status Report"
+          echo "====================="
+          echo "Action performed: ${{ steps.determine-action.outputs.action }}"
+          echo "Time (UTC): $(date -u)"
+          echo "Time (KST): $(TZ=Asia/Seoul date)"
+
+          FRONTEND_COUNT=$(aws ecs describe-services \
+            --cluster ${{ env.CLUSTER_NAME }} \
+            --services ${{ env.FRONTEND_SERVICE }} \
+            --query 'services[0].desiredCount' \
+            --output text)
+
+          BACKEND_COUNT=$(aws ecs describe-services \
+            --cluster ${{ env.CLUSTER_NAME }} \
+            --services ${{ env.BACKEND_SERVICE }} \
+            --query 'services[0].desiredCount' \
+            --output text)
+
+          echo "Frontend tasks: $FRONTEND_COUNT"
+          echo "Backend tasks: $BACKEND_COUNT"
+
+          if [ "$FRONTEND_COUNT" == "0" ] && [ "$BACKEND_COUNT" == "0" ]; then
+            echo "💰 Services stopped - saving money!"
+          else
+            echo "🟢 Services running - ready for traffic"
+          fi

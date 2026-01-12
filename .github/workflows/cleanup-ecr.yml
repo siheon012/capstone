@@ -1,0 +1,107 @@
+name: 🧹 ECR Image Cleanup
+
+on:
+  schedule:
+    # 매주 일요일 오전 3시 (KST 기준)
+    - cron: '0 18 * * 6' # UTC 토요일 18:00 = KST 일요일 03:00
+  workflow_dispatch: # 수동 실행 가능
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_FRONTEND_REPO: ${{ secrets.ECR_FRONTEND_REPO }}
+  ECR_BACKEND_REPO: ${{ secrets.ECR_BACKEND_REPO }}
+  ECR_BATCH_REPO: ${{ secrets.ECR_BATCH_REPO }}
+
+jobs:
+  cleanup-ecr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Cleanup Frontend ECR untagged images
+        run: |
+          echo "🔍 Checking ${{ env.ECR_FRONTEND_REPO }} repository..."
+          IMAGES=$(aws ecr list-images \
+            --repository-name ${{ env.ECR_FRONTEND_REPO }} \
+            --filter "tagStatus=UNTAGGED" \
+            --query 'imageIds[*]' \
+            --output json \
+            --region ${{ env.AWS_REGION }})
+
+          if [ "$IMAGES" != "[]" ]; then
+            echo "🗑️ Deleting untagged images from ${{ env.ECR_FRONTEND_REPO }}..."
+            aws ecr batch-delete-image \
+              --repository-name ${{ env.ECR_FRONTEND_REPO }} \
+              --image-ids "$IMAGES" \
+              --region ${{ env.AWS_REGION }}
+            echo "✅ Frontend cleanup completed"
+          else
+            echo "✨ No untagged images found in ${{ env.ECR_FRONTEND_REPO }}"
+          fi
+
+      - name: Cleanup Backend ECR untagged images
+        run: |
+          echo "🔍 Checking ${{ env.ECR_BACKEND_REPO }} repository..."
+          IMAGES=$(aws ecr list-images \
+            --repository-name ${{ env.ECR_BACKEND_REPO }} \
+            --filter "tagStatus=UNTAGGED" \
+            --query 'imageIds[*]' \
+            --output json \
+            --region ${{ env.AWS_REGION }})
+
+          if [ "$IMAGES" != "[]" ]; then
+            echo "🗑️ Deleting untagged images from ${{ env.ECR_BACKEND_REPO }}..."
+            aws ecr batch-delete-image \
+              --repository-name ${{ env.ECR_BACKEND_REPO }} \
+              --image-ids "$IMAGES" \
+              --region ${{ env.AWS_REGION }}
+            echo "✅ Backend cleanup completed"
+          else
+            echo "✨ No untagged images found in ${{ env.ECR_BACKEND_REPO }}"
+          fi
+
+      - name: Cleanup old tagged images (keep last 10)
+        run: |
+          for REPO in ${{ env.ECR_FRONTEND_REPO }} ${{ env.ECR_BACKEND_REPO }} ${{ env.ECR_BATCH_REPO }}; do
+            echo "🔍 Cleaning old images from $REPO (keeping last 10)..."
+            
+            # latest 태그를 제외한 이미지 중 오래된 것들 삭제
+            OLD_IMAGES=$(aws ecr describe-images \
+              --repository-name $REPO \
+              --query 'sort_by(imageDetails,& imagePushedAt)[:-10].[imageDigest]' \
+              --output json \
+              --region ${{ env.AWS_REGION }} | \
+              jq -r '.[] | select(. != null) | "imageDigest=" + .')
+            
+            if [ ! -z "$OLD_IMAGES" ]; then
+              echo "$OLD_IMAGES" | while read img; do
+                aws ecr batch-delete-image \
+                  --repository-name $REPO \
+                  --image-ids $img \
+                  --region ${{ env.AWS_REGION }} || true
+              done
+              echo "✅ Old images cleanup completed for $REPO"
+            else
+              echo "✨ No old images to delete in $REPO"
+            fi
+          done
+
+      - name: Report storage saved
+        run: |
+          echo "📊 ECR Cleanup Summary"
+          echo "======================"
+          for REPO in ${{ env.ECR_FRONTEND_REPO }} ${{ env.ECR_BACKEND_REPO }}; do
+            TOTAL=$(aws ecr describe-images \
+              --repository-name $REPO \
+              --query 'length(imageDetails)' \
+              --output text \
+              --region ${{ env.AWS_REGION }})
+            echo "$REPO: $TOTAL images remaining"
+          done
+          echo "💰 Estimated monthly savings: ~$2-5 USD"

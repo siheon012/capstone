@@ -257,14 +257,10 @@ jobs:
 - 에러 타입: [예: Container Exit, Network Error, Database Connection]
 
 **변경된 코드 분석:**
-\`\`\`diff
-[중요한 변경 사항 2-3개만 발췌]
-\`\`\`
+(Code diff below)
 
 **로그 증거:**
-\`\`\`
-[중요한 에러 메시지 2-3줄만 발췌]
-\`\`\`
+(Error logs below)
 
 **권장 조치:**
 1. [즉시 해야 할 것]

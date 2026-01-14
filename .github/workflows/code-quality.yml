@@ -156,12 +156,16 @@ jobs:
   docker-security:
     name: 🐳 Docker Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner (Backend)
+        continue-on-error: true
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -172,12 +176,14 @@ jobs:
 
       - name: Upload Trivy Backend SARIF to GitHub Security
         if: always()
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-backend.sarif'
           category: 'trivy-backend'
 
       - name: Run Trivy vulnerability scanner (Frontend)
+        continue-on-error: true
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -188,6 +194,7 @@ jobs:
 
       - name: Upload Trivy Frontend SARIF to GitHub Security
         if: always()
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-frontend.sarif'

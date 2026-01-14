@@ -33,20 +33,41 @@ jobs:
       - name: Run Black (Code Formatting)
         run: |
           echo "🎨 Checking code formatting with Black..."
-          black --check --diff back/ || true
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            black --check --diff back/
+          else
+            black --check --diff back/ || true
+          fi
 
       - name: Run Flake8 (Linting)
         run: |
           echo "🔍 Running Flake8 linter..."
-          flake8 back/ \
-            --max-line-length=100 \
-            --exclude=back/*/migrations/*,back/venv/*,back/.venv/* \
-            --ignore=E203,W503 \
-            --statistics || true
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            flake8 back/ \
+              --max-line-length=100 \
+              --exclude=back/*/migrations/*,back/venv/*,back/.venv/* \
+              --ignore=E203,W503 \
+              --statistics
+          else
+            flake8 back/ \
+              --max-line-length=100 \
+              --exclude=back/*/migrations/*,back/venv/*,back/.venv/* \
+              --ignore=E203,W503 \
+              --statistics || true
+          fi
 
       - name: Run Bandit (Security Scan)
         run: |
           echo "🔒 Running security scan with Bandit..."
+
+          # SARIF 형식으로 출력 (GitHub Security 탭용)
+          bandit -r back/ \
+            -x back/*/migrations/*,back/venv/*,back/.venv/* \
+            -ll \
+            --format sarif \
+            -o bandit-report.sarif || true
+
+          # JSON 형식으로도 출력 (인라인 표시용)
           bandit -r back/ \
             -x back/*/migrations/*,back/venv/*,back/.venv/* \
             -ll \
@@ -57,6 +78,13 @@ jobs:
             echo "📊 Security scan results:"
             cat bandit-report.json | jq '.results[] | {issue: .issue_text, severity: .issue_severity, file: .filename, line: .line_number}' || true
           fi
+
+      - name: Upload Bandit SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit-report.sarif
+          category: bandit
 
       - name: Check for vulnerable dependencies
         run: |
@@ -95,19 +123,27 @@ jobs:
         working-directory: front
         run: |
           echo "🔍 Running ESLint..."
-          yarn lint || true
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            yarn lint
+          else
+            yarn lint || true
+          fi
 
       - name: Run Prettier Check
         working-directory: front
         run: |
           echo "🎨 Checking code formatting with Prettier..."
-          yarn prettier --check "**/*.{ts,tsx,js,jsx,json,css,md}" || true
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            yarn prettier --check "**/*.{ts,tsx,js,jsx,json,css,md}"
+          else
+            yarn prettier --check "**/*.{ts,tsx,js,jsx,json,css,md}" || true
+          fi
 
       - name: TypeScript Type Check
         working-directory: front
         run: |
           echo "📘 Running TypeScript type check..."
-          yarn tsc --noEmit || true
+          yarn tsc --noEmit || echo "⚠️ Type errors exist but not blocking (fix recommended)"
 
       - name: Build Test
         working-directory: front
@@ -131,7 +167,15 @@ jobs:
           scan-type: 'fs'
           scan-ref: 'back/'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+          format: 'sarif'
+          output: 'trivy-backend.sarif'
+
+      - name: Upload Trivy Backend SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-backend.sarif'
+          category: 'trivy-backend'
 
       - name: Run Trivy vulnerability scanner (Frontend)
         uses: aquasecurity/trivy-action@master
@@ -139,7 +183,15 @@ jobs:
           scan-type: 'fs'
           scan-ref: 'front/'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'
+          format: 'sarif'
+          output: 'trivy-frontend.sarif'
+
+      - name: Upload Trivy Frontend SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-frontend.sarif'
+          category: 'trivy-frontend'
 
   summary:
     name: 📊 Quality Summary

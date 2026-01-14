@@ -12,6 +12,8 @@ env:
   ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
   ECS_FRONTEND_SERVICE: ${{ secrets.ECS_FRONTEND_SERVICE }}
   ECS_BACKEND_SERVICE: ${{ secrets.ECS_BACKEND_SERVICE }}
+  CLOUDWATCH_FRONTEND_LOG_GROUP: /ecs/${{ secrets.ECR_FRONTEND_REPO }}
+  CLOUDWATCH_BACKEND_LOG_GROUP: /ecs/${{ secrets.ECR_BACKEND_REPO }}
 
 jobs:
   build-and-deploy:
@@ -21,6 +23,24 @@ jobs:
       # 1. 코드 체크아웃
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # 이전 커밋과 비교하기 위해 2개 커밋 가져오기
+
+      # 1.5 변경된 코드 Diff 수집
+      - name: Collect code changes
+        id: git-diff
+        run: |
+          echo "collecting-diff" > /tmp/diff_status.txt
+          
+          # 이전 커밋과 비교
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            git diff HEAD~1 HEAD > /tmp/code_changes.diff
+            echo "has_diff=true" >> $GITHUB_OUTPUT
+            echo "📝 Code changes collected ($(wc -l < /tmp/code_changes.diff) lines)"
+          else
+            echo "has_diff=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No previous commit to compare"
+          fi
 
       # 2. AWS 인증
       - name: Configure AWS credentials
@@ -35,7 +55,19 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 3.5 AWS Account ID 가져오기
+      # 3.5 Docker 빌드 캐시 설정
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      # 3.6 AWS Account ID 가져오기
       - name: Get AWS Account ID
         id: account
         run: |
@@ -49,15 +81,18 @@ jobs:
         run: |
           echo "Building frontend with commit SHA: $IMAGE_TAG"
 
-          # 프로덕션 이미지 빌드
-          docker build --no-cache --target production \
+          # 프로덕션 이미지 빌드 (cache 사용)
+          docker buildx build --target production \
+            --cache-from=type=local,src=/tmp/.buildx-cache \
+            --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
             -t $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:$IMAGE_TAG \
             -t $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:latest \
+            --push \
             ./front
 
-          # ECR에 푸시
-          docker push $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:$IMAGE_TAG
-          docker push $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:latest
+          # 캐시 교체 (무한 증가 방지)
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
           echo "Frontend image pushed successfully!"
 
@@ -69,20 +104,24 @@ jobs:
         run: |
           echo "Building backend with commit SHA: $IMAGE_TAG"
 
-          # Backend 이미지 빌드 (Dockerfile이 있다면)
-          docker build --no-cache\
+          # Backend 이미지 빌드 (cache 사용)
+          docker buildx build \
+            --cache-from=type=local,src=/tmp/.buildx-cache \
+            --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
             -t $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:$IMAGE_TAG \
             -t $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:latest \
+            --push \
             ./back
 
-          # ECR에 푸시
-          docker push $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:$IMAGE_TAG
-          docker push $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:latest
+          # 캐시 교체
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
           echo "Backend image pushed successfully!"
 
       # 6. ECS 서비스 배포
       - name: Deploy Frontend to ECS
+        id: deploy-frontend
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
@@ -91,9 +130,13 @@ jobs:
             --cluster ${{ env.ECS_CLUSTER }} \
             --service ${{ env.ECS_FRONTEND_SERVICE }} \
             --force-new-deployment \
+            --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true}" \
             --region ${{ env.AWS_REGION }}
+          
+          echo "frontend_deployed=true" >> $GITHUB_OUTPUT
 
       - name: Deploy Backend to ECS
+        id: deploy-backend
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
@@ -102,10 +145,186 @@ jobs:
             --cluster ${{ env.ECS_CLUSTER }} \
             --service ${{ env.ECS_BACKEND_SERVICE }} \
             --force-new-deployment \
+            --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true}" \
             --region ${{ env.AWS_REGION }}
+          
+          echo "backend_deployed=true" >> $GITHUB_OUTPUT
 
-      # 7. 슬랙 알림 (선택사항)
-      - name: Notify deployment
+      # 7. 배포 안정성 확인
+      - name: Wait for deployment stability
         if: success()
         run: |
-          echo "✅ Deployment successful! Image tag: ${{ github.sha }}"
+          echo "⏳ Waiting for services to stabilize..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_FRONTEND_SERVICE }} ${{ env.ECS_BACKEND_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Deployment stable"
+
+      # 8. 배포 성공 Summary
+      - name: Generate Deployment Summary
+        if: success()
+        run: |
+          echo "# 🚀 Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployed at:** $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+
+      # 9. 배포 실패 시 장애 분석
+      - name: Collect failure diagnostics
+        if: failure()
+        id: diagnostics
+        run: |
+          echo "🔍 Collecting deployment failure diagnostics..."
+          
+          # Frontend 태스크 상태 확인
+          FRONTEND_TASKS=$(aws ecs list-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service-name ${{ env.ECS_FRONTEND_SERVICE }} \
+            --desired-status STOPPED \
+            --max-results 5 \
+            --region ${{ env.AWS_REGION }} \
+            --query 'taskArns[0]' \
+            --output text)
+          
+          if [ "$FRONTEND_TASKS" != "None" ] && [ ! -z "$FRONTEND_TASKS" ]; then
+            FRONTEND_REASON=$(aws ecs describe-tasks \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --tasks $FRONTEND_TASKS \
+              --region ${{ env.AWS_REGION }} \
+              --query 'tasks[0].stoppedReason' \
+              --output text)
+            echo "frontend_stop_reason=$FRONTEND_REASON" >> $GITHUB_OUTPUT
+          fi
+          
+          # Backend 태스크 상태 확인
+          BACKEND_TASKS=$(aws ecs list-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service-name ${{ env.ECS_BACKEND_SERVICE }} \
+            --desired-status STOPPED \
+            --max-results 5 \
+            --region ${{ env.AWS_REGION }} \
+            --query 'taskArns[0]' \
+            --output text)
+          
+          if [ "$BACKEND_TASKS" != "None" ] && [ ! -z "$BACKEND_TASKS" ]; then
+            BACKEND_REASON=$(aws ecs describe-tasks \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --tasks $BACKEND_TASKS \
+              --region ${{ env.AWS_REGION }} \
+              --query 'tasks[0].stoppedReason' \
+              --output text)
+            echo "backend_stop_reason=$BACKEND_REASON" >> $GITHUB_OUTPUT
+          fi
+          
+          # CloudWatch 로그 수집 (최근 50줄)
+          FRONTEND_LOGS=$(aws logs tail ${{ env.CLOUDWATCH_FRONTEND_LOG_GROUP }} --since 10m --format short 2>/dev/null | tail -50 || echo "No logs available")
+          BACKEND_LOGS=$(aws logs tail ${{ env.CLOUDWATCH_BACKEND_LOG_GROUP }} --since 10m --format short 2>/dev/null | tail -50 || echo "No logs available")
+          
+          # 로그를 파일로 저장
+          echo "$FRONTEND_LOGS" > /tmp/frontend_logs.txt
+          echo "$BACKEND_LOGS" > /tmp/backend_logs.txt
+          
+          echo "has_diagnostics=true" >> $GITHUB_OUTPUT
+
+      # 10. Bedrock으로 로그 요약
+      - name: Summarize logs with Bedrock
+        if: failure()
+        id: bedrock-summary
+        run: |
+          echo "🤖 Summarizing logs with AWS Bedrock..."
+          
+          FRONTEND_LOGS=$(cat /tmp/frontend_logs.txt 2>/dev/null || echo "No frontend logs")
+          BACKEND_LOGS=$(cat /tmp/backend_logs.txt 2>/dev/null || echo "No backend logs")
+          CODE_DIFF=$(cat /tmp/code_changes.diff 2>/dev/null || echo "No code changes available")
+          
+          # Bedrock 프롬프트 구성 (Git Diff 포함)
+          PROMPT="You are a DevOps engineer analyzing deployment failure logs. Summarize the root cause in Korean using this template:
+
+## 배포 실패 원인 분석
+
+**핵심 원인:** [한 줄 요약]
+
+**상세 분석:**
+- 발생 시각: [타임스탬프]
+- 영향 범위: [Frontend/Backend/Both]
+- 에러 타입: [예: Container Exit, Network Error, Database Connection]
+
+**변경된 코드 분석:**
+\`\`\`diff
+[중요한 변경 사항 2-3개만 발췌]
+\`\`\`
+
+**로그 증거:**
+\`\`\`
+[중요한 에러 메시지 2-3줄만 발췌]
+\`\`\`
+
+**권장 조치:**
+1. [즉시 해야 할 것]
+2. [근본 원인 해결 방법]
+
+---
+
+Code Changes (This deployment):
+$CODE_DIFF
+
+Frontend Logs:
+$FRONTEND_LOGS
+
+Backend Logs:
+$BACKEND_LOGS"
+          
+          # Bedrock API 호출
+          SUMMARY=$(aws bedrock-runtime invoke-model \
+            --model-id anthropic.claude-3-sonnet-20240229-v1:0 \
+            --body "{\"anthropic_version\":\"bedrock-2023-05-31\",\"max_tokens\":2000,\"messages\":[{\"role\":\"user\",\"content\":\"$PROMPT\"}]}" \
+            --region ${{ env.AWS_REGION }} \
+            /tmp/bedrock_response.json 2>/dev/null && \
+            cat /tmp/bedrock_response.json | jq -r '.content[0].text' || echo "Bedrock 요약 실패")
+          
+          # Summary를 파일로 저장
+          echo "$SUMMARY" > /tmp/bedrock_summary.txt
+          echo "summary_created=true" >> $GITHUB_OUTPUT
+
+      # 11. 배포 실패 Issue 자동 생성
+      - name: Create deployment failure issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const date = new Date().toISOString().split('T')[0];
+            const commit = '${{ github.sha }}'.substring(0, 7);
+            
+            let summary = "Bedrock 요약을 사용할 수 없습니다.";
+            try {
+              summary = fs.readFileSync('/tmp/bedrock_summary.txt', 'utf8');
+            } catch (e) {
+              summary = `## 배포 실패 상세 정보
+              
+**Commit:** ${{ github.sha }}
+**Branch:** ${{ github.ref_name }}
+**실패 시각:** ${new Date().toISOString()}
+
+**Frontend 중지 원인:** ${{ steps.diagnostics.outputs.frontend_stop_reason || 'N/A' }}
+**Backend 중지 원인:** ${{ steps.diagnostics.outputs.backend_stop_reason || 'N/A' }}
+
+### 원본 로그
+CloudWatch 로그를 확인하세요: [AWS Console](https://ap-northeast-2.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-2#logsV2:log-groups)
+              `;
+            }
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 배포 실패 - ${date} (${commit})`,
+              body: summary,
+              labels: ['deployment', 'failure', 'automated', 'urgent']
+            });

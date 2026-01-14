@@ -83,7 +83,7 @@ jobs:
       - name: Report Storage Saved
         if: always()
         run: |
-          echo "### 📊 ECR Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### ECR Cleanup Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Repository | Remaining Images |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
 

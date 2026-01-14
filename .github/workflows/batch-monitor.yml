@@ -1,8 +1,6 @@
 name: AWS Batch and Cost Monitor
 
 on:
-  push:
-    branches: [ECSFargate]
   schedule:
     - cron: '0 0 * * *' # KST 09:00 (Daily)
     - cron: '0 1 * * 1' # KST 10:00 (Weekly)

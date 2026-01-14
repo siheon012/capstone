@@ -1,4 +1,4 @@
-name: ✅ Code Quality Check
+name: Code Quality Check
 
 on:
   pull_request:
@@ -14,7 +14,6 @@ jobs:
     permissions:
       security-events: write
       contents: read
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,46 +44,28 @@ jobs:
       - name: Run Flake8 (Linting)
         run: |
           echo "🔍 Running Flake8 linter..."
+          ARGS="--max-line-length=100 --exclude=back/*/migrations/*,back/venv/*,back/.venv/* --ignore=E203,W503 --statistics"
+
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            flake8 back/ \
-              --max-line-length=100 \
-              --exclude=back/*/migrations/*,back/venv/*,back/.venv/* \
-              --ignore=E203,W503 \
-              --statistics
+            flake8 back/ $ARGS
           else
-            flake8 back/ \
-              --max-line-length=100 \
-              --exclude=back/*/migrations/*,back/venv/*,back/.venv/* \
-              --ignore=E203,W503 \
-              --statistics || true
+            flake8 back/ $ARGS || true
           fi
 
       - name: Run Bandit (Security Scan)
         run: |
           echo "🔒 Running security scan with Bandit..."
-
-          # SARIF 형식으로 출력 (GitHub Security 탭용)
-          bandit -r back/ \
-            -x back/*/migrations/*,back/venv/*,back/.venv/* \
-            -ll \
-            --format sarif \
-            -o bandit-report.sarif || true
-
-          # JSON 형식으로도 출력 (인라인 표시용)
-          bandit -r back/ \
-            -x back/*/migrations/*,back/venv/*,back/.venv/* \
-            -ll \
-            --format json \
-            -o bandit-report.json || true
+          # SARIF 및 JSON 리포트 생성 (에러가 있어도 파일 생성 시도)
+          bandit -r back/ -x back/*/migrations/*,back/venv/*,back/.venv/* -ll --format sarif -o bandit-report.sarif || true
+          bandit -r back/ -x back/*/migrations/*,back/venv/*,back/.venv/* -ll --format json -o bandit-report.json || true
 
           if [ -f bandit-report.json ]; then
-            echo "📊 Security scan results:"
+            echo "📊 Security scan results summary:"
             cat bandit-report.json | jq '.results[] | {issue: .issue_text, severity: .issue_severity, file: .filename, line: .line_number}' || true
           fi
 
       - name: Upload Bandit SARIF to GitHub Security
-        if: always()
-        continue-on-error: true
+        if: always() && hashFiles('bandit-report.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: bandit-report.sarif
@@ -100,14 +81,15 @@ jobs:
           DJANGO_SETTINGS_MODULE: core.settings
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///db.sqlite3
+          DEBUG: 'False' # 실무 환경과 유사하게 설정
         run: |
           cd back
-          python manage.py test --verbosity=2 || echo "⚠️ No tests found or tests failed"
+          # --noinput: CI 환경에서 사용자 입력 대기 방지
+          python manage.py test --noinput --verbosity=2 || echo "⚠️ Tests failed"
 
   typescript-quality:
     name: 📘 TypeScript Quality Check
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -147,7 +129,7 @@ jobs:
         working-directory: front
         run: |
           echo "📘 Running TypeScript type check..."
-          yarn tsc --noEmit || echo "⚠️ Type errors exist but not blocking (fix recommended)"
+          yarn tsc --noEmit || echo "⚠️ Type errors exist but not blocking"
 
       - name: Build Test
         working-directory: front
@@ -163,13 +145,11 @@ jobs:
     permissions:
       security-events: write
       contents: read
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner (Backend)
-        continue-on-error: true
+      - name: Run Trivy (Backend)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -177,17 +157,16 @@ jobs:
           severity: 'CRITICAL,HIGH'
           format: 'sarif'
           output: 'trivy-backend.sarif'
-
-      - name: Upload Trivy Backend SARIF to GitHub Security
-        if: always()
         continue-on-error: true
+
+      - name: Upload Trivy Backend
+        if: always() && hashFiles('trivy-backend.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-backend.sarif'
           category: 'trivy-backend'
 
-      - name: Run Trivy vulnerability scanner (Frontend)
-        continue-on-error: true
+      - name: Run Trivy (Frontend)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -195,10 +174,10 @@ jobs:
           severity: 'CRITICAL,HIGH'
           format: 'sarif'
           output: 'trivy-frontend.sarif'
-
-      - name: Upload Trivy Frontend SARIF to GitHub Security
-        if: always()
         continue-on-error: true
+
+      - name: Upload Trivy Frontend
+        if: always() && hashFiles('trivy-frontend.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-frontend.sarif'
@@ -209,20 +188,34 @@ jobs:
     runs-on: ubuntu-latest
     needs: [python-quality, typescript-quality, docker-security]
     if: always()
-
     steps:
-      - name: Check results
+      - name: Generate Summary Report
         run: |
-          echo "📊 Code Quality Check Summary"
-          echo "=============================="
-          echo "Python Quality: ${{ needs.python-quality.result }}"
-          echo "TypeScript Quality: ${{ needs.typescript-quality.result }}"
-          echo "Docker Security: ${{ needs.docker-security.result }}"
+          echo "### 📊 Code Quality Check Result" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check Category | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ needs.python-quality.result }}" == "success" ] && \
-             [ "${{ needs.typescript-quality.result }}" == "success" ] && \
-             [ "${{ needs.docker-security.result }}" == "success" ]; then
-            echo "✅ All quality checks passed!"
+          # Python Status
+          if [ "${{ needs.python-quality.result }}" == "success" ]; then
+            echo "| 🐍 Python Backend | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠️ Some checks failed. Please review the logs."
+            echo "| 🐍 Python Backend | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
           fi
+
+          # TypeScript Status
+          if [ "${{ needs.typescript-quality.result }}" == "success" ]; then
+            echo "| 📘 TypeScript Frontend | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 📘 TypeScript Frontend | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Docker Security Status
+          if [ "${{ needs.docker-security.result }}" == "success" ]; then
+            echo "| 🐳 Docker Security | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🐳 Docker Security | ⚠️ Issues Found |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 🔍 Detailed security reports can be found in the **Security > Code scanning** tab." >> $GITHUB_STEP_SUMMARY

@@ -57,12 +57,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: Build and push images
+      - name: Build and push Frontend
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # 빌드 및 푸시를 통합하여 효율화 가능 (예시는 유지)
           docker buildx build --target production \
             --cache-from=type=local,src=/tmp/.buildx-cache \
             --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
@@ -70,6 +69,11 @@ jobs:
             -t $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:latest \
             --push ./front
 
+      - name: Build and push Backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
           docker buildx build \
             --cache-from=type=local,src=/tmp/.buildx-cache \
             --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
@@ -77,55 +81,128 @@ jobs:
             -t $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:latest \
             --push ./back
 
+      # 캐시 갱신 (오래된 캐시 삭제 후 새 캐시 이동)
+      - name: Update Cache
+        run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
       - name: Deploy to ECS
         run: |
-          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_FRONTEND_SERVICE }} --force-new-deployment --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true}"
-          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_BACKEND_SERVICE }} --force-new-deployment --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true}"
+          # Circuit Breaker 적용: 실패 시 자동 롤백
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_FRONTEND_SERVICE }} --force-new-deployment --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true}" --region ${{ env.AWS_REGION }}
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_BACKEND_SERVICE }} --force-new-deployment --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true}" --region ${{ env.AWS_REGION }}
 
       - name: Wait for stability
         run: |
-          aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_FRONTEND_SERVICE }} ${{ env.ECS_BACKEND_SERVICE }}
+          aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_FRONTEND_SERVICE }} ${{ env.ECS_BACKEND_SERVICE }} --region ${{ env.AWS_REGION }}
 
       - name: Collect failure diagnostics
         if: failure()
         id: diagnostics
         run: |
-          # 최근 중지된 태스크 원인 및 로그 수집 (기존 로직 유지하되 에러 방어 추가)
-          FRONTEND_REASON=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_FRONTEND_SERVICE }} --desired-status STOPPED --query 'taskArns[0]' --output text) --query 'tasks[0].stoppedReason' --output text 2>/dev/null || echo "Unknown")
-          BACKEND_REASON=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_BACKEND_SERVICE }} --desired-status STOPPED --query 'taskArns[0]' --output text) --query 'tasks[0].stoppedReason' --output text 2>/dev/null || echo "Unknown")
+          echo "🔍 Collecting diagnostics..."
 
-          echo "frontend_stop_reason=$FRONTEND_REASON" >> $GITHUB_OUTPUT
-          echo "backend_stop_reason=$BACKEND_REASON" >> $GITHUB_OUTPUT
+          # Frontend 중지 원인 파악
+          TASK_ARN=$(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_FRONTEND_SERVICE }} --desired-status STOPPED --max-results 1 --query 'taskArns[0]' --output text)
+          if [ "$TASK_ARN" != "None" ] && [ ! -z "$TASK_ARN" ]; then
+            REASON=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].stoppedReason' --output text)
+            echo "frontend_stop_reason=$REASON" >> $GITHUB_OUTPUT
+          else
+            echo "frontend_stop_reason=Unknown (No stopped task found)" >> $GITHUB_OUTPUT
+          fi
 
-          aws logs tail ${{ env.CLOUDWATCH_FRONTEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/frontend_logs.txt || true
-          aws logs tail ${{ env.CLOUDWATCH_BACKEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/backend_logs.txt || true
+          # Backend 중지 원인 파악
+          TASK_ARN=$(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_BACKEND_SERVICE }} --desired-status STOPPED --max-results 1 --query 'taskArns[0]' --output text)
+          if [ "$TASK_ARN" != "None" ] && [ ! -z "$TASK_ARN" ]; then
+            REASON=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].stoppedReason' --output text)
+            echo "backend_stop_reason=$REASON" >> $GITHUB_OUTPUT
+          else
+            echo "backend_stop_reason=Unknown (No stopped task found)" >> $GITHUB_OUTPUT
+          fi
+
+          # 로그 수집 (최근 50줄)
+          aws logs tail ${{ env.CLOUDWATCH_FRONTEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/frontend_logs.txt || echo "No logs" > /tmp/frontend_logs.txt
+          aws logs tail ${{ env.CLOUDWATCH_BACKEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/backend_logs.txt || echo "No logs" > /tmp/backend_logs.txt
 
       - name: Summarize logs with Bedrock
         if: failure()
         id: bedrock-summary
         run: |
-          # 안전한 JSON 생성을 위해 jq 사용
-          PROMPT_TEXT=$(cat <<EOF
+          # 프롬프트 내용을 파일로 작성 (따옴표 충돌 방지)
+          cat <<EOF > /tmp/prompt.txt
           You are a DevOps engineer analyzing deployment failure logs. Summarize the root cause in Korean.
 
           [Context]
-          Code Changes: $(cat /tmp/code_changes.diff | head -c 2000)
+          Code Changes:
+          $(cat /tmp/code_changes.diff | head -c 2000)
 
-          Frontend Logs: $(cat /tmp/frontend_logs.txt)
-          Backend Logs: $(cat /tmp/backend_logs.txt)
+          Frontend Logs:
+          $(cat /tmp/frontend_logs.txt)
+
+          Backend Logs:
+          $(cat /tmp/backend_logs.txt)
           EOF
-          )
 
-          # JSON 바디 구성 (이스케이프 처리)
-          BODY=$(jq -n --arg msg "$PROMPT_TEXT" '{anthropic_version: "bedrock-2023-05-31", max_tokens: 2000, messages: [{role: "user", content: $msg}]}')
+          # jq를 사용하여 안전한 JSON 페이로드 생성 (이스케이프 처리 자동화)
+          jq -n --rawfile prompt /tmp/prompt.txt \
+            '{anthropic_version: "bedrock-2023-05-31", max_tokens: 2000, messages: [{role: "user", content: $prompt}]}' > /tmp/payload.json
 
+          # Bedrock 호출
           aws bedrock-runtime invoke-model \
             --model-id anthropic.claude-3-sonnet-20240229-v1:0 \
-            --body "$BODY" \
+            --body file:///tmp/payload.json \
             --region ${{ env.AWS_REGION }} \
             /tmp/bedrock_response.json
             
+          # 응답 추출
           jq -r '.content[0].text' /tmp/bedrock_response.json > /tmp/bedrock_summary.txt
+
+      - name: Create deployment failure issue
+        if: failure()
+        uses: actions/github-script@v7
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+        with:
+          script: |
+            const fs = require('fs');
+            const date = new Date().toISOString().split('T')[0];
+            const commit = '${{ github.sha }}'.substring(0, 7);
+            const region = process.env.AWS_REGION;
+
+            let summary = "Bedrock analysis failed.";
+            try {
+              summary = fs.readFileSync('/tmp/bedrock_summary.txt', 'utf8');
+            } catch (e) {
+              console.log("No bedrock summary found");
+            }
+
+            const feReason = '${{ steps.diagnostics.outputs.frontend_stop_reason }}';
+            const beReason = '${{ steps.diagnostics.outputs.backend_stop_reason }}';
+
+            // AWS 콘솔 링크 동적 생성 (리전 반영)
+            const logLink = `https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#logsV2:log-groups`;
+
+            const body = `## 🚨 배포 실패 (${date})
+
+            **Commit:** ${commit}
+            **Branch:** ${{ github.ref_name }}
+
+            ### 🤖 AI 분석 결과
+            ${summary}
+
+            ---
+            ### 🔍 상세 진단
+            - **Frontend 중지 사유:** ${feReason}
+            - **Backend 중지 사유:** ${beReason}
+
+            [CloudWatch 로그 확인하기](${logLink})
+            `;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 배포 실패 - ${date} (${commit})`,
+              body: body,
+              labels: ['deployment', 'failure', 'automated']
+            });

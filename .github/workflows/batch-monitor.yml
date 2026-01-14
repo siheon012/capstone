@@ -1,8 +1,8 @@
 name: AWS Batch and Cost Monitor
 
 on:
-  push: # <--- 이 부분 추가!
-    branches: [ECSFargate] # <--- 현재 작업 중인 브랜치명
+  push:
+    branches: [ECSFargate]
   schedule:
     - cron: '0 0 * * *' # KST 09:00 (Daily)
     - cron: '0 1 * * 1' # KST 10:00 (Weekly)
@@ -26,7 +26,6 @@ jobs:
   monitor-batch:
     name: AWS Batch Status Monitor
     runs-on: ubuntu-latest
-    # 다른 작업(summary)에서 참조할 수 있도록 출력 변수 연결
     outputs:
       succeeded_count: ${{ steps.batch-summary.outputs.succeeded_count }}
       failed_count: ${{ steps.batch-summary.outputs.failed_count }}
@@ -140,12 +139,19 @@ jobs:
           DAILY_COST=$(echo "$COSTS" | jq -r '.ResultsByTime[-1].Total.UnblendedCost.Amount' || echo "0")
           echo "daily_cost=$DAILY_COST" >> $GITHUB_OUTPUT
 
-      - name: Get monthly cost
+      - name: Get monthly cost (Group by Service)
         id: cost-breakdown
         run: |
           START_DATE=$(date -d '30 days ago' +%Y-%m-%d)
           END_DATE=$(date +%Y-%m-%d)
-          COST_DATA=$(aws ce get-cost-and-usage --time-period Start=$START_DATE,End=$END_DATE --granularity MONTHLY --metrics UnblendedCost --group-by Type=SERVICE --output json)
+          # [중요 수정] GroupBy 문법 오류 수정 (Type=DIMENSION,Key=SERVICE)
+          COST_DATA=$(aws ce get-cost-and-usage \
+            --time-period Start=$START_DATE,End=$END_DATE \
+            --granularity MONTHLY \
+            --metrics UnblendedCost \
+            --group-by Type=DIMENSION,Key=SERVICE \
+            --output json)
+            
           TOTAL_COST=$(echo "$COST_DATA" | jq -r '.ResultsByTime[0].Total.UnblendedCost.Amount' || echo "0")
           echo "total_monthly_cost=$TOTAL_COST" >> $GITHUB_OUTPUT
 

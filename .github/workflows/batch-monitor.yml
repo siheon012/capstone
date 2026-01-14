@@ -1,6 +1,8 @@
 name: AWS Batch and Cost Monitor
 
 on:
+  push: # <--- 이 부분 추가!
+    branches: [ECSFargate] # <--- 현재 작업 중인 브랜치명
   schedule:
     - cron: '0 0 * * *' # KST 09:00 (Daily)
     - cron: '0 1 * * 1' # KST 10:00 (Weekly)

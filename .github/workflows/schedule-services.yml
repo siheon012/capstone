@@ -1,6 +1,8 @@
 name: AWS Services Scheduler (ECS + RDS)
 
 on:
+  push: # <--- 이 부분 추가!
+    branches: [ECSFargate]
   schedule:
     # 매일 오전 8시 (KST 08:00 = UTC 전날 23:00) - 서비스 중지
     - cron: '0 23 * * *'

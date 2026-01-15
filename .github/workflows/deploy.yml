@@ -2,7 +2,7 @@ name: Deploy to Production
 
 on:
   push:
-    branches: [ECSFargate]
+    branches: [chore/dependency-cleanup]
   workflow_dispatch:
 
 env:

@@ -65,7 +65,7 @@ python3 video-analysis/run.py \
     --input "${INPUT_VIDEO}" \
     --output "${OUTPUT_DIR}" \
     --detector-weights "${DETECTOR_WEIGHTS:-/workspace/models/yolov8x_person_face.pt}" \
-    --checkpoint "${MIVOLO_CHECKPOINT:-/workspace/models/model_imdb_cross_person_4.24_99.46.pth.tar}" \
+    --checkpoint "${MIVOLO_CHECKPOINT:-/workspace/models/model_imdb_cross_person_4.22_99.46.pth.tar}" \
     --mebow-cfg "${MEBOW_CFG:-/workspace/experiments/coco/segm-4_lr1e-3.yaml}" \
     --vlm-path "${VLM_PATH:-/workspace/checkpoints/llava-fastvithd_0.5b_stage2}" \
     --device "${DEVICE:-cuda:0}" \

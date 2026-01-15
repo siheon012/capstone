@@ -18,7 +18,8 @@ on:
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  BATCH_JOB_QUEUE: ${{ secrets.BATCH_JOB_QUEUE }}
+  BATCH_JOB_QUEUE: ${{ secrets.AWS_BATCH_JOB_QUEUE }}
+  BATCH_LOG_GROUP: ${{ secrets.AWS_BATCH_LOG_GROUP }}
 
 jobs:
   monitor-batch:
@@ -68,7 +69,7 @@ jobs:
               
               if [ ! -z "$LOG_STREAM" ] && [ "$LOG_STREAM" != "None" ]; then
                 aws logs get-log-events \
-                  --log-group-name /aws/batch/job \
+                  --log-group-name ${{ env.BATCH_LOG_GROUP }} \
                   --log-stream-name $LOG_STREAM \
                   --limit 50 \
                   --query 'events[*].message' \

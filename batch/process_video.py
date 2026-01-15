@@ -56,7 +56,7 @@ def run_video_analysis(video_id: int, video_path: str, output_dir: str = '/app/o
             '--input', video_path,
             '--output', output_dir,
             '--detector-weights', os.getenv('DETECTOR_WEIGHTS', '/app/models/yolov8x_person_face.pt'),
-            '--checkpoint', os.getenv('MIVOLO_CHECKPOINT', '/app/models/model_imdb_cross_person_4.24_99.46.pth.tar'),
+            '--checkpoint', os.getenv('MIVOLO_CHECKPOINT', '/app/models/model_imdb_cross_person_4.22_99.46.pth.tar'),
             '--mebow-cfg', os.getenv('MEBOW_CFG', '/app/config/mebow.yaml'),
             '--vlm-path', os.getenv('VLM_PATH', '/app/checkpoints/llava-fastvithd_0.5b_stage2'),
             '--with-persons',

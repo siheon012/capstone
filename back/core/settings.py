@@ -239,11 +239,6 @@ METADATA_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, METADATA_SUBDIR)
 THUMBNAIL_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, THUMBNAIL_SUBDIR)
 VIDEO_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, VIDEO_SUBDIR)
 
-# OpenAI 설정 (RAG 기능용)
-OPENAI_API_KEY = env('OPENAI_API_KEY', default=None)
-OPENAI_MODEL = env('OPENAI_MODEL', default='gpt-3.5-turbo')
-OPENAI_EMBEDDING_MODEL = env('OPENAI_EMBEDDING_MODEL', default='text-embedding-ada-002')
-
 # AWS Bedrock 설정
 AWS_BEDROCK_REGION = env('AWS_BEDROCK_REGION', default='ap-northeast-2')
 AWS_BEDROCK_MODEL_ID = env('AWS_BEDROCK_MODEL_ID', default='anthropic.claude-3-5-sonnet-20241022-v2:0')  # Claude 3.5 Sonnet v2 (Vision)

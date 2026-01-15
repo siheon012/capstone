@@ -1,24 +1,117 @@
-# Unmanned Store Action Timeline Extraction Agent
+# 🦅 DeepSentinel
 
-## Project Overview
+**AI-powered CCTV Video Analysis Platform for Unmanned Stores**
 
-This project is an anomaly detection agent for unmanned convenience stores that extracts action timelines from vision-based surveillance data. The system records all pre-anomalous behaviors of users in a database, allowing system administrators to query and retrieve timelines of incidents through natural language prompts. Administrators can easily discover what events occurred at specific times, providing comprehensive monitoring and security capabilities.
+> **"Replace expensive sensors with AI - Secure unmanned stores using existing CCTV infrastructure."**
 
-## Repository Status
+<div align="center">
+  <img src="picture/page_screenshots/main page.png" width="80%" alt="Main Dashboard">
+</div>
 
-🔒 **Private Repository**: This project is currently in development and not yet publicly available. If you need access, please contact the project maintainers.
+---
 
-## Architecture
+## 📖 Introduction
 
-- **Frontend**: Next.js with TypeScript
-- **Backend**: Django REST Framework
-- **Database**: PostgreSQL
-- **AI Models**: Custom vision models running in separate Docker containers
-- **Deployment**: Docker Compose with Nginx reverse proxy
+### 🚨 Problem Statement
 
-## Deployment Options
+As unmanned stores and convenience shops proliferate, **theft, vandalism, and juvenile delinquency** have become serious social issues. However, for small business owners, deploying **expensive security sensors or specialized CCTV systems** creates significant financial burden.
 
-### Production Deployment (Docker Compose) - Recommended
+### 💡 Our Solution
+
+**DeepSentinel** is a **low-cost, high-efficiency security solution** that leverages existing CCTV footage with AI-powered anomaly detection and analysis - **no hardware replacement required**.
+
+- **Cost-Effective**: Utilize existing IP cameras
+- **Automated Monitoring**: 24/7 AI surveillance with automatic event tagging (theft, fights, vandalism, etc.)
+- **Intelligent Search**: RAG-based chatbot lets you ask "What just happened?" in natural language
+
+---
+
+## 🎯 Key Features
+
+✅ **Multi-AI Model Pipeline**: YOLO v8x + MiVOLO + MEBOW + LLaVA + AWS Bedrock Claude  
+✅ **Serverless Architecture**: Auto-scaling GPU compute from 0 to 4 instances  
+✅ **Cost Optimized**: $1-3 per video analysis vs $720/month for 24/7 GPU server  
+✅ **Vector Search**: pgvector-powered semantic search for intelligent event retrieval  
+✅ **Real-time Monitoring**: Live analysis progress tracking and event timeline visualization  
+✅ **IaC Managed**: 153 AWS resources managed via Terraform with zero-downtime deployment
+
+---
+
+## 📸 Service Demo
+
+See how the service works in action: **[Service Flow Demo →](FLOW.md)**
+
+|                       **Main Dashboard**                        |                        **AI Analysis Timeline**                        |
+| :-------------------------------------------------------------: | :--------------------------------------------------------------------: |
+| <img src="picture/page_screenshots/main page.png" width="100%"> | <img src="picture/page_screenshots/sessions_id page.png" width="100%"> |
+|            Real-time performance metrics monitoring             |             Object detection visualization & RAG-based Q&A             |
+
+**Infrastructure Visualization**: See [Infrastructure Architecture →](INFRA.md)
+
+---
+
+## 🛠️ Architecture
+
+### High-Level System Design
+
+Users upload videos through the frontend, which triggers the `S3 → SQS → Lambda → Batch (GPU)` serverless pipeline for AI analysis.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          User (Browser)                             │
+└─────────────────────────────────────────────────────────────────────┘
+                              ↓ HTTPS
+┌─────────────────────────────────────────────────────────────────────┐
+│  Route53 + CloudFront + ALB                                         │
+│  - deepsentinel.cloud                                               │
+│  - SSL/TLS Termination                                              │
+└─────────────────────────────────────────────────────────────────────┘
+                              ↓
+┌──────────────────────────────┬──────────────────────────────────────┐
+│  Frontend (Next.js 15)       │  Backend (Django 5.2)                │
+│  - ECS Fargate               │  - ECS Fargate                       │
+│  - TypeScript + React 19     │  - REST API + pgvector RAG           │
+└──────────────────────────────┴──────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                   Serverless AI Pipeline                            │
+│                                                                     │
+│  S3 Upload → SQS Event → Lambda Trigger → AWS Batch (GPU)          │
+│                                              ↓                      │
+│                                      g5.xlarge (A10G)               │
+│                                      YOLOv8 + MiVOLO                │
+│                                      + MEBOW + LLaVA                │
+│                                              ↓                      │
+│                                      PostgreSQL + pgvector          │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Detailed Architecture**: See [INFRA.md](INFRA.md) for Terraform module breakdown and full infrastructure diagram.
+
+---
+
+## 🧰 Tech Stack
+
+| Category           | Technologies                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Infrastructure** | ![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat&logo=amazon-aws&logoColor=white) ![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=flat&logo=terraform&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)                                                                                                                             |
+| **Backend**        | ![Django](https://img.shields.io/badge/Django-092E20?style=flat&logo=django&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white) ![pgvector](https://img.shields.io/badge/pgvector-316192?style=flat&logo=postgresql&logoColor=white)                                                                                                                |
+| **Frontend**       | ![Next.js](https://img.shields.io/badge/Next.js%2015-000000?style=flat&logo=next.js&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white) ![React](https://img.shields.io/badge/React%2019-61DAFB?style=flat&logo=react&logoColor=black) ![Tailwind](https://img.shields.io/badge/Tailwind%20CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white) |
+| **AI / ML**        | ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white) ![YOLO](https://img.shields.io/badge/YOLOv8-00FFFF?style=flat) ![AWS Bedrock](https://img.shields.io/badge/AWS%20Bedrock-FF9900?style=flat&logo=amazon-aws&logoColor=white) ![CUDA](https://img.shields.io/badge/CUDA%2011.8-76B900?style=flat&logo=nvidia&logoColor=white)                                               |
+| **DevOps**         | ![AWS Batch](https://img.shields.io/badge/AWS%20Batch-FF9900?style=flat&logo=amazon-aws&logoColor=white) ![ECS](https://img.shields.io/badge/ECS%20Fargate-FF9900?style=flat&logo=amazon-ecs&logoColor=white) ![Lambda](https://img.shields.io/badge/Lambda-FF9900?style=flat&logo=aws-lambda&logoColor=white) ![SQS](https://img.shields.io/badge/SQS-FF4F8B?style=flat&logo=amazon-sqs&logoColor=white)                 |
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Docker & Docker Compose
+- AWS Account with configured credentials
+- Node.js 18+ (for local development)
+- Python 3.10+ (for local development)
+
+### Local Development with Docker Compose
 
 For production deployment with existing infrastructure:
 
@@ -36,293 +129,110 @@ docker-compose ps
 
 **Service Ports:**
 
-- Frontend (Next.js): `http://your-server:3000`
-- Backend API (Django): `http://your-server:8001`
+- Frontend (Next.js): `http://localhost:3000`
+- Backend API (Django): `http://localhost:8000`
 - Database (PostgreSQL): `localhost:5433`
-- Nginx (Load Balancer): `http://your-server:80`
 
-### Development Environment Setup
+### AWS Production Deployment
 
-### Development Environment Setup
-
-For local development and testing:
-
-#### Prerequisites
-
-- Python 3.10+
-- Node.js 18+
-- PostgreSQL 15+
-- Docker (optional, for AI models)
-
-#### Step 1: Clone Repository
+For full AWS deployment with Terraform:
 
 ```bash
-# Clone the repository (requires access)
-git clone [private-repo-url]
-cd capstone
+cd terraform
+
+# Initialize Terraform
+terraform init
+
+# Review planned changes
+terraform plan
+
+# Deploy infrastructure (153 AWS resources)
+terraform apply
+
+# Services will be available at:
+# Frontend: https://deepsentinel.cloud
+# Backend: https://api.deepsentinel.cloud
 ```
 
-#### Step 2: Backend Setup
+See [terraform/README.md](terraform/README.md) for detailed deployment guide.
 
-#### Step 2: Backend Setup
+---
 
-```bash
-cd back
-python3 -m venv env
-source ./env/bin/activate
+## 📂 Project Structure & Documentation
 
-# Install dependencies
-pip install -r requirements.txt
+Comprehensive documentation for each module - click links to dive deeper:
 
-# Or for development
-pip install -e .
-```
+### 🏗️ Infrastructure (IaC)
 
-#### Step 3: Frontend Setup
+| Module                     | Description                                                      | Link                                       |
+| -------------------------- | ---------------------------------------------------------------- | ------------------------------------------ |
+| **Terraform**              | 153 AWS resources managed across 6 specialized modules           | [terraform/README.md](terraform/README.md) |
+| **Infrastructure Diagram** | Visual representation of network, compute, pipeline architecture | [INFRA.md](INFRA.md)                       |
 
-```bash
-cd front
-yarn install
-```
+**Key Topics**: Modular design, zero-downtime migration with `moved` blocks, S3 remote state
 
-#### Step 4: Environment Configuration
+---
 
-#### Step 4: Environment Configuration
+### 💻 Application Layer
 
-Create environment configuration:
+| Component       | Description                                                             | Link                               |
+| --------------- | ----------------------------------------------------------------------- | ---------------------------------- |
+| **Backend API** | Django REST + pgvector RAG, AWS integration (S3/SQS/Bedrock)            | [back/README.md](back/README.md)   |
+| **Frontend**    | Next.js 15 App Router, real-time progress tracking, custom video player | [front/README.md](front/README.md) |
 
-```bash
-cd back
-touch .env
-```
+**Backend Highlights**: S3 presigned URLs, JWT upload validation, vector search API  
+**Frontend Highlights**: Three-layer separation (actions/hooks/components), responsive design, toast notifications
 
-**Development Configuration** (`.env`):
+---
 
-```env
-SECRET_KEY=your-secret-key-here
-DEBUG=True
-ALLOWED_HOSTS=127.0.0.1,localhost
+### 🧠 AI & Processing Pipeline
 
-# Database configuration
-DB_ENGINE=django.db.backends.postgresql
-DB_NAME=your_db_name
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
-DB_HOST=localhost
-DB_PORT=5432
-```
+| Component                 | Description                                                | Link                                                 |
+| ------------------------- | ---------------------------------------------------------- | ---------------------------------------------------- |
+| **Video Analysis Engine** | Multi-AI pipeline: YOLO + MiVOLO + MEBOW + LLaVA + Bedrock | [video-analysis/README.md](video-analysis/README.md) |
+| **AWS Batch Worker**      | GPU-accelerated video processing with auto-scaling         | [batch/README.md](batch/README.md)                   |
+| **Lambda Trigger**        | SQS → Batch orchestration with duplicate prevention        | [lambda/README.md](lambda/README.md)                 |
 
-**Production Configuration** (automatically handled by Docker):
+**Pipeline Flow**: Frame sampling (30fps → 1.5fps) → AI models → PostgreSQL + S3 results
 
-```env
-SECRET_KEY=auto-generated-secure-key
-DEBUG=False
-ALLOWED_HOSTS=your-domain.com,your-server-ip
+---
 
-# Database (Docker internal networking)
-DB_HOST=db
-DB_PORT=5432
-```
+### 📚 Additional Documentation
 
-Generate Django secret key:
+| Document                    | Description                                   | Link                                         |
+| --------------------------- | --------------------------------------------- | -------------------------------------------- |
+| **Service Flow Demo**       | Step-by-step screenshots of user workflow     | [FLOW.md](FLOW.md)                           |
+| **GPU Worker (Deprecated)** | Cost comparison: 24/7 EC2 vs serverless Batch | [gpu_worker/README.md](gpu_worker/README.md) |
 
-```bash
-python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-```
+---
 
-#### Step 5: Database Setup
+## 📊 Cost Analysis
 
-#### Step 5: Database Setup
+| Architecture               | Monthly Cost | Cost per Video   | Scalability         |
+| -------------------------- | ------------ | ---------------- | ------------------- |
+| **24/7 GPU Server (EC2)**  | $723/month   | N/A (fixed cost) | Manual scaling only |
+| **Serverless (AWS Batch)** | ~$0 (idle)   | $1-3 per video   | Auto 0-4 instances  |
 
-```bash
-cd back
-source ./env/bin/activate
+**Winner**: Serverless architecture provides **99% cost savings** for typical workloads (< 240 videos/month).
 
-# Run migrations
-python manage.py makemigrations
-python manage.py migrate
+---
 
-# Create superuser (optional)
-python manage.py createsuperuser
-```
+## 📝 License
 
-#### Step 6: Start Development Servers
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
-```bash
-# Terminal 1: Backend
-cd back
-source ./env/bin/activate
-python manage.py runserver
+**Note**: Some AI models (YOLOv8) are licensed under AGPL-3.0. Commercial use may require additional licensing.
 
-# Terminal 2: Frontend
-cd front
-yarn dev
-```
+---
 
-## Infrastructure & Dependencies
+## 👥 Contributors
 
-### Current Server Setup
+**Team DeepSentinel** - Capstone Project 2026
 
-This application runs alongside other services on the same server with the following port allocation:
+For questions or support, please open an issue or contact the maintainers.
 
-**AI Model Containers:**
+---
 
-- **Port 7000**: Video Analysis Pipeline (YOLOv8x + MiVOLO + MeBOW + LLaVA)
-- **Port 7500**: LangGraph API (Korean NLP + Text2SQL + Translation)
-- **Port 8087**: Video Summary Service (LLaMA-based summarization)
-
-**Application Services:**
-
-- **Port 8000**: Django Backend (Development)
-- **Port 3000**: Next.js Frontend (Development)
-
-### AI Model Containers
-
-The application integrates with three specialized Docker containers that provide AI-powered analysis capabilities:
-
-#### 1. Video Analysis Pipeline Container (Port 7000)
-
-📹 **Purpose**: Comprehensive video analysis for person detection, age/gender estimation, and behavior analysis.
-
-**Key Features:**
-
-- **Person & Face Detection**: YOLOv8x model for real-time object detection
-- **Age & Gender Estimation**: MiVOLO (Multi-input Transformer) with 99.46% gender accuracy and 4.22 years age MAE
-- **Behavior Analysis**: MeBOW (Motion-Enhanced Body Object Weight) for action pattern recognition
-- **Visual Language Model**: LLaVA-FastViT-HD 0.5B for scene understanding
-
-**Processing Pipeline:**
-
-```bash
-# FPS optimization for memory efficiency
-convert_video_to_10fps() → MiVOLO analysis → Data processing → Database storage
-```
-
-**API Endpoint:**
-
-```bash
-POST /analyze
-Content-Type: application/json
-{
-    "video_id": 123,
-    "video_path": "/path/to/video.mp4"
-}
-```
-
-#### 2. LangGraph API Container (Port 7500)
-
-🤖 **Purpose**: Korean natural language processing and SQL query generation for timeline data retrieval.
-
-**Key Features:**
-
-- Korean text processing and question classification
-- Korean-to-English translation using Helsinki-NLP/opus-mt-ko-en
-- Text-to-SQL generation with finetuned T5-LM-Large model
-- General question answering with Bllossom/llama-3.2-Korean-Bllossom-AICA-5B
-
-**Processing Flow:**
-
-```
-Korean Query → Question Type Classification →
-├── Timeline/SQL Question → Translation → SQL Generation
-└── General Question → LLM Response
-```
-
-**API Endpoint:**
-
-```bash
-POST /api/process
-Content-Type: application/json
-{
-    "prompt": "10시에서 13시 사이 사건 데이터를 알려줘"
-}
-```
-
-#### 3. Video Summary Container (Port 8087)
-
-📋 **Purpose**: AI-powered video content summarization using finetuned LLaMA models.
-
-**Key Features:**
-
-- Video content analysis and summarization
-- User-triggered summary generation
-- Optimized LLaMA-based model for video understanding
-- RESTful API for external integration
-
-**Usage:**
-
-- Users upload videos through the frontend
-- Summary generation triggered by user interaction
-- AI provides comprehensive video content summary
-
-**Container Management:**
-
-```bash
-# Check all AI containers status
-docker ps | grep nvidia/cuda
-
-# Monitor container logs
-docker logs api      # Video Analysis
-docker logs apps     # LangGraph API
-docker logs vlm      # Video Summary
-```
-
-### Production Port Allocation
-
-When deployed via Docker Compose:
-
-- **Port 80/443**: Nginx Load Balancer
-- **Port 8001**: Django Backend (Production)
-- **Port 3000**: Next.js Frontend (Production)
-- **Port 5433**: PostgreSQL Database (Production)
-
-## Troubleshooting
-
-### Port Conflicts
-
-If you encounter port conflicts during deployment:
-
-```bash
-# Check current port usage
-netstat -tlnp | grep LISTEN
-
-# Modify docker-compose.yml port mappings if needed
-# Example: Change 8001:8000 to 8002:8000
-```
-
-### Database Connection Issues
-
-```bash
-# Check PostgreSQL status
-docker-compose logs db
-
-# Reset database (caution: data loss)
-docker-compose down -v
-docker-compose up -d
-```
-
-### AI Container Management
-
-```bash
-# Verify all AI containers are running
-docker ps | grep cuda
-
-# Check individual container status and logs
-docker logs api      # Video Analysis Pipeline
-docker logs apps     # LangGraph API Service
-docker logs vlm      # Video Summary Service
-
-# Monitor container resource usage
-docker stats api apps vlm
-
-# Restart specific container if needed
-docker restart api   # or apps, vlm
-```
-
-## Contributing
-
-This is a private repository. For contribution guidelines and access requests, please contact the project maintainers.
-
-## License
-
-Private - All rights reserved.
+<div align="center">
+  <sub>Built with ❤️ for safer unmanned stores</sub>
+</div>

@@ -1,0 +1,89 @@
+name: 'ECR Image Cleanup'
+
+on:
+  schedule:
+    - cron: '0 18 * * 6' # KST 일요일 03:00 (UTC 토요일 18:00)
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_FRONTEND_REPO: ${{ secrets.ECR_FRONTEND_REPO }}
+  ECR_BACKEND_REPO: ${{ secrets.ECR_BACKEND_REPO }}
+  ECR_BATCH_REPO: ${{ secrets.ECR_BATCH_REPO }}
+
+jobs:
+  cleanup-ecr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Cleanup Untagged Images
+        run: |
+          for REPO in ${{ env.ECR_FRONTEND_REPO }} ${{ env.ECR_BACKEND_REPO }} ${{ env.ECR_BATCH_REPO }}; do
+            echo "🔍 Checking untagged images in $REPO..."
+            
+            # Untagged 이미지의 Digest 추출 (Text 포맷)
+            DIGESTS=$(aws ecr list-images \
+              --repository-name $REPO \
+              --filter "tagStatus=UNTAGGED" \
+              --query 'imageIds[*].imageDigest' \
+              --output text)
+
+            if [ -n "$DIGESTS" ]; then
+              echo "🗑️ Deleting untagged images from $REPO..."
+              
+              # [중요] 100개씩 끊어서 삭제 (xargs 활용)
+              echo "$DIGESTS" | tr '\t' '\n' | while read digest; do
+                echo "imageDigest=$digest"
+              done | xargs -n 100 aws ecr batch-delete-image --repository-name $REPO --region ${{ env.AWS_REGION }} --image-ids
+
+              echo "✅ Untagged images cleanup completed for $REPO"
+            else
+              echo "✨ No untagged images found in $REPO"
+            fi
+          done
+
+      - name: Cleanup Old Tagged Images (Keep last 10)
+        run: |
+          for REPO in ${{ env.ECR_FRONTEND_REPO }} ${{ env.ECR_BACKEND_REPO }} ${{ env.ECR_BATCH_REPO }}; do
+            echo "🔍 Checking old images in $REPO (keeping last 10)..."
+            
+            # 최신 10개를 제외한 오래된 이미지 Digest 추출 (Text 포맷)
+            OLD_DIGESTS=$(aws ecr describe-images \
+              --repository-name $REPO \
+              --query 'sort_by(imageDetails,& imagePushedAt)[:-10].imageDigest' \
+              --output text)
+            
+            if [ -n "$OLD_DIGESTS" ]; then
+               echo "🗑️ Deleting older images from $REPO..."
+
+               # [중요] 100개씩 끊어서 삭제
+               echo "$OLD_DIGESTS" | tr '\t' '\n' | while read digest; do
+                 echo "imageDigest=$digest"
+               done | xargs -n 100 aws ecr batch-delete-image --repository-name $REPO --region ${{ env.AWS_REGION }} --image-ids
+
+               echo "✅ Old images cleanup completed for $REPO"
+            else
+              echo "✨ No old images to delete in $REPO"
+            fi
+          done
+
+      - name: Report Storage Saved
+        if: always()
+        run: |
+          echo "### ECR Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Repository | Remaining Images |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+
+          for REPO in ${{ env.ECR_FRONTEND_REPO }} ${{ env.ECR_BACKEND_REPO }} ${{ env.ECR_BATCH_REPO }}; do
+            TOTAL=$(aws ecr describe-images --repository-name $REPO --query 'length(imageDetails)' --output text)
+            echo "| $REPO | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "💰 **Estimated monthly savings:** ~$2-5 USD" >> $GITHUB_STEP_SUMMARY

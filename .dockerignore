@@ -1,0 +1,98 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+video-analysis/.venv/
+video-analysis/venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local test data
+video-analysis/videos/*
+!video-analysis/videos/.gitkeep
+video-analysis/result/*
+!video-analysis/result/.gitkeep
+!video-analysis/result/*.py
+video-analysis/mivolo_output/*
+video-analysis/depth_json/*
+video-analysis/db_data/*
+video-analysis/images/*
+
+# video-analysis large directories (exclude from batch build)
+video-analysis/0.26.0/
+video-analysis/build/
+video-analysis/__pycache__/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Docker compose (Dockerfile은 제외하지 않음 - -f로 명시하므로)
+docker-compose*.yml
+
+# Documentation
+*.md
+doc/
+docs/
+LICENSE
+.pre-commit-config.yaml
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+*.log.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform (batch 빌드에 불필요)
+terraform/
+*.tf
+*.tfstate*
+*.tfvars
+
+# Other services (batch 빌드에 불필요)
+back/
+front/
+nginx/
+localstack/
+gpu_worker/
+lambda/
+
+# Unnecessary files
+*.zip
+.env.*
+!.env.example
+start.txt
+payload.json
+demo.py
+measure_time.py
+eval_*.py
+tew.py
+test_video.mp4
+test-message.json
+ec2-console.log
+job-def.json
+lambda-policy.json
+requirements.txt

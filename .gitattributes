@@ -1,0 +1,14 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Terraform files should always use LF
+*.tf text eol=lf
+*.tfvars text eol=lf
+
+# Shell scripts should always use LF
+*.sh text eol=lf
+
+# Windows scripts use CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf

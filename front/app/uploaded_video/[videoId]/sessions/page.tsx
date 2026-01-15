@@ -23,13 +23,19 @@ import {
 } from 'lucide-react';
 import type { UploadedVideo } from '@/app/types/video';
 import type { ChatSession } from '@/app/types/session';
-import { getUploadedVideos, deleteVideo, getVideoEventStats } from '@/app/actions/video-service';
+import {
+  getUploadedVideos,
+  getVideoEventStats,
+  deleteVideo,
+} from '@/app/actions/video-service-client';
 import { getVideoSessions, deleteSession } from '@/app/actions/session-service';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import SmartHeader from '@/components/smart-header';
-import DynamicHistorySidebar from '@/components/dynamic-history-sidebar';
-import ToastNotification from '@/components/toast-notification';
+import SmartHeader from '@/components/layout/SmartHeader';
+import HistoryLayout from '@/components/layout/HistoryLayout';
+import HistorySidebar from '@/components/history/HistorySidebar';
+import ToastNotification from '@/components/feedback/ToastNotification';
+import Footer from '@/components/layout/Footer';
 
 export default function VideoSessionsPage() {
   const params = useParams();
@@ -42,8 +48,11 @@ export default function VideoSessionsPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   // Event 테이블에서 가져온 이벤트 통계
-  const [videoEventStat, setVideoEventStat] = useState<{ eventType: string; count: number } | null>(null);
-  
+  const [videoEventStat, setVideoEventStat] = useState<{
+    eventType: string;
+    count: number;
+  } | null>(null);
+
   // 페이지네이션 상태 추가
   const [currentPage, setCurrentPage] = useState(1);
   const [sessionsPerPage] = useState(5); // 페이지당 5개 세션
@@ -142,15 +151,21 @@ export default function VideoSessionsPage() {
       if (sessionsResponse.success) {
         setSessions(sessionsResponse.data);
       }
-      
+
       // Event 테이블에서 이벤트 통계 로드
       const eventStatsResponse = await getVideoEventStats(videoId);
-      if (eventStatsResponse.success && eventStatsResponse.data?.mostFrequentEvent) {
+      if (
+        eventStatsResponse.success &&
+        eventStatsResponse.data?.mostFrequentEvent
+      ) {
         setVideoEventStat({
           eventType: eventStatsResponse.data.mostFrequentEvent.eventType,
           count: eventStatsResponse.data.mostFrequentEvent.count,
         });
-        console.log('로드된 비디오 이벤트 통계:', eventStatsResponse.data.mostFrequentEvent);
+        console.log(
+          '로드된 비디오 이벤트 통계:',
+          eventStatsResponse.data.mostFrequentEvent
+        );
       }
     } catch (error) {
       console.error('Failed to load video and sessions:', error);
@@ -248,40 +263,36 @@ export default function VideoSessionsPage() {
   ) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
+    // sessionId 유효성 검사
+    if (!sessionId || sessionId.trim() === '') {
+      console.error('❌ 세션 ID가 유효하지 않습니다:', sessionId);
+      addToast('삭제 실패', '세션 ID가 유효하지 않습니다.', 'error');
+      return;
+    }
+
     if (confirm('이 세션을 삭제하시겠습니까?')) {
       try {
+        console.log('🔥 세션 삭제 시도:', sessionId);
         // 삭제 시작 토스트
-        addToast(
-          '세션 삭제 중',
-          '선택한 세션을 삭제하고 있습니다...',
-          'info'
-        );
+        addToast('세션 삭제 중', '선택한 세션을 삭제하고 있습니다...', 'info');
 
         const success = await deleteSession(sessionId);
-        
+
         if (success) {
           // 성공 토스트
-          addToast(
-            '삭제 완료',
-            '세션이 성공적으로 삭제되었습니다.',
-            'success'
-          );
+          addToast('삭제 완료', '세션이 성공적으로 삭제되었습니다.', 'success');
 
           // UI에서 세션 제거
           setSessions((prev) =>
             prev.filter((session) => session.id !== sessionId)
           );
-          
+
           // 페이지 새로고침
           window.location.reload();
         } else {
           // 실패 토스트
-          addToast(
-            '삭제 실패',
-            '세션 삭제 중 오류가 발생했습니다.',
-            'error'
-          );
+          addToast('삭제 실패', '세션 삭제 중 오류가 발생했습니다.', 'error');
         }
       } catch (error) {
         console.error('Delete session error:', error);
@@ -304,6 +315,8 @@ export default function VideoSessionsPage() {
         return '쓰러짐';
       case 'sitting':
         return '점거';
+      case 'interaction':
+        return '없음'
       default:
         return eventType;
     }
@@ -327,25 +340,44 @@ export default function VideoSessionsPage() {
     if (!session.detected_events || session.detected_events.length === 0) {
       return [];
     }
-    
+
     // 중복 제거하여 유니크한 이벤트 타입들만 반환
     const uniqueEventTypes = Array.from(
-      new Set(session.detected_events.map(event => event.event_type))
+      new Set(session.detected_events.map((event) => event.event_type))
     );
-    
+
     return uniqueEventTypes;
   };
 
   // 찾은 이벤트들을 한국어로 표시하는 함수
   const formatDetectedEvents = (eventTypes: string[]) => {
     if (eventTypes.length === 0) return null;
+
+    const translatedEvents = eventTypes.map((eventType) =>
+      translateEventType(eventType)
+    );
     
-    const translatedEvents = eventTypes.map(eventType => translateEventType(eventType));
-    return translatedEvents.join(', ');
+    // interaction만 있는 경우 "없음"으로 표시
+    if (translatedEvents.length === 1 && translatedEvents[0] === '특이 사건 없음') {
+      return '없음';
+    }
+    
+    // interaction 제외한 실제 사건들만 표시
+    const actualEvents = translatedEvents.filter(event => event !== '특이 사건 없음');
+    if (actualEvents.length === 0) {
+      return '없음';
+    }
+    
+    return actualEvents.join(', ');
   };
 
   // 이벤트 뱃지 스타일 가져오기 함수
-  const getEventBadgeStyle = (eventType: string) => {
+  const getEventBadgeStyle = (eventType: string, formattedText?: string) => {
+    // formattedText가 "없음"이면 파란색
+    if (formattedText === '없음') {
+      return 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30';
+    }
+    
     switch (eventType) {
       case 'theft':
       case '도난':
@@ -356,6 +388,9 @@ export default function VideoSessionsPage() {
       case 'sitting':
       case '점거':
         return 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30';
+      case 'interaction':
+      case '없음':
+        return 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30';
       default:
         return 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30';
     }
@@ -371,7 +406,7 @@ export default function VideoSessionsPage() {
         total: videoEventStat.count, // Event 테이블 기반이므로 총 이벤트 수와 동일
       };
     }
-    
+
     console.log('Event 통계가 없음, 세션 기반 분석 사용');
     return null;
   };
@@ -547,13 +582,13 @@ export default function VideoSessionsPage() {
                     <h1 className="text-xl sm:text-2xl font-bold text-white mb-2 break-words leading-tight">
                       {video.name}
                     </h1>
-                    
+
                     {/* 영상의 실제 시각 정보 */}
                     <div className="text-sm text-gray-400 mb-2">
                       <span className="text-[#00e6b4]">영상의 실제 시각:</span>{' '}
                       <span>{formatVideoTime(video.timeInVideo)}</span>
                     </div>
-                    
+
                     {video.description && (
                       <p className="text-sm sm:text-base text-gray-400 mb-3">
                         {video.description}
@@ -565,19 +600,26 @@ export default function VideoSessionsPage() {
                   {(mostFrequentEvent || video.majorEvent) && (
                     <Badge
                       className={`flex-shrink-0 self-start sm:ml-4 mt-1 sm:mt-0 whitespace-nowrap ${
-                        (mostFrequentEvent ? translateEventType(mostFrequentEvent.type) : video.majorEvent) === '도난'
+                        (mostFrequentEvent
+                          ? translateEventType(mostFrequentEvent.type)
+                          : video.majorEvent) === '도난'
                           ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
-                          : (mostFrequentEvent ? translateEventType(mostFrequentEvent.type) : video.majorEvent) === '쓰러짐'
+                          : (mostFrequentEvent
+                              ? translateEventType(mostFrequentEvent.type)
+                              : video.majorEvent) === '쓰러짐'
                           ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                          : (mostFrequentEvent ? translateEventType(mostFrequentEvent.type) : video.majorEvent) === '점거'
+                          : (mostFrequentEvent
+                              ? translateEventType(mostFrequentEvent.type)
+                              : video.majorEvent) === '점거'
                           ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
                           : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
                       }`}
                     >
-                      {mostFrequentEvent 
-                        ? `주요 사건: ${translateEventType(mostFrequentEvent.type)}(${mostFrequentEvent.count} times)`
-                        : `주요 사건: ${video.majorEvent}`
-                      }
+                      {mostFrequentEvent
+                        ? `주요 사건: ${translateEventType(
+                            mostFrequentEvent.type
+                          )}(${mostFrequentEvent.count} times)`
+                        : `주요 사건: ${video.majorEvent}`}
                     </Badge>
                   )}
                 </div>
@@ -675,276 +717,186 @@ export default function VideoSessionsPage() {
               </CardContent>
             </Card>
           ) : (
-            sessions.map((session) => {
-              const timestamps = getTimestampsFromSession(session);
-              const firstUserMessage = session.messages.find(
-                (msg) => msg.role === 'user'
-              );
-              const firstAssistantMessage = session.messages.find(
-                (msg) => msg.role === 'assistant'
-              );
-              const detectedEvents = getDetectedEventsFromSession(session);
+            sessions
+              .filter((session) => {
+                // id가 없는 세션 필터링 및 로그
+                if (!session.id || session.id.trim() === '') {
+                  console.error('⚠️ ID가 없는 세션 발견:', session);
+                  return false;
+                }
+                return true;
+              })
+              .map((session) => {
+                const timestamps = getTimestampsFromSession(session);
+                const firstUserMessage = session.messages.find(
+                  (msg) => msg.role === 'user'
+                );
+                const firstAssistantMessage = session.messages.find(
+                  (msg) => msg.role === 'assistant'
+                );
+                const detectedEvents = getDetectedEventsFromSession(session);
 
-              return (
-                <Card
-                  key={session.id}
-                  className="bg-[#242a38] border-0 shadow-lg hover:bg-[#2a3142] transition-colors"
-                >
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
-                      <Link 
-                        href={`/uploaded_video/${video.id}?sessionId=${session.id}`}
-                        className="flex-1 min-w-0 cursor-pointer"
-                      >
-                        <div className="min-w-0">
-                          <h3 className="text-base sm:text-lg font-semibold text-white mb-2 break-words">
-                            <span 
-                              className="inline-block max-w-full"
-                              title={session.title}
-                            >
-                              {session.title && session.title.length > 50 
-                                ? `${session.title.substring(0, 50)}...` 
-                                : session.title
-                              }
-                            </span>
-                          </h3>
-
-                          {/* 첫 번째 질문과 답변 */}
-                          <div className="space-y-2 mb-3 sm:mb-4 min-w-0">
-                            {firstUserMessage && (
-                              <div className="text-xs sm:text-sm min-w-0">
-                                <span className="text-[#6c5ce7] font-medium flex-shrink-0">
-                                  Q:
-                                </span>
-                                <span 
-                                  className="text-gray-300 ml-2 break-words inline-block max-w-full"
-                                  title={firstUserMessage.content}
-                                  style={{
-                                    wordBreak: 'break-word',
-                                    overflowWrap: 'anywhere',
-                                    hyphens: 'auto'
-                                  }}
-                                >
-                                  {firstUserMessage.content && firstUserMessage.content.length > 80
-                                    ? `${firstUserMessage.content.substring(0, 80)}...`
-                                    : firstUserMessage.content}
-                                </span>
-                              </div>
-                            )}
-                            {firstAssistantMessage && (
-                              <div className="text-xs sm:text-sm min-w-0">
-                                <span className="text-[#00e6b4] font-medium flex-shrink-0">
-                                  A:
-                                </span>
-                                <span 
-                                  className="text-gray-300 ml-2 break-words inline-block max-w-full"
-                                  title={firstAssistantMessage.content}
-                                  style={{
-                                    wordBreak: 'break-word',
-                                    overflowWrap: 'anywhere',
-                                    hyphens: 'auto'
-                                  }}
-                                >
-                                  {firstAssistantMessage.content && firstAssistantMessage.content.length > 80
-                                    ? `${firstAssistantMessage.content.substring(0, 80)}...`
-                                    : firstAssistantMessage.content}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* 메타데이터 */}
-                          <div className="grid grid-cols-2 gap-2 sm:gap-4">
-                            <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-400">
-                              <Calendar className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                              <span className="truncate">
-                                {formatDate(session.createdAt)}
+                return (
+                  <Card
+                    key={session.id}
+                    className="bg-[#242a38] border-0 shadow-lg hover:bg-[#2a3142] transition-colors"
+                  >
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
+                        <Link
+                          href={`/uploaded_video/${video.id}?sessionId=${session.id}`}
+                          className="flex-1 min-w-0 cursor-pointer"
+                        >
+                          <div className="min-w-0">
+                            <h3 className="text-base sm:text-lg font-semibold text-white mb-2 break-words">
+                              <span
+                                className="inline-block max-w-full"
+                                title={session.title}
+                              >
+                                {session.title && session.title.length > 50
+                                  ? `${session.title.substring(0, 50)}...`
+                                  : session.title}
                               </span>
-                            </div>
+                            </h3>
 
-                            <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-400">
-                              <FileText className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                              <span className="truncate">
-                                {session.main_event?.scene_analysis || '분석 정보 없음'}
-                              </span>
-                            </div>
-
-                            {timestamps.length > 0 && (
-                              <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-400 col-span-2 sm:col-span-1">
-                                <Timeline className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                                <span className="truncate">
-                                  {timestamps.length}개의 보고서 (
-                                  {formatTime(timestamps[0])} ~{' '}
-                                  {formatTime(
-                                    timestamps[timestamps.length - 1]
-                                  )}
-                                  )
-                                </span>
-                              </div>
-                            )}
-
-                            {session.eventType && (
-                              <div className="flex items-center gap-1 sm:gap-2 col-span-2 sm:col-span-1">
-                                <Badge
-                                  className={`text-xs ${
-                                    session.eventType === 'theft'
-                                      ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
-                                      : session.eventType === 'collapse'
-                                      ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                      : session.eventType === 'violence'
-                                      ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
-                                      : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
-                                  }`}
-                                >
-                                  {translateEventType(session.eventType)}
-                                </Badge>
-                              </div>
-                            )}
-
-                            {/* 찾은 사건 뱃지 - 사건이 있을 때만 표시 */}
-                            {detectedEvents.length > 0 && (() => {
-                              const formattedEvents = formatDetectedEvents(detectedEvents);
-                              return formattedEvents && (
-                                <div className="flex items-center gap-1 sm:gap-2 col-span-2">
-                                  <Badge className={`text-xs flex-shrink-0 whitespace-nowrap ${getEventBadgeStyle(detectedEvents[0])}`}>
-                                    찾은 사건: {formattedEvents}
-                                  </Badge>
+                            {/* 첫 번째 질문과 답변 */}
+                            <div className="space-y-2 mb-3 sm:mb-4 min-w-0">
+                              {firstUserMessage && (
+                                <div className="text-xs sm:text-sm min-w-0">
+                                  <span className="text-[#6c5ce7] font-medium flex-shrink-0">
+                                    Q:
+                                  </span>
+                                  <span
+                                    className="text-gray-300 ml-2 break-words inline-block max-w-full"
+                                    title={firstUserMessage.content}
+                                    style={{
+                                      wordBreak: 'break-word',
+                                      overflowWrap: 'anywhere',
+                                      hyphens: 'auto',
+                                    }}
+                                  >
+                                    {firstUserMessage.content &&
+                                    firstUserMessage.content.length > 80
+                                      ? `${firstUserMessage.content.substring(
+                                          0,
+                                          80
+                                        )}...`
+                                      : firstUserMessage.content}
+                                  </span>
                                 </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      </Link>
+                              )}
+                              {firstAssistantMessage && (
+                                <div className="text-xs sm:text-sm min-w-0">
+                                  <span className="text-[#00e6b4] font-medium flex-shrink-0">
+                                    A:
+                                  </span>
+                                  <span
+                                    className="text-gray-300 ml-2 break-words inline-block max-w-full"
+                                    title={firstAssistantMessage.content}
+                                    style={{
+                                      wordBreak: 'break-word',
+                                      overflowWrap: 'anywhere',
+                                      hyphens: 'auto',
+                                    }}
+                                  >
+                                    {firstAssistantMessage.content &&
+                                    firstAssistantMessage.content.length > 80
+                                      ? `${firstAssistantMessage.content.substring(
+                                          0,
+                                          80
+                                        )}...`
+                                      : firstAssistantMessage.content}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
 
-                      {/* 삭제 버튼 - Link 밖으로 이동 */}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-gray-400 hover:text-red-400 hover:bg-red-400 hover:bg-opacity-10 flex-shrink-0 self-start sm:ml-4"
-                        onClick={(e) => handleDeleteSession(session.id, e)}
-                        aria-label="세션 삭제"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
+                            {/* 메타데이터 */}
+                            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+                              <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-400">
+                                <Calendar className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                                <span className="truncate">
+                                  {formatDate(session.createdAt)}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-400">
+                                <FileText className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                                <span className="truncate">
+                                  {session.main_event?.scene_analysis ||
+                                    '분석 정보 없음'}
+                                </span>
+                              </div>
+
+                              {timestamps.length > 0 && (
+                                <div className="flex items-center gap-1 sm:gap-2 text-xs text-gray-400 col-span-2 sm:col-span-1">
+                                  <Timeline className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                                  <span className="truncate">
+                                    {timestamps.length}개의 보고서 (
+                                    {formatTime(timestamps[0])} ~{' '}
+                                    {formatTime(
+                                      timestamps[timestamps.length - 1]
+                                    )}
+                                    )
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* 찾은 사건 뱃지 - 사건이 있을 때만 표시 */}
+                              {detectedEvents.length > 0 &&
+                                (() => {
+                                  const formattedEvents =
+                                    formatDetectedEvents(detectedEvents);
+                                  return (
+                                    formattedEvents && (
+                                      <div className="flex items-center gap-1 sm:gap-2 col-span-2">
+                                        <Badge
+                                          className={`text-xs flex-shrink-0 whitespace-nowrap ${getEventBadgeStyle(
+                                            detectedEvents[0],
+                                            formattedEvents
+                                          )}`}
+                                        >
+                                          찾은 사건: {formattedEvents}
+                                        </Badge>
+                                      </div>
+                                    )
+                                  );
+                                })()}
+                            </div>
+                          </div>
+                        </Link>
+
+                        {/* 삭제 버튼 - Link 밖으로 이동 */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-gray-400 hover:text-red-400 hover:bg-red-400 hover:bg-opacity-10 flex-shrink-0 self-start sm:ml-4"
+                          onClick={(e) => handleDeleteSession(session.id, e)}
+                          aria-label="세션 삭제"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
           )}
         </div>
       </main>
 
-      {/* History Sidebar - 모바일에서는 전체 화면으로 */}
-      {isMobile ? (
-        <div
-          className={`fixed inset-0 z-50 bg-[#1a1f2c] transform transition-transform duration-300 ease-out ${
-            historyOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          {/* 모바일 전용 헤더 */}
-          <div className="bg-[#242a38] border-b border-[#2a3142] p-4 flex items-center">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 flex items-center justify-center">
-                <img
-                  src="/images/ds_logo_transparent.png"
-                  alt="Deep Sentinel Logo"
-                  className="w-full h-full object-contain scale-[1.7]"
-                />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-white">Deep Sentinel</h1>
-                <span className="text-xs text-gray-400">분석 히스토리</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 h-[calc(100vh-80px)] overflow-hidden">
-            {/* 모바일 히스토리 사이드바에 onHistoryRefresh prop 추가 */}
-            <DynamicHistorySidebar
-              onSelectHistory={handleSelectHistory}
-              onClose={handleCloseHistory}
-              onHistoryRefresh={handleHistoryRefresh}
-              refreshTrigger={historyRefreshTrigger}
-            />
-          </div>
-        </div>
-      ) : (
-        <div
-          className={`fixed inset-y-0 right-0 z-50 transform transition-transform duration-300 ease-in-out ${
-            historyOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-          style={{
-            top: '73px',
-            height: 'calc(100vh - 73px)',
-            width: '35vw',
-            maxWidth: '600px',
-            minWidth: '400px',
-          }}
-        >
-          {/* 데스크톱 히스토리 사이드바에도 onHistoryRefresh prop 추가 */}
-          <DynamicHistorySidebar
-            onSelectHistory={handleSelectHistory}
-            onClose={handleCloseHistory}
-            onHistoryRefresh={handleHistoryRefresh}
-            refreshTrigger={historyRefreshTrigger}
-          />
-        </div>
-      )}
-
-      {/* History Backdrop - 데스크톱에서만 표시 */}
-      {historyOpen && !isMobile && (
-        <div
-          className="fixed inset-0 z-40 backdrop-blur-sm bg-gradient-to-r from-[#1a1f2c]/20 via-[#00e6b4]/5 to-[#3694ff]/10"
-          style={{
-            top: '73px',
-            height: 'calc(100vh - 73px)',
-          }}
-          onClick={() => setHistoryOpen(false)}
-        />
-      )}
+      <HistoryLayout
+        historyOpen={historyOpen}
+        isMobile={isMobile}
+        currentHistoryId={currentHistoryId}
+        historyRefreshTrigger={historyRefreshTrigger}
+        onSelectHistory={handleSelectHistory}
+        onClose={handleCloseHistory}
+        onHistoryRefresh={handleHistoryRefresh}
+      />
 
       {/* Footer */}
-      <footer
-        className={`bg-[#242a38] border-t border-[#2a3142] mt-auto transition-all duration-300 ${
-          historyOpen ? 'blur-sm opacity-75' : 'blur-0 opacity-100'
-        }`}
-      >
-        <div className="container mx-auto px-4 py-6 sm:py-8">
-          <div className="text-center mb-4 sm:mb-6">
-            <h2 className="text-xl sm:text-2xl font-bold text-[#00e6b4] mb-2 sm:mb-3">
-              AI 기반 CCTV 영상 분석 플랫폼
-            </h2>
-            <p className="text-sm sm:text-lg text-gray-400">
-              실시간 이벤트 감지 • 스마트 보안 솔루션 • Deep Sentinel
-            </p>
-          </div>
-
-          <Separator className="bg-[#2a3142] my-4 sm:my-6" />
-
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-2 text-xs sm:text-base text-gray-400">
-              <span>© 2024 Deep Sentinel. All rights reserved.</span>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs sm:text-base text-gray-300">
-              <span>궁금한 부분은 여기로</span>
-              <span className="text-[#00e6b4]">→</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-[#00e6b4] hover:text-[#00c49c] hover:bg-[#1a1f2c] p-1 sm:p-2 text-xs sm:text-sm"
-                onClick={() =>
-                  window.open('mailto:contact@deepsentinel.com', '_blank')
-                }
-              >
-                Contact
-              </Button>
-            </div>
-          </div>
-        </div>
-      </footer>
-
+      <Footer historyOpen={historyOpen} />
       {/* Toast Notifications */}
       <ToastNotification toasts={toasts} onRemove={removeToast} />
     </div>

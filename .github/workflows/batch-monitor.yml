@@ -1,0 +1,220 @@
+name: AWS Batch and Cost Monitor
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # KST 09:00 (Daily)
+    - cron: '0 1 * * 1' # KST 10:00 (Weekly)
+  workflow_dispatch:
+    inputs:
+      report_type:
+        description: 'Report type'
+        required: true
+        default: 'daily'
+        type: choice
+        options:
+          - daily
+          - weekly
+          - batch-status
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  BATCH_JOB_QUEUE: ${{ secrets.AWS_BATCH_JOB_QUEUE }}
+  BATCH_LOG_GROUP: ${{ secrets.AWS_BATCH_LOG_GROUP }}
+
+jobs:
+  monitor-batch:
+    name: AWS Batch Status Monitor
+    runs-on: ubuntu-latest
+    outputs:
+      succeeded_count: ${{ steps.batch-summary.outputs.succeeded_count }}
+      failed_count: ${{ steps.batch-summary.outputs.failed_count }}
+      running_count: ${{ steps.batch-summary.outputs.running_count }}
+      pending_count: ${{ steps.batch-summary.outputs.pending_count }}
+      has_failed_jobs: ${{ steps.batch-check.outputs.has_failed_jobs }}
+      has_batch_logs: ${{ steps.batch-check.outputs.has_batch_logs }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check failed Batch jobs (Last 24h)
+        id: batch-check
+        run: |
+          echo "🔍 Checking AWS Batch jobs status..."
+
+          FAILED_JOBS=$(aws batch list-jobs \
+            --job-queue ${{ env.BATCH_JOB_QUEUE }} \
+            --job-status FAILED \
+            --max-results 50 \
+            --query 'jobSummaryList[*].[jobName,jobId,createdAt]' \
+            --output text 2>/dev/null || echo "")
+
+          FAILED_COUNT=$(echo "$FAILED_JOBS" | grep -v '^$' | wc -l)
+
+          if [ ! -z "$FAILED_JOBS" ] && [ "$FAILED_COUNT" -gt 0 ]; then
+            echo "❌ Failed jobs found: $FAILED_COUNT"
+            echo "has_failed_jobs=true" >> $GITHUB_OUTPUT
+            echo "failed_count=$FAILED_COUNT" >> $GITHUB_OUTPUT
+            echo "$FAILED_JOBS" > /tmp/failed_jobs.txt
+            
+            # 실패한 작업 중 첫 번째 작업의 로그 수집 시도
+            FIRST_FAILED_JOB=$(echo "$FAILED_JOBS" | head -1 | awk '{print $2}')
+            
+            if [ ! -z "$FIRST_FAILED_JOB" ]; then
+              LOG_STREAM=$(aws batch describe-jobs --jobs $FIRST_FAILED_JOB --query 'jobs[0].container.logStreamName' --output text 2>/dev/null || echo "")
+              
+              if [ ! -z "$LOG_STREAM" ] && [ "$LOG_STREAM" != "None" ]; then
+                aws logs get-log-events \
+                  --log-group-name ${{ env.BATCH_LOG_GROUP }} \
+                  --log-stream-name $LOG_STREAM \
+                  --limit 50 \
+                  --query 'events[*].message' \
+                  --output text > /tmp/batch_failure_logs.txt 2>/dev/null || echo "No logs" > /tmp/batch_failure_logs.txt
+                
+                echo "has_batch_logs=true" >> $GITHUB_OUTPUT
+              else
+                echo "has_batch_logs=false" >> $GITHUB_OUTPUT
+              fi
+            fi
+          else
+            echo "✅ No failed jobs"
+            echo "has_failed_jobs=false" >> $GITHUB_OUTPUT
+            echo "failed_count=0" >> $GITHUB_OUTPUT
+            echo "has_batch_logs=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Batch report
+        id: batch-summary
+        run: |
+          SUCCEEDED=0
+          FAILED=0
+          RUNNING=0
+          PENDING=0
+
+          for STATUS in SUCCEEDED FAILED RUNNING PENDING; do
+            COUNT=$(aws batch list-jobs --job-queue ${{ env.BATCH_JOB_QUEUE }} --job-status $STATUS --query 'length(jobSummaryList)' --output text 2>/dev/null || echo "0")
+            
+            case $STATUS in
+              SUCCEEDED) SUCCEEDED=$COUNT ;;
+              FAILED) FAILED=$COUNT ;;
+              RUNNING) RUNNING=$COUNT ;;
+              PENDING) PENDING=$COUNT ;;
+            esac
+          done
+
+          echo "succeeded_count=$SUCCEEDED" >> $GITHUB_OUTPUT
+          echo "failed_count=$FAILED" >> $GITHUB_OUTPUT
+          echo "running_count=$RUNNING" >> $GITHUB_OUTPUT
+          echo "pending_count=$PENDING" >> $GITHUB_OUTPUT
+
+  cost-report:
+    name: AWS Cost Report
+    runs-on: ubuntu-latest
+    outputs:
+      total_monthly_cost: ${{ steps.cost-breakdown.outputs.total_monthly_cost }}
+      daily_cost: ${{ steps.daily-cost.outputs.daily_cost }}
+      daily_exceeded: ${{ steps.cost-check.outputs.daily_exceeded }}
+      monthly_exceeded: ${{ steps.cost-check.outputs.monthly_exceeded }}
+      has_cost_alert: ${{ steps.cost-check.outputs.has_cost_alert }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # Cost Explorer 필수 리전
+
+      - name: Get daily cost
+        id: daily-cost
+        run: |
+          START_DATE=$(date -d '7 days ago' +%Y-%m-%d)
+          END_DATE=$(date +%Y-%m-%d)
+          COSTS=$(aws ce get-cost-and-usage --time-period Start=$START_DATE,End=$END_DATE --granularity DAILY --metrics UnblendedCost --output json)
+          DAILY_COST=$(echo "$COSTS" | jq -r '.ResultsByTime[-1].Total.UnblendedCost.Amount' || echo "0")
+          echo "daily_cost=$DAILY_COST" >> $GITHUB_OUTPUT
+
+      - name: Get monthly cost (Group by Service)
+        id: cost-breakdown
+        run: |
+          START_DATE=$(date -d '30 days ago' +%Y-%m-%d)
+          END_DATE=$(date +%Y-%m-%d)
+          # [중요 수정] GroupBy 문법 오류 수정 (Type=DIMENSION,Key=SERVICE)
+          COST_DATA=$(aws ce get-cost-and-usage \
+            --time-period Start=$START_DATE,End=$END_DATE \
+            --granularity MONTHLY \
+            --metrics UnblendedCost \
+            --group-by Type=DIMENSION,Key=SERVICE \
+            --output json)
+            
+          TOTAL_COST=$(echo "$COST_DATA" | jq -r '.ResultsByTime[0].Total.UnblendedCost.Amount' || echo "0")
+          echo "total_monthly_cost=$TOTAL_COST" >> $GITHUB_OUTPUT
+
+      - name: Check alerts
+        id: cost-check
+        run: |
+          DAILY_COST=${{ steps.daily-cost.outputs.daily_cost }}
+          MONTHLY_COST=${{ steps.cost-breakdown.outputs.total_monthly_cost }}
+
+          DAILY_EXCEEDED=$(awk -v cost="$DAILY_COST" 'BEGIN {print (cost > 5.0) ? "true" : "false"}')
+          MONTHLY_EXCEEDED=$(awk -v cost="$MONTHLY_COST" 'BEGIN {print (cost > 100.0) ? "true" : "false"}')
+
+          echo "daily_exceeded=$DAILY_EXCEEDED" >> $GITHUB_OUTPUT
+          echo "monthly_exceeded=$MONTHLY_EXCEEDED" >> $GITHUB_OUTPUT
+
+          if [ "$DAILY_EXCEEDED" == "true" ] || [ "$MONTHLY_EXCEEDED" == "true" ]; then
+            echo "has_cost_alert=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_cost_alert=false" >> $GITHUB_OUTPUT
+          fi
+
+  summary:
+    name: 📋 Monitoring Summary
+    runs-on: ubuntu-latest
+    needs: [monitor-batch, cost-report]
+    if: always()
+    permissions:
+      issues: write
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "### 📊 AWS Monitoring Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ Batch Success | ${{ needs.monitor-batch.outputs.succeeded_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❌ Batch Failed | ${{ needs.monitor-batch.outputs.failed_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 💰 Daily Cost | $${{ needs.cost-report.outputs.daily_cost }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 💳 Monthly Cost | $${{ needs.cost-report.outputs.total_monthly_cost }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Batch Failure Issue
+        if: needs.monitor-batch.outputs.has_failed_jobs == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const failedCount = '${{ needs.monitor-batch.outputs.failed_count }}';
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Batch Job Failed: ${failedCount} jobs`,
+              body: `AWS Batch jobs have failed. Please check the AWS Console.\n\nFailed Count: ${failedCount}`,
+              labels: ['aws', 'batch', 'alert']
+            });
+
+      - name: Create Cost Alert Issue
+        if: needs.cost-report.outputs.has_cost_alert == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const dailyCost = '${{ needs.cost-report.outputs.daily_cost }}';
+            const monthlyCost = '${{ needs.cost-report.outputs.total_monthly_cost }}';
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Budget Exceeded Alert`,
+              body: `### Cost Alert\n- Daily Cost: $${dailyCost}\n- Monthly Cost: $${monthlyCost}\n\nPlease review AWS Cost Explorer immediately.`,
+              labels: ['aws', 'cost', 'critical']
+            });

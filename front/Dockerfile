@@ -5,9 +5,6 @@
 # ==========================================
 FROM node:18-alpine AS base
 
-# FFmpeg 설치 (비디오 처리용)
-RUN apk add --no-cache ffmpeg
-
 # 보안을 위한 사용자 생성
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -26,7 +23,7 @@ FROM base AS deps
 COPY package*.json yarn.lock* ./
 
 # 의존성 설치 (yarn 1.22 호환)
-RUN yarn install --frozen-lockfile --network-timeout 300000
+RUN yarn install --network-timeout 300000
 
 # ==========================================
 # Builder Stage: 애플리케이션 빌드
@@ -44,6 +41,10 @@ COPY . .
 # Next.js 환경 변수 설정
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+
+# ECS/Fargate 배포 시 빌드 타임 환경 변수
+ARG NEXT_PUBLIC_API_URL=https://api.deepsentinel.cloud
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 # 애플리케이션 빌드
 RUN yarn build
@@ -83,7 +84,7 @@ WORKDIR /app
 
 # 프로덕션 의존성만 설치
 COPY package*.json yarn.lock* ./
-RUN yarn install --production --frozen-lockfile --network-timeout 300000 && yarn cache clean
+RUN yarn install --production --network-timeout 300000 && yarn cache clean
 
 # 빌드된 애플리케이션 복사
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
@@ -101,15 +102,19 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 
+# ECS/Fargate용 API URL 설정
+ENV NEXT_PUBLIC_API_URL=https://api.deepsentinel.cloud
+ENV AWS_REGION=ap-northeast-2
+
 # 프로덕션 서버용 포트
 EXPOSE 3000
 
 # 보안을 위해 nextjs 사용자로 실행
 USER nextjs
 
-# 헬스체크 추가
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node --version || exit 1
+# 헬스체크 추가 (더 상세한 체크)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
 
 # 프로덕션 서버 실행
 CMD ["yarn", "start"]

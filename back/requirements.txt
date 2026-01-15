@@ -1,9 +1,27 @@
-asgiref==3.8.1
+# --- Django Core & Middleware ---
 Django==5.2
 djangorestframework==3.16.0
 django-environ==0.11.2
 django-cors-headers==4.3.1
-sqlparse==0.5.3
-typing_extensions==4.13.2
 gunicorn==22.0.0
+
+# --- Database (PostgreSQL) ---
+# psycopg[binary]는 제거 (psycopg2-binary와 중복)
 psycopg2-binary==2.9.7
+dj-database-url==2.2.0
+pgvector==0.3.6
+
+# --- AWS Services ---
+boto3==1.35.72
+botocore==1.35.72
+django-storages[boto3]==1.14.4
+
+# --- ML & Image Processing (Optimized) ---
+numpy>=1.22.4,<2.0.0
+# [중요 변경] 서버용 headless 버전으로 교체 (버전은 동일하게 유지하거나 최신 사용)
+opencv-python-headless==4.10.0.84
+
+# --- Utilities & Auth ---
+requests==2.32.3
+# urllib3, certifi 등은 requests가 알아서 설치하므로 생략 가능 (깔끔함 유지)
+PyJWT==2.9.0

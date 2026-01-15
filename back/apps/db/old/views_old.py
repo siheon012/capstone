@@ -1,0 +1,784 @@
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.db import transaction
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.conf import settings
+import os
+import json
+from datetime import datetime
+import logging
+
+from apps.db.models import Video, Event, PromptSession, PromptInteraction, DepthData, DisplayData, VideoAnalysis, AnalysisJob
+from apps.api.services import get_video_service, get_event_service
+from .serializers import (
+    VideoSerializer, EventSerializer, PromptSessionSerializer, PromptInteractionSerializer,
+    DepthDataSerializer, DisplayDataSerializer, DepthDataBulkCreateSerializer, DisplayDataBulkCreateSerializer,
+    VideoAnalysisSerializer, AnalysisJobSerializer
+)
+
+logger = logging.getLogger(__name__)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class VideoViewSet(viewsets.ModelViewSet):
+    queryset = Video.objects.all()
+    serializer_class = VideoSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    
+    def create(self, request, *args, **kwargs):
+        """비디오 생성"""
+        try:
+            if not request.data:
+                return Response(
+                    {'error': '요청 데이터가 비어있습니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            response = super().create(request, *args, **kwargs)
+            
+            if response.status_code == status.HTTP_201_CREATED:
+                video_id = response.data.get('video_id')
+                if video_id:
+                    video = Video.objects.get(video_id=video_id)
+                    video.data_tier = 'hot'
+                    video.hotness_score = 100.0
+                    video.save(update_fields=['data_tier', 'hotness_score'])
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Video creation failed: {e}", exc_info=True)
+            return Response(
+                {'error': f'비디오 생성 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'], url_path='upload')
+    def upload_video(self, request):
+        """비디오 파일 업로드 - VideoService 사용"""
+        from .utils import extract_video_metadata
+        
+        try:
+            video_file = request.FILES.get('video')
+            if not video_file:
+                return Response({'error': '비디오 파일이 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not video_file.content_type.startswith('video/'):
+                return Response({'error': '비디오 파일만 업로드 가능합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            max_size = 10 * 1024 * 1024 * 1024  # 10GB
+            if video_file.size > max_size:
+                return Response({'error': '파일 크기는 10GB를 초과할 수 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            logger.info(f"Uploading video: {video_file.name}")
+            
+            # 메타데이터 추출
+            metadata = extract_video_metadata(video_file)
+            logger.info(f"Metadata: duration={metadata['duration']}s, fps={metadata['fps']}")
+            
+            # Video 객체 생성
+            video = Video.objects.create(
+                name=video_file.name,
+                filename=video_file.name,
+                original_filename=video_file.name,
+                file_size=video_file.size,
+                duration=metadata['duration'],
+                fps=metadata['fps'],
+                frame_rate=metadata['fps'],
+                width=metadata['width'],
+                height=metadata['height'],
+                resolution_width=metadata['width'],
+                resolution_height=metadata['height'],
+                data_tier='hot',
+                hotness_score=100.0,
+                metadata_extracted=True,
+                analysis_status='pending',
+                analysis_progress=0,
+            )
+            
+            logger.info(f"Video created: video_id={video.video_id}")
+            
+            # S3 업로드 (VideoService 사용)
+            video_service = get_video_service()
+            s3_key = video_service._upload_to_s3(video, video_file)
+            
+            if s3_key:
+                video.s3_key = s3_key
+                video.s3_raw_key = s3_key
+                video.s3_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'capstone-video-bucket')
+                video.save(update_fields=['s3_key', 's3_raw_key', 's3_bucket'])
+                logger.info(f"S3 upload complete: s3://{video.s3_bucket}/{s3_key}")
+            
+            serializer = self.get_serializer(video)
+            
+            return Response({
+                'success': True,
+                'videoId': video.video_id,
+                'message': '비디오가 성공적으로 업로드되었습니다.',
+                'video': serializer.data,
+                'metadata': metadata,
+                's3_key': s3_key,
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Video upload failed: {e}", exc_info=True)
+            return Response(
+                {'error': f'업로드 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['patch'], url_path='update-progress')
+    def update_analysis_progress(self, request, pk=None):
+        """분석 모델에서 진행률 업데이트를 위한 API"""
+        try:
+            video = self.get_object()
+            progress = request.data.get('progress')
+            analysis_status = request.data.get('status', 'processing')
+            
+            # 진행률 유효성 검사
+            if progress is None:
+                return Response(
+                    {'error': 'progress 값이 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                progress = int(progress)
+                if not (0 <= progress <= 100):
+                    raise ValueError("진행률은 0-100 사이여야 합니다.")
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': '진행률은 0-100 사이의 정수여야 합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 분석 상태 유효성 검사
+            valid_statuses = ['pending', 'processing', 'completed', 'failed']
+            if analysis_status not in valid_statuses:
+                return Response(
+                    {'error': f'유효하지 않은 상태입니다. 가능한 값: {valid_statuses}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # 진행률과 상태 업데이트
+            video.analysis_progress = progress
+            video.analysis_status = analysis_status
+            
+            # 완료 시 자동으로 진행률을 100으로 설정
+            if analysis_status == 'completed':
+                video.analysis_progress = 100
+            
+            video.save(update_fields=['analysis_progress', 'analysis_status'])
+            
+            # ✨ 분석 완료 시 자동으로 Summary 생성
+            if analysis_status == 'completed' and progress == 100:
+                try:
+                    from apps.db.models import Event
+                    from apps.api.vlm_service import get_vlm_service
+                    
+                    events = Event.objects.filter(video=video).order_by('timestamp')
+                    
+                    if events.exists():
+                        logger.info(f"🤖 [Auto-Summary] 자동 요약 생성 시작: video_id={video.video_id}, events={events.count()}개")
+                        
+                        vlm_service = get_vlm_service()
+                        summary = vlm_service.generate_video_summary(
+                            video=video,
+                            events=list(events),
+                            summary_type='events'
+                        )
+                        
+                        # DB에 저장
+                        video.summary = summary
+                        video.save(update_fields=['summary'])
+                        
+                        logger.info(f"✅ [Auto-Summary] 자동 요약 생성 완료: video_id={video.video_id}")
+                    else:
+                        logger.warning(f"⚠️ [Auto-Summary] 이벤트가 없어 요약 생성 생략: video_id={video.video_id}")
+                        
+                except Exception as e:
+                    logger.error(f"❌ [Auto-Summary] 자동 요약 생성 실패: {str(e)}")
+                    # 요약 생성 실패해도 진행률 업데이트는 성공으로 처리
+            
+            return Response({
+                'success': True,
+                'message': f'진행률이 {progress}%로 업데이트되었습니다.',
+                'video_id': video.video_id,
+                'progress': video.analysis_progress,
+                'status': video.analysis_status
+            }, status=status.HTTP_200_OK)
+            
+        except Video.DoesNotExist:
+            return Response(
+                {'error': '존재하지 않는 비디오입니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'진행률 업데이트 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'], url_path='progress')
+    def get_analysis_progress(self, request, pk=None):
+        """분석 진행률 조회 API"""
+        try:
+            video = self.get_object()
+            
+            return Response({
+                'video_id': video.video_id,
+                'progress': video.analysis_progress,
+                'status': video.analysis_status,
+                'is_completed': video.analysis_status == 'completed',
+                'is_failed': video.analysis_status == 'failed'
+            }, status=status.HTTP_200_OK)
+            
+        except Video.DoesNotExist:
+            return Response(
+                {'error': '존재하지 않는 비디오입니다.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'진행률 조회 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+@method_decorator(csrf_exempt, name='dispatch')
+class EventViewSet(viewsets.ModelViewSet):
+    queryset = Event.objects.all()
+    serializer_class = EventSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+    
+    def get_queryset(self):
+        queryset = Event.objects.all()
+        video = self.request.query_params.get('video', None)
+        event_type = self.request.query_params.get('event_type', None)
+        
+        if video is not None:
+            queryset = queryset.filter(video_id=video)
+        if event_type is not None:
+            queryset = queryset.filter(event_type__icontains=event_type)
+            
+        return queryset.order_by('timestamp')
+    
+    @action(detail=False, methods=['get'], url_path='video-stats')
+    def video_stats(self, request):
+        """비디오별 이벤트 타입 통계 - EventService 사용"""
+        video_id = request.query_params.get('video_id')
+        if not video_id:
+            return Response(
+                {'error': 'video_id 파라미터가 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            event_service = get_event_service()
+            stats = event_service.get_video_event_stats(video_id)
+            return Response(stats)
+            
+        except Exception as e:
+            logger.error(f"통계 조회 실패: {str(e)}")
+            return Response(
+                {'error': f'통계 조회 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'], url_path='generate-embeddings')
+    def generate_embeddings(self, request):
+        """
+        이벤트들의 embedding 일괄 생성 - EventService 사용
+        
+        POST /db/events/generate-embeddings/
+        Body: {
+            "video_id": 103,  // optional
+            "limit": 100,     // optional
+            "force": false    // optional - 기존 embedding도 재생성
+        }
+        """
+        video_id = request.data.get('video_id')
+        limit = request.data.get('limit')
+        force = request.data.get('force', False)
+        
+        try:
+            event_service = get_event_service()
+            result = event_service.generate_embeddings(
+                video_id=video_id,
+                limit=limit,
+                force=force
+            )
+            
+            if result['total'] == 0:
+                message = '처리할 이벤트가 없습니다.'
+            else:
+                message = 'Embedding 생성 완료'
+            
+            return Response({
+                'message': message,
+                **result
+            })
+            
+        except Exception as e:
+            logger.error(f"Embedding 생성 실패: {str(e)}")
+            return Response(
+                {'error': f'Embedding 생성 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class PromptSessionViewSet(viewsets.ModelViewSet):
+    queryset = PromptSession.objects.all()
+    serializer_class = PromptSessionSerializer
+    lookup_field = 'session_id'  # UUID 문자열로 조회
+    lookup_value_regex = '[^/]+'  # UUID 패턴 허용
+    
+    def get_queryset(self):
+        """쿼리셋 필터링 - 비디오별 세션"""
+        queryset = PromptSession.objects.all()
+        
+        # orphan 세션 제외 (related_videos가 없는 세션)
+        queryset = queryset.filter(related_videos__isnull=False)
+        
+        # 비디오 ID로 필터링
+        video_id = self.request.query_params.get('video', None)
+        if video_id:
+            queryset = queryset.filter(related_videos__video_id=video_id)
+        
+        return queryset.order_by('-created_at')
+    
+    def list(self, request, *args, **kwargs):
+        """세션 목록 조회 - session_id가 없는 세션 자동 수정"""
+        import uuid
+        from apps.db.models import Video
+        
+        # 1. session_id가 없는 세션들 찾아서 UUID 할당
+        sessions_without_id = PromptSession.objects.filter(session_id='') | PromptSession.objects.filter(session_id__isnull=True)
+        if sessions_without_id.exists():
+            count = sessions_without_id.count()
+            logger.warning(f"⚠️ [AUTO-FIX] {count}개의 세션에 session_id가 없습니다. 자동으로 UUID를 할당합니다...")
+            
+            for session in sessions_without_id:
+                session.session_id = str(uuid.uuid4())
+                session.save(update_fields=['session_id'])
+            
+            logger.info(f"✅ [AUTO-FIX] {count}개의 세션 ID를 성공적으로 업데이트했습니다!")
+        
+        # 2. related_videos가 비어있지만 상호작용이 있는 세션 수정
+        # video 필터가 있는 경우에만 처리
+        video_id = request.query_params.get('video')
+        if video_id:
+            try:
+                video = Video.objects.get(video_id=video_id)
+                # 해당 비디오와 관련된 세션들 중 related_videos가 비어있는 것 찾기
+                all_sessions = PromptSession.objects.all()
+                fixed_count = 0
+                
+                for session in all_sessions:
+                    if not session.related_videos:
+                        # 상호작용의 관련 이벤트를 통해 비디오 찾기
+                        interactions = session.interactions.all()
+                        for interaction in interactions:
+                            related_events = interaction.related_events.all()
+                            for event in related_events:
+                                if event.video == video and not session.related_videos:
+                                    session.related_videos = video
+                                    session.save()
+                                    fixed_count += 1
+                                    logger.info(f"✅ [AUTO-FIX] 세션 {session.session_id[:8]}에 비디오 {video.name} 연결")
+                                    break
+                            if session.related_videos:
+                                break
+                
+                if fixed_count > 0:
+                    logger.info(f"✅ [AUTO-FIX] {fixed_count}개의 세션에 related_videos를 연결했습니다!")
+            except Video.DoesNotExist:
+                pass
+        
+        return super().list(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """세션 삭제 (명시적 구현)"""
+        try:
+            instance = self.get_object()
+            session_id = instance.session_id
+            
+            # 비디오 찾기: 우선순위 1) related_videos, 2) 인터랙션의 이벤트
+            video = instance.related_videos
+            
+            if not video:
+                # related_videos가 없으면 상호작용의 관련 이벤트를 통해 비디오 찾기
+                first_interaction = instance.interactions.first()
+                if first_interaction:
+                    first_event = first_interaction.related_events.first()
+                    if first_event and first_event.video:
+                        video = first_event.video
+                        logger.info(f"ℹ️ [DELETE] related_videos 없음, 인터랙션 이벤트에서 비디오 찾음")
+            
+            if video:
+                video_name = video.name or video.filename or f"Video-{video.video_id}"
+                logger.info(f"🔥 [DELETE] 세션 삭제 요청: session_id={session_id}, video={video_name} (ID: {video.video_id})")
+            else:
+                logger.info(f"🔥 [DELETE] 세션 삭제 요청: session_id={session_id}, video=연결된 비디오 없음")
+                logger.warning(f"⚠️ [DELETE] 경고: 세션에 비디오 정보를 찾을 수 없습니다.")
+            
+            logger.info(f"📊 [DELETE] 세션 상호작용 수: {instance.interactions.count()}")
+            
+            # 삭제 수행
+            self.perform_destroy(instance)
+            
+            logger.info(f"✅ [DELETE] 세션 삭제 완료: session_id={session_id}")
+            
+            return Response(
+                {
+                    "success": True,
+                    "message": "세션이 성공적으로 삭제되었습니다.",
+                    "session_id": session_id
+                },
+                status=status.HTTP_204_NO_CONTENT
+            )
+        except Exception as e:
+            logger.error(f"❌ [DELETE] 세션 삭제 실패: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"error": f"세션 삭제 중 오류가 발생했습니다: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+class PromptInteractionViewSet(viewsets.ModelViewSet):
+    queryset = PromptInteraction.objects.all()
+    serializer_class = PromptInteractionSerializer
+
+class DepthDataViewSet(viewsets.ModelViewSet):
+    queryset = DepthData.objects.all()
+    serializer_class = DepthDataSerializer
+    
+    def get_queryset(self):
+        queryset = DepthData.objects.all()
+        video_id = self.request.query_params.get('video_id', None)
+        frame_name = self.request.query_params.get('frame_name', None)
+        
+        if video_id is not None:
+            queryset = queryset.filter(video_id=video_id)
+        if frame_name is not None:
+            queryset = queryset.filter(frame_name__icontains=frame_name)
+            
+        return queryset.order_by('frame_name', 'mask_id')
+    
+    @action(detail=False, methods=['post'], url_path='bulk-create')
+    def bulk_create(self, request):
+        """공간 정보 데이터 일괄 생성"""
+        try:
+            serializer = DepthDataBulkCreateSerializer(data=request.data)
+            if serializer.is_valid():
+                with transaction.atomic():
+                    depth_data_objects = serializer.save()
+                    return Response({
+                        'success': True,
+                        'message': f'{len(depth_data_objects)}개의 공간 정보가 저장되었습니다.',
+                        'count': len(depth_data_objects)
+                    }, status=status.HTTP_201_CREATED)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {'error': f'공간 정보 저장 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class DisplayDataViewSet(viewsets.ModelViewSet):
+    queryset = DisplayData.objects.all()
+    serializer_class = DisplayDataSerializer
+    
+    def get_queryset(self):
+        queryset = DisplayData.objects.all()
+        video_id = self.request.query_params.get('video_id', None)
+        description = self.request.query_params.get('description', None)
+        
+        if video_id is not None:
+            queryset = queryset.filter(video_id=video_id)
+        if description is not None:
+            queryset = queryset.filter(description__icontains=description)
+            
+        return queryset.order_by('timestamp', 'image_index', 'mask_key')
+    
+    @action(detail=False, methods=['post'], url_path='bulk-create')
+    def bulk_create(self, request):
+        """진열대 정보 데이터 일괄 생성"""
+        try:
+            serializer = DisplayDataBulkCreateSerializer(data=request.data)
+            if serializer.is_valid():
+                with transaction.atomic():
+                    display_data_objects = serializer.save()
+                    return Response({
+                        'success': True,
+                        'message': f'{len(display_data_objects)}개의 진열대 정보가 저장되었습니다.',
+                        'count': len(display_data_objects)
+                    }, status=status.HTTP_201_CREATED)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {'error': f'진열대 정보 저장 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['get'], url_path='by-depth')
+    def by_depth(self, request):
+        """깊이별 진열대 정보 조회"""
+        video_id = request.query_params.get('video_id')
+        if not video_id:
+            return Response(
+                {'error': 'video_id 파라미터가 필요합니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        displays = DisplayData.objects.filter(video_id=video_id).order_by('avg_depth')
+        serializer = self.get_serializer(displays, many=True)
+        
+        # 깊이별로 그룹화
+        depth_groups = {}
+        for display in serializer.data:
+            depth = display['description']
+            if depth not in depth_groups:
+                depth_groups[depth] = []
+            depth_groups[depth].append(display)
+        
+        return Response({
+            'video_id': video_id,
+            'depth_groups': depth_groups,
+            'total_count': len(serializer.data)
+        })
+
+
+# 새로운 클라우드 모델을 위한 ViewSet들
+class VideoAnalysisViewSet(viewsets.ModelViewSet):
+    """비디오 분석 결과 ViewSet"""
+    queryset = VideoAnalysis.objects.all()
+    serializer_class = VideoAnalysisSerializer
+    
+    def get_queryset(self):
+        queryset = VideoAnalysis.objects.all()
+        video_id = self.request.query_params.get('video_id', None)
+        analysis_type = self.request.query_params.get('analysis_type', None)
+        tier = self.request.query_params.get('tier', None)
+        
+        if video_id is not None:
+            queryset = queryset.filter(video_id=video_id)
+        if analysis_type is not None:
+            queryset = queryset.filter(analysis_type=analysis_type)
+        if tier is not None:
+            queryset = queryset.filter(data_tier=tier)
+            
+        return queryset.order_by('-created_at')
+    
+    @action(detail=False, methods=['post'], url_path='vector-search')
+    def vector_search(self, request):
+        """벡터 유사도 검색"""
+        try:
+            from .search_service import RAGSearchService
+            
+            query = request.data.get('query', '')
+            video_id = request.data.get('video_id', None)
+            limit = request.data.get('limit', 10)
+            
+            if not query:
+                return Response(
+                    {'error': '검색 쿼리가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # RAG 검색 서비스 사용
+            search_service = RAGSearchService()
+            results = search_service.search_similar_events(
+                query=query,
+                video_id=video_id,
+                limit=limit
+            )
+            
+            return Response({
+                'query': query,
+                'results': results,
+                'count': len(results)
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'벡터 검색 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'], url_path='generate-embedding')
+    def generate_embedding(self, request):
+        """텍스트 임베딩 생성"""
+        try:
+            text = request.data.get('text', '')
+            if not text:
+                return Response(
+                    {'error': '임베딩할 텍스트가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            from .search_service import RAGSearchService
+            search_service = RAGSearchService()
+            embedding = search_service.generate_embedding(text)
+            
+            return Response({
+                'text': text,
+                'embedding': embedding,
+                'dimension': len(embedding) if embedding else 0
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'임베딩 생성 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class AnalysisJobViewSet(viewsets.ModelViewSet):
+    """AWS Batch 분석 작업 ViewSet"""
+    queryset = AnalysisJob.objects.all()
+    serializer_class = AnalysisJobSerializer
+    
+    def get_queryset(self):
+        queryset = AnalysisJob.objects.all()
+        video_id = self.request.query_params.get('video_id', None)
+        status_filter = self.request.query_params.get('status', None)
+        
+        if video_id is not None:
+            queryset = queryset.filter(video_id=video_id)
+        if status_filter is not None:
+            queryset = queryset.filter(status=status_filter)
+            
+        return queryset.order_by('-created_at')
+    
+    @action(detail=True, methods=['post'], url_path='update-status')
+    def update_status(self, request, pk=None):
+        """AWS Batch에서 작업 상태 업데이트"""
+        try:
+            job = self.get_object()
+            old_status = job.status
+            
+            # AWS에서 최신 상태 조회
+            job.update_status_from_aws()
+            
+            if job.status != old_status:
+                return Response({
+                    'job_id': job.job_id,
+                    'old_status': old_status,
+                    'new_status': job.status,
+                    'updated': True
+                })
+            else:
+                return Response({
+                    'job_id': job.job_id,
+                    'status': job.status,
+                    'updated': False
+                })
+                
+        except Exception as e:
+            return Response(
+                {'error': f'상태 업데이트 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'], url_path='submit-analysis')
+    def submit_analysis(self, request):
+        """새로운 분석 작업 제출"""
+        try:
+            video_id = request.data.get('video_id')
+            analysis_types = request.data.get('analysis_types', [])
+            
+            if not video_id:
+                return Response(
+                    {'error': 'video_id가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not analysis_types:
+                return Response(
+                    {'error': 'analysis_types가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # AWS Batch 작업 제출 로직 (실제 구현 필요)
+            job_name = f"video-analysis-{video_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            job_id = f"batch-job-{video_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            
+            # AnalysisJob 생성
+            analysis_job = AnalysisJob.objects.create(
+                video_id=video_id,
+                job_id=job_id,
+                job_name=job_name,
+                job_queue='video-analysis-queue',
+                job_definition='video-analysis-job-def',
+                analysis_types=analysis_types,
+                status='submitted'
+            )
+            
+            serializer = self.get_serializer(analysis_job)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'분석 작업 제출 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# 데이터 티어링 관리 ViewSet
+class TierManagementViewSet(viewsets.GenericViewSet):
+    """데이터 티어링 관리 API"""
+    
+    @action(detail=False, methods=['post'], url_path='promote-to-hot')
+    def promote_to_hot(self, request):
+        """Hot 티어로 승격"""
+        try:
+            video_id = request.data.get('video_id')
+            if not video_id:
+                return Response(
+                    {'error': 'video_id가 필요합니다.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            from .tier_manager import TierManager
+            tier_manager = TierManager()
+            result = tier_manager.promote_to_hot(video_id)
+            
+            return Response({
+                'success': True,
+                'video_id': video_id,
+                'message': f'비디오가 Hot 티어로 승격되었습니다.',
+                'result': result
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'티어 승격 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'], url_path='run-tier-management')
+    def run_tier_management(self, request):
+        """티어 관리 실행"""
+        try:
+            from .tier_manager import TierManager
+            tier_manager = TierManager()
+            
+            results = tier_manager.run_daily_tier_management()
+            
+            return Response({
+                'success': True,
+                'message': '티어 관리가 완료되었습니다.',
+                'results': results
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'티어 관리 중 오류가 발생했습니다: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

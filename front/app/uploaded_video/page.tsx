@@ -31,12 +31,20 @@ import {
 } from '@/components/ui/select';
 import type { UploadedVideo } from '@/app/types/video';
 import type { ChatSession } from '@/app/types/session';
-import { getUploadedVideos, deleteVideo, getVideoEventStats } from '@/app/actions/video-service';
+import {
+  getUploadedVideos,
+  getVideoEventStats,
+  deleteVideo,
+} from '@/app/actions/video-service-client';
 import { getAllSessions } from '@/app/actions/session-service';
 import Link from 'next/link';
-import SmartHeader from '@/components/smart-header';
-import DynamicHistorySidebar from '@/components/dynamic-history-sidebar';
-import ToastNotification, { type Toast } from '@/components/toast-notification';
+import SmartHeader from '@/components/layout/SmartHeader';
+import HistoryLayout from '@/components/layout/HistoryLayout';
+import HistorySidebar from '@/components/history/HistorySidebar';
+import ToastNotification, {
+  type Toast,
+} from '@/components/feedback/ToastNotification';
+import Footer from '@/components/layout/Footer';
 
 // 토스트 알림을 위한 import 제거 (useToast 대신 자체 토스트 시스템 사용)
 // import { useToast } from '@/components/ui/use-toast';
@@ -58,7 +66,9 @@ export default function UploadedVideoPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
   // Event 테이블에서 가져온 비디오별 이벤트 통계
-  const [videoEventStats, setVideoEventStats] = useState<{ [videoId: string]: { eventType: string; count: number } }>({});
+  const [videoEventStats, setVideoEventStats] = useState<{
+    [videoId: string]: { eventType: string; count: number };
+  }>({});
 
   // useToast 훅 제거 - 자체 토스트 시스템 사용
   // const { toast } = useToast();
@@ -133,15 +143,15 @@ export default function UploadedVideoPage() {
       // 비디오 목록과 세션 목록을 병렬로 로드
       const [videoResponse, sessionResponse] = await Promise.all([
         getUploadedVideos(),
-        getAllSessions()
+        getAllSessions(),
       ]);
-      
+
       console.log('비디오 응답:', videoResponse);
       console.log('세션 응답:', sessionResponse);
-      
+
       if (videoResponse.success) {
         setVideos(videoResponse.data);
-        
+
         // 각 비디오에 대한 Event 테이블 통계 로드
         const eventStatsPromises = videoResponse.data.map(async (video) => {
           const statsResponse = await getVideoEventStats(video.id);
@@ -154,20 +164,27 @@ export default function UploadedVideoPage() {
           }
           return null;
         });
-        
+
         const eventStats = await Promise.all(eventStatsPromises);
-        const validEventStats = eventStats.filter(stat => stat !== null) as Array<{ videoId: string; eventType: string; count: number }>;
-        
+        const validEventStats = eventStats.filter(
+          (stat) => stat !== null
+        ) as Array<{ videoId: string; eventType: string; count: number }>;
+
         // 통계를 상태에 저장
-        const statsMap: { [videoId: string]: { eventType: string; count: number } } = {};
-        validEventStats.forEach(stat => {
-          statsMap[stat.videoId] = { eventType: stat.eventType, count: stat.count };
+        const statsMap: {
+          [videoId: string]: { eventType: string; count: number };
+        } = {};
+        validEventStats.forEach((stat) => {
+          statsMap[stat.videoId] = {
+            eventType: stat.eventType,
+            count: stat.count,
+          };
         });
         setVideoEventStats(statsMap);
-        
+
         console.log('로드된 비디오 이벤트 통계:', statsMap);
       }
-      
+
       if (sessionResponse.success) {
         setSessions(sessionResponse.data);
         console.log('로드된 세션들:', sessionResponse.data);
@@ -288,6 +305,10 @@ export default function UploadedVideoPage() {
         return '쓰러짐';
       case 'sitting':
         return '점거';
+      case 'violence':
+        return '폭행';
+      case 'interaction':
+        return '특이 사건 없음';
       default:
         return eventType;
     }
@@ -296,7 +317,7 @@ export default function UploadedVideoPage() {
   // Event 테이블에서 가져온 통계를 기반으로 가장 많이 발생한 이벤트 반환
   const getMostFrequentEventForVideo = (videoId: string) => {
     const eventStat = videoEventStats[videoId];
-    
+
     if (eventStat) {
       console.log(`비디오 ${videoId}의 Event 테이블 통계:`, eventStat);
       return {
@@ -305,22 +326,28 @@ export default function UploadedVideoPage() {
         total: eventStat.count, // Event 테이블 기반이므로 총 이벤트 수와 동일
       };
     }
-    
+
     console.log(`비디오 ${videoId}에 대한 Event 통계가 없음`);
     return null;
   };
 
   const formatFileSize = (bytes: number) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    if (bytes === 0) return '0 Bytes';
+    // NaN, null, undefined, 0 처리
+    if (!bytes || isNaN(bytes) || bytes === 0) return '0 Bytes';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
   const formatDuration = (seconds: number) => {
+    // NaN, null, undefined 처리
+    if (isNaN(seconds) || seconds === null || seconds === undefined) {
+      return '0:00';
+    }
+
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
 
     if (hours > 0) {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs
@@ -349,6 +376,7 @@ export default function UploadedVideoPage() {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
+      timeZone: 'Asia/Seoul', // 한국 서울 시간대 명시
     });
   };
 
@@ -358,32 +386,34 @@ export default function UploadedVideoPage() {
       const matchesSearch =
         video.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         video.description?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       // 사건 필터링 로직 개선
       const matchesFilter = (() => {
         if (filterEvent === 'all') {
           return true;
         }
-        
+
         if (filterEvent === 'none') {
           // Event 테이블 통계와 비디오의 majorEvent 모두 없는 경우
           const mostFrequentEvent = getMostFrequentEventForVideo(video.id);
           return !mostFrequentEvent && !video.majorEvent;
         }
-        
+
         // 특정 사건으로 필터링하는 경우
         const mostFrequentEvent = getMostFrequentEventForVideo(video.id);
-        
+
         // Event 테이블에서 분석된 이벤트가 있으면 우선 확인
         if (mostFrequentEvent) {
-          const translatedEventType = translateEventType(mostFrequentEvent.type);
+          const translatedEventType = translateEventType(
+            mostFrequentEvent.type
+          );
           return translatedEventType === filterEvent;
         }
-        
+
         // Event 테이블 통계가 없으면 비디오의 majorEvent 확인
         return video.majorEvent === filterEvent;
       })();
-      
+
       return matchesSearch && matchesFilter;
     })
     .sort((a, b) => {
@@ -395,9 +425,15 @@ export default function UploadedVideoPage() {
         case 'name':
           return a.name.localeCompare(b.name);
         case 'size':
-          return b.size - a.size;
+          // null 안전 처리
+          const sizeA = a.size ?? 0;
+          const sizeB = b.size ?? 0;
+          return sizeB - sizeA;
         case 'duration':
-          return b.duration - a.duration;
+          // null/undefined 안전 처리
+          const durationA = a.duration ?? 0;
+          const durationB = b.duration ?? 0;
+          return durationB - durationA;
         default:
           return 0;
       }
@@ -524,6 +560,7 @@ export default function UploadedVideoPage() {
                     <SelectItem value="도난">도난</SelectItem>
                     <SelectItem value="쓰러짐">쓰러짐</SelectItem>
                     <SelectItem value="점거">점거</SelectItem>
+                    <SelectItem value="폭행">폭행</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -616,13 +653,15 @@ export default function UploadedVideoPage() {
                               {video.name}
                             </h3>
                           </Link>
-                          
+
                           {/* 영상의 실제 시각 정보 */}
                           <div className="text-sm text-gray-400 mb-2">
-                            <span className="text-[#00e6b4]">영상의 실제 시각:</span>{' '}
+                            <span className="text-[#00e6b4]">
+                              영상의 실제 시각:
+                            </span>{' '}
                             <span>{formatVideoTime(video.timeInVideo)}</span>
                           </div>
-                          
+
                           {video.description && (
                             <p className="text-sm text-gray-400 mb-2 line-clamp-2">
                               {video.description}
@@ -630,51 +669,83 @@ export default function UploadedVideoPage() {
                           )}
                         </div>
 
-                        {/* 주요 사건 배지 - Event 테이블에서 가져온 통계 또는 비디오의 majorEvent */}
-                        {(() => {
-                          const mostFrequentEvent = getMostFrequentEventForVideo(video.id);
-                          
-                          // Event 테이블에서 분석된 이벤트가 있으면 우선 표시
-                          if (mostFrequentEvent) {
-                            const eventText = translateEventType(mostFrequentEvent.type);
+                        {/* 주요 사건 배지 - 실제 사건(점거/도난/쓰러짐/폭행) 우선, 없으면 특이 사건 없음 */}
+                        <div className="flex-shrink-0">
+                          {(() => {
+                            const mostFrequentEvent =
+                              getMostFrequentEventForVideo(video.id);
+
+                            // 1순위: Event 테이블에서 분석된 실제 사건 (interaction 제외)
+                            if (mostFrequentEvent) {
+                              const eventType = mostFrequentEvent.type;
+
+                              // theft, collapse, sitting, violence 등 실제 사건만 표시
+                              if (
+                                eventType === 'theft' ||
+                                eventType === 'collapse' ||
+                                eventType === 'sitting' ||
+                                eventType === 'violence'
+                              ) {
+                                const eventText = translateEventType(eventType);
+                                return (
+                                  <Badge
+                                    className={`flex-shrink-0 text-xs whitespace-nowrap ${
+                                      eventText === '도난'
+                                        ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
+                                        : eventText === '쓰러짐'
+                                        ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
+                                        : eventText === '점거'
+                                        ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
+                                        : eventText === '폭행'
+                                        ? 'bg-purple-500 bg-opacity-20 text-purple-400 border border-purple-500 border-opacity-30'
+                                        : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
+                                    }`}
+                                  >
+                                    주요 사건: {eventText}
+                                  </Badge>
+                                );
+                              }
+                            }
+
+                            // 2순위: 비디오의 majorEvent (실제 사건만)
+                            if (video.majorEvent) {
+                              const majorEvent = video.majorEvent;
+
+                              // 한글로 저장된 실제 사건만 표시 (interaction 제외)
+                              if (
+                                majorEvent === '도난' ||
+                                majorEvent === '쓰러짐' ||
+                                majorEvent === '점거' ||
+                                majorEvent === '폭행'
+                              ) {
+                                return (
+                                  <Badge
+                                    className={`flex-shrink-0 text-xs whitespace-nowrap ${
+                                      majorEvent === '도난'
+                                        ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
+                                        : majorEvent === '쓰러짐'
+                                        ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
+                                        : majorEvent === '점거'
+                                        ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
+                                        : majorEvent === '폭행'
+                                        ? 'bg-purple-500 bg-opacity-20 text-purple-400 border border-purple-500 border-opacity-30'
+                                        : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
+                                    }`}
+                                  >
+                                    주요 사건: {majorEvent}
+                                  </Badge>
+                                );
+                              }
+                            }
+
+                            // 3순위: 실제 사건이 없으면 "특이 사건 없음" (interaction 또는 데이터 없음)
                             return (
-                              <Badge
-                                className={`flex-shrink-0 text-xs whitespace-nowrap ${
-                                  eventText === '도난'
-                                    ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
-                                    : eventText === '쓰러짐'
-                                    ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                    : eventText === '점거'
-                                    ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
-                                    : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
-                                }`}
-                              >
-                                주요 사건: {eventText}({mostFrequentEvent.count} times)
+                              <Badge className="flex-shrink-0 text-xs whitespace-nowrap bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30">
+                                특이 사건 없음
                               </Badge>
                             );
-                          }
-                          
-                          // 비디오의 majorEvent가 있으면 표시
-                          if (video.majorEvent) {
-                            return (
-                              <Badge
-                                className={`flex-shrink-0 text-xs whitespace-nowrap ${
-                                  video.majorEvent === '도난'
-                                    ? 'bg-red-500 bg-opacity-20 text-red-400 border border-red-500 border-opacity-30'
-                                    : video.majorEvent === '쓰러짐'
-                                    ? 'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500 border-opacity-30'
-                                    : video.majorEvent === '점거'
-                                    ? 'bg-orange-500 bg-opacity-20 text-orange-400 border border-orange-500 border-opacity-30'
-                                    : 'bg-gray-500 bg-opacity-20 text-gray-400 border border-gray-500 border-opacity-30'
-                                }`}
-                              >
-                                주요 사건: {video.majorEvent}
-                              </Badge>
-                            );
-                          }
-                          
-                          return null;
-                        })()}
+                          })()}
+                        </div>
                       </div>
 
                       {/* 메타데이터 */}
@@ -860,118 +931,22 @@ export default function UploadedVideoPage() {
         )}
       </main>
 
-      {/* History Sidebar - 모바일에서는 전체 화면으로 */}
-      {isMobile ? (
-        <div
-          className={`fixed inset-0 z-50 bg-[#1a1f2c] transform transition-transform duration-300 ease-out ${
-            historyOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          {/* 모바일 전용 헤더 */}
-          <div className="bg-[#242a38] border-b border-[#2a3142] p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 flex items-center justify-center">
-                <img
-                  src="/images/ds_logo_transparent.png"
-                  alt="Deep Sentinel Logo"
-                  className="w-full h-full object-contain scale-[1.7]"
-                />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-white">Deep Sentinel</h1>
-                <span className="text-xs text-gray-400">분석 히스토리</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 h-[calc(100vh-80px)] overflow-hidden">
-            <DynamicHistorySidebar
-              onSelectHistory={handleSelectHistory}
-              currentHistoryId={currentHistoryId}
-              onClose={handleCloseHistory}
-              refreshTrigger={historyRefreshTrigger}
-              onHistoryRefresh={handleHistoryRefresh}
-            />
-          </div>
-        </div>
-      ) : (
-        <div
-          className={`fixed inset-y-0 right-0 z-50 transform transition-transform duration-300 ease-in-out ${
-            historyOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-          style={{
-            top: '73px',
-            height: 'calc(100vh - 73px)',
-            width: '35vw',
-            maxWidth: '600px',
-            minWidth: '400px',
-          }}
-        >
-          <DynamicHistorySidebar
-            onSelectHistory={handleSelectHistory}
-            currentHistoryId={currentHistoryId}
-            onClose={handleCloseHistory}
-            refreshTrigger={historyRefreshTrigger}
-            onHistoryRefresh={handleHistoryRefresh}
-          />
-        </div>
-      )}
-
-      {/* History Backdrop - 데스크톱에서만 표시 */}
-      {historyOpen && !isMobile && (
-        <div
-          className="fixed inset-0 z-40 backdrop-blur-sm bg-gradient-to-r from-[#1a1f2c]/20 via-[#00e6b4]/5 to-[#3694ff]/10"
-          style={{
-            top: '73px',
-            height: 'calc(100vh - 73px)',
-          }}
-          onClick={() => setHistoryOpen(false)}
-        />
-      )}
+      <HistoryLayout
+        historyOpen={historyOpen}
+        isMobile={isMobile}
+        currentHistoryId={currentHistoryId}
+        historyRefreshTrigger={historyRefreshTrigger}
+        onSelectHistory={handleSelectHistory}
+        onClose={handleCloseHistory}
+        onHistoryRefresh={handleHistoryRefresh}
+      />
 
       {/* 토스트 알림 */}
       <ToastNotification toasts={toasts} onRemove={removeToast} />
 
       {/* Footer */}
-      <footer
-        className={`bg-[#242a38] border-t border-[#2a3142] mt-auto transition-all duration-300 ${
-          historyOpen ? 'blur-sm opacity-75' : 'blur-0 opacity-100'
-        }`}
-      >
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-[#00e6b4] mb-3">
-              AI 기반 CCTV 영상 분석 플랫폼
-            </h2>
-            <p className="text-gray-400 text-lg">
-              실시간 이벤트 감지 • 스마트 보안 솔루션 • Deep Sentinel
-            </p>
-          </div>
 
-          <Separator className="bg-[#2a3142] my-6" />
-
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-gray-400">
-              <span>© 2024 Deep Sentinel. All rights reserved.</span>
-            </div>
-
-            <div className="flex items-center gap-2 text-gray-300">
-              <span>궁금한 부분은 여기로</span>
-              <span className="text-[#00e6b4]">→</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-[#00e6b4] hover:text-[#00c49c] hover:bg-[#1a1f2c] p-2"
-                onClick={() =>
-                  window.open('mailto:contact@deepsentinel.com', '_blank')
-                }
-              >
-                Contact
-              </Button>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <Footer historyOpen={historyOpen} />
     </div>
   );
 }

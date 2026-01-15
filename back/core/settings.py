@@ -35,7 +35,8 @@ SECRET_KEY = env('SECRET_KEY', default='django-insecure-fallback-key-only-for-de
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = env('ALLOWED_HOSTS', default='localhost').split(',')
+# AWS 프로덕션 환경을 위한 ALLOWED_HOSTS 설정
+ALLOWED_HOSTS = env('ALLOWED_HOSTS', default='*').split(',')
 
 # Application definition
 
@@ -50,6 +51,8 @@ INSTALLED_APPS = [
     'corsheaders',  # CORS 설정 추가
     'apps.db.apps.DbConfig',
     'apps.api.apps.ApiConfig',
+    # pgvector 지원을 위한 추가 앱들
+    'pgvector',  # pgvector Django 확장
 ]
 
 MIDDLEWARE = [
@@ -64,13 +67,19 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# CORS 설정
-CORS_ALLOW_ALL_ORIGINS = True  # 개발 환경에서는 모든 도메인에서의 요청 허용
-# 프로덕션 환경에서는 아래와 같이 특정 도메인만 허용하는 것이 좋습니다
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "https://yourdomain.com",
-# ]
+# CORS 설정 - Same-origin (Path-based routing)
+# Same-origin이지만 안전하게 특정 도메인만 허용
+# 환경변수에서 도메인 가져오기 (없으면 localhost만)
+PRODUCTION_DOMAIN = env('PRODUCTION_DOMAIN', default=None)
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # 로컬 개발용
+]
+if PRODUCTION_DOMAIN:
+    CORS_ALLOWED_ORIGINS.extend([
+        f"https://{PRODUCTION_DOMAIN}",
+        f"https://www.{PRODUCTION_DOMAIN}",
+    ])
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'core.urls'
 
@@ -95,16 +104,30 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': env('DB_ENGINE', default='django.db.backends.postgresql'),
-        'NAME': env('DB_NAME', default='capstone_local'),        
-        'USER': env('DB_USER', default='capstone_user'),      
-        'PASSWORD': env('DB_PASSWORD', default='local_password'),  
-        'HOST': env('DB_HOST', default='db'),
-        'PORT': env('DB_PORT', default='5432'),
+# 데이터베이스 URL 우선 사용 (클라우드 환경)
+DATABASE_URL = env('DATABASE_URL', default=None)
+
+if DATABASE_URL:
+    # 클라우드 환경: DATABASE_URL 사용
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL)
     }
-}
+else:
+    # 로컬 환경: 개별 환경변수 사용
+    DATABASES = {
+        'default': {
+            'ENGINE': env('DB_ENGINE', default='django.db.backends.postgresql'),
+            'NAME': env('DB_NAME', default='capstone_local'),        
+            'USER': env('DB_USER', default='capstone_user'),      
+            'PASSWORD': env('DB_PASSWORD', default='local_password'),  
+            'HOST': env('DB_HOST', default='db'),
+            'PORT': env('DB_PORT', default='5432'),
+        }
+    }
+
+# 연결 풀링 설정 (프로덕션 환경용)
+DATABASES['default']['CONN_MAX_AGE'] = env('DB_CONN_MAX_AGE', default=600, cast=int)
 
 
 # Password validation
@@ -153,6 +176,57 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# AWS 설정
+AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default=None)
+AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default=None)
+AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME', default='capstone-dev-raw')
+AWS_S3_REGION_NAME = env('AWS_DEFAULT_REGION', default='ap-northeast-2')
+AWS_S3_CUSTOM_DOMAIN = env('AWS_S3_CUSTOM_DOMAIN', default=None)
+
+# S3 버킷 이름 설정
+AWS_RAW_BUCKET_NAME = env('AWS_RAW_BUCKET_NAME', default='capstone-dev-raw')
+AWS_THUMBNAILS_BUCKET_NAME = env('AWS_THUMBNAILS_BUCKET_NAME', default='capstone-dev-thumbnails')
+AWS_HIGHLIGHTS_BUCKET_NAME = env('AWS_HIGHLIGHTS_BUCKET_NAME', default='capstone-dev-highlights')
+
+# AWS Bedrock 설정
+AWS_BEDROCK_REGION = env('AWS_BEDROCK_REGION', default='ap-northeast-2')
+AWS_BEDROCK_RERANKER_REGION = env('AWS_BEDROCK_RERANKER_REGION', default='ap-northeast-1')  # Cohere 지원 리전
+AWS_BEDROCK_MODEL_ID = env('AWS_BEDROCK_MODEL_ID', default='anthropic.claude-3-5-sonnet-20241022-v2:0')
+AWS_BEDROCK_VLM_MODEL_ID = env('AWS_BEDROCK_VLM_MODEL_ID', default='anthropic.claude-3-5-sonnet-20241022-v2:0')
+AWS_BEDROCK_EMBEDDING_MODEL_ID = env('AWS_BEDROCK_EMBEDDING_MODEL_ID', default='amazon.titan-embed-text-v2:0')
+AWS_BEDROCK_RERANK_MODEL_ID = env('AWS_BEDROCK_RERANK_MODEL_ID', default='cohere.rerank-v3-5:0')
+
+# AWS SQS 설정
+AWS_SQS_QUEUE_URL = env('AWS_SQS_QUEUE_URL', default='')
+AWS_SQS_REGION = env('AWS_SQS_REGION', default='ap-northeast-2')
+
+# 파일 저장소 설정 (AWS S3 vs 로컬)
+USE_S3 = bool(AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME)
+
+if USE_S3:
+    # AWS S3 스토리지 설정
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    STATICFILES_STORAGE = 'storages.backends.s3boto3.StaticS3Boto3Storage'
+    
+    # S3 설정
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+    AWS_S3_VERIFY = True
+    AWS_QUERYSTRING_AUTH = True
+    AWS_QUERYSTRING_EXPIRE = 3600  # 1시간
+    
+    # S3 URL 설정
+    if AWS_S3_CUSTOM_DOMAIN:
+        STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
+        MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+    else:
+        STATIC_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/static/'
+        MEDIA_URL = f'https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/media/'
+else:
+    # 로컬 파일 스토리지 설정
+    STATIC_URL = 'static/'
+    MEDIA_URL = '/media/'
+
 # 메타데이터 및 썸네일 파일 경로 설정
 PROJECT_ROOT = BASE_DIR.parent  # /home/uns/code/project
 UPLOADS_BASE_DIR = env('UPLOADS_BASE_DIR', default='front/public/uploads')  # front/public/uploads
@@ -164,6 +238,26 @@ VIDEO_SUBDIR = env('VIDEO_SUBDIR', default='videos')  # videos
 METADATA_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, METADATA_SUBDIR)
 THUMBNAIL_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, THUMBNAIL_SUBDIR)
 VIDEO_DIR = os.path.join(PROJECT_ROOT, UPLOADS_BASE_DIR, VIDEO_SUBDIR)
+
+# AWS Bedrock 설정
+AWS_BEDROCK_REGION = env('AWS_BEDROCK_REGION', default='ap-northeast-2')
+AWS_BEDROCK_MODEL_ID = env('AWS_BEDROCK_MODEL_ID', default='anthropic.claude-3-5-sonnet-20241022-v2:0')  # Claude 3.5 Sonnet v2 (Vision)
+AWS_BEDROCK_EMBEDDING_MODEL_ID = env('AWS_BEDROCK_EMBEDDING_MODEL_ID', default='amazon.titan-embed-text-v2:0')
+AWS_BEDROCK_KNOWLEDGE_BASE_ID = env('AWS_BEDROCK_KNOWLEDGE_BASE_ID', default=None)
+USE_BEDROCK = env('USE_BEDROCK', default='true').lower() == 'true'
+
+# Video Analysis FastAPI 설정 (ECS Service Discovery DNS)
+VIDEO_ANALYSIS_URL = env('VIDEO_ANALYSIS_URL', default=None)  # 예: http://video-analysis.capstone.local:7000
+
+# 하이브리드 RAG 설정 (Text2SQL + pgvector)
+USE_HYBRID_SEARCH = env('USE_HYBRID_SEARCH', default='true').lower() == 'true'
+VECTOR_SEARCH_SIMILARITY_THRESHOLD = env('VECTOR_SEARCH_SIMILARITY_THRESHOLD', default=0.3, cast=float)
+HYBRID_SEARCH_LIMIT = env('HYBRID_SEARCH_LIMIT', default=5, cast=int)
+
+# 벡터 검색 설정
+VECTOR_DIMENSION = env('VECTOR_DIMENSION', default=1024, cast=int)  # Titan Embed v2 (1024D Matryoshka)
+VECTOR_SIMILARITY_THRESHOLD = env('VECTOR_SIMILARITY_THRESHOLD', default=0.8, cast=float)
+VECTOR_SEARCH_LIMIT = env('VECTOR_SEARCH_LIMIT', default=10, cast=int)
 
 # Django REST Framework 설정
 REST_FRAMEWORK = {
@@ -187,6 +281,11 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8088',
     'http://host.docker.internal:8088',
 ]
+if PRODUCTION_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.extend([
+        f'https://{PRODUCTION_DOMAIN}',
+        f'http://{PRODUCTION_DOMAIN}',
+    ])
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

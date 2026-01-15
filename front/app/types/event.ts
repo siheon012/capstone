@@ -9,6 +9,7 @@ export interface Event {
   age: number;
   gender: string;
   gender_score: number;
+  confidence: number;
   location: string;
   area_of_interest: number;
   action_detected: string;
@@ -35,10 +36,13 @@ export const calculateAbsoluteTime = (
   eventTimestamp: number
 ): Date | null => {
   if (!videoStartTime) return null;
-  
-  const videoDate = typeof videoStartTime === 'string' ? new Date(videoStartTime) : videoStartTime;
+
+  const videoDate =
+    typeof videoStartTime === 'string'
+      ? new Date(videoStartTime)
+      : videoStartTime;
   if (isNaN(videoDate.getTime())) return null;
-  
+
   return new Date(videoDate.getTime() + eventTimestamp * 1000);
 };
 
@@ -47,9 +51,9 @@ export const formatAbsoluteTime = (
   eventTimestamp: number
 ): string => {
   const absoluteTime = calculateAbsoluteTime(videoStartTime, eventTimestamp);
-  
+
   if (!absoluteTime) return '시간 정보 없음';
-  
+
   return absoluteTime.toLocaleDateString('ko-KR', {
     year: 'numeric',
     month: 'short',
@@ -63,5 +67,7 @@ export const formatAbsoluteTime = (
 export const formatRelativeTime = (timestamp: number): string => {
   const minutes = Math.floor(timestamp / 60);
   const seconds = Math.floor(timestamp % 60);
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  return `${minutes.toString().padStart(2, '0')}:${seconds
+    .toString()
+    .padStart(2, '0')}`;
 };

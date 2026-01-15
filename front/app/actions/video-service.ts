@@ -5,10 +5,18 @@ import { mkdir, writeFile, readdir, unlink, stat, readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { deleteSessionsByVideoId } from './session-service';
+import { getAppConfig } from '@/lib/env-config';
 
-// Django API URL 설정
-const DJANGO_API_BASE = process.env.DJANGO_API_URL || 'http://localhost:8088/api';
-const DJANGO_DB_BASE = process.env.DJANGO_DB_URL || 'http://localhost:8088/db';
+// 환경 설정
+const config = getAppConfig();
+const DJANGO_API_BASE = config.api.baseUrl;
+const DJANGO_DB_BASE = config.api.database;
+
+console.log('🔧 [Video Service] API 설정:', {
+  DJANGO_API_BASE,
+  DJANGO_DB_BASE,
+  config: config.api,
+});
 
 // Django Video API 통신 함수들
 async function createVideoInDjango(videoData: {
@@ -24,7 +32,7 @@ async function createVideoInDjango(videoData: {
       name: videoData.name,
       size: videoData.size,
       duration: videoData.duration,
-      url: `${DJANGO_API_BASE}/videos/`
+      url: `${DJANGO_DB_BASE}/videos/`,
     });
 
     const requestBody = {
@@ -35,14 +43,16 @@ async function createVideoInDjango(videoData: {
       video_file: videoData.video_file_path, // Django의 video_file 필드에 경로 저장
       chat_count: 0,
       major_event: null,
-      ...(videoData.time_in_video && { time_in_video: videoData.time_in_video }),
+      ...(videoData.time_in_video && {
+        time_in_video: videoData.time_in_video,
+      }),
     };
 
     console.log('📤 [Django API] 요청 데이터:', requestBody);
 
     console.log('🔗 [Django API] 연결 시도 시작...');
-    
-    const response = await fetch(`${DJANGO_API_BASE}/videos/`, {
+
+    const response = await fetch(`${DJANGO_DB_BASE}/videos/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -55,7 +65,7 @@ async function createVideoInDjango(videoData: {
     console.log('📨 [Django API] 응답 수신:', {
       status: response.status,
       statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries())
+      headers: Object.fromEntries(response.headers.entries()),
     });
 
     if (response.ok) {
@@ -65,33 +75,36 @@ async function createVideoInDjango(videoData: {
         hasVideoId: 'video_id' in result,
         videoIdValue: result.video_id,
         allKeys: Object.keys(result),
-        resultType: typeof result
+        resultType: typeof result,
       });
-      
+
       // Django API는 직접 video_id 필드를 반환
       const videoId = result.video_id;
-      
+
       if (!videoId) {
         console.error('❌ [Django API] video_id를 찾을 수 없음:', {
           result,
           hasVideoId: 'video_id' in result,
           videoIdValue: result.video_id,
-          allKeys: Object.keys(result)
+          allKeys: Object.keys(result),
         });
-        return { success: false, error: 'Django API에서 video_id를 반환하지 않았습니다.' };
+        return {
+          success: false,
+          error: 'Django API에서 video_id를 반환하지 않았습니다.',
+        };
       }
-      
+
       console.log('✅ [Django API] video_id 추출 성공:', {
         videoId,
         type: typeof videoId,
-        stringValue: String(videoId)
+        stringValue: String(videoId),
       });
-      
-      return { 
-        success: true, 
+
+      return {
+        success: true,
         video: {
-          ...result,  // Django 응답 전체를 사용 (video_id 필드 포함)
-        }
+          ...result, // Django 응답 전체를 사용 (video_id 필드 포함)
+        },
       };
     } else {
       const error = await response.text();
@@ -104,9 +117,13 @@ async function createVideoInDjango(videoData: {
   }
 }
 
-async function getVideosFromDjango(): Promise<{ success: boolean; videos?: any[]; error?: string }> {
+async function getVideosFromDjango(): Promise<{
+  success: boolean;
+  videos?: any[];
+  error?: string;
+}> {
   try {
-    const response = await fetch(`${DJANGO_API_BASE}/videos/`, {
+    const response = await fetch(`${DJANGO_DB_BASE}/videos/`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -127,9 +144,11 @@ async function getVideosFromDjango(): Promise<{ success: boolean; videos?: any[]
   }
 }
 
-async function deleteVideoFromDjango(videoId: string): Promise<{ success: boolean; error?: string }> {
+async function deleteVideoFromDjango(
+  videoId: string
+): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch(`${DJANGO_API_BASE}/videos/${videoId}/`, {
+    const response = await fetch(`${DJANGO_DB_BASE}/videos/${videoId}/`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -187,136 +206,6 @@ async function ensureUploadDir() {
   }
 }
 
-// 중복 비디오 체크 함수
-export async function checkDuplicateVideo(
-  file: File,
-  videoDuration?: number
-): Promise<{
-  isDuplicate: boolean;
-  duplicateVideo?: UploadedVideo;
-  error?: string;
-}> {
-  try {
-    console.log('중복 체크 시작:', {
-      fileName: file.name,
-      fileSize: file.size,
-      videoDuration,
-    });
-
-    // Django API에서 기존 비디오들을 가져와서 비교
-    const videosResponse = await getVideosFromDjango();
-    if (!videosResponse.success) {
-      return { isDuplicate: false, error: videosResponse.error };
-    }
-
-    console.log('기존 비디오 개수:', videosResponse.videos?.length || 0);
-
-    // 업로드할 파일명을 정규화 (saveVideoFile과 동일한 로직)
-    const fileNameWithoutExt = file.name.substring(
-      0,
-      file.name.lastIndexOf('.')
-    );
-    const normalizedFileName = fileNameWithoutExt
-      .replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s\-_]/g, '') // 안전하지 않은 문자 제거 (언더스코어와 하이픈 허용)
-      .replace(/\s+/g, '_') // 공백을 언더스코어로 변경
-      .substring(0, 50); // 이름 길이 제한
-    const fileExtension = file.name.split('.').pop() || 'mp4';
-    const normalizedFullFileName = `${normalizedFileName}.${fileExtension}`;
-
-    console.log('파일명 정규화:', {
-      originalFileName: file.name,
-      normalizedFileName: normalizedFullFileName,
-    });
-
-    // 각 비디오에 대해 중복 검사 실행
-    for (const video of videosResponse.videos || []) {
-      // Django에서 가져온 비디오의 name도 정규화해서 비교
-      const videoFileNameWithoutExt = video.name.substring(
-        0,
-        video.name.lastIndexOf('.')
-      );
-      const normalizedVideoFileName = videoFileNameWithoutExt
-        .replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s\-_]/g, '') // 안전하지 않은 문자 제거 (언더스코어와 하이픈 허용)
-        .replace(/\s+/g, '_') // 공백을 언더스코어로 변경
-        .substring(0, 50); // 이름 길이 제한
-      const videoFileExtension = video.name.split('.').pop() || 'mp4';
-      const normalizedVideoFullFileName = `${normalizedVideoFileName}.${videoFileExtension}`;
-
-      console.log('비교 중:', {
-        videoName: video.name,
-        normalizedVideoFileName: normalizedVideoFullFileName,
-        uploadFileName: file.name,
-        normalizedUploadFileName: normalizedFullFileName,
-        videoSize: video.size,
-        videoDuration: video.duration,
-        fileNameMatch: normalizedVideoFullFileName === normalizedFullFileName,
-        fileSizeMatch: video.size === file.size,
-      });
-
-      // 1차: 정규화된 파일명과 크기로 기본 중복 확인
-      if (
-        normalizedVideoFullFileName === normalizedFullFileName &&
-        video.size === file.size
-      ) {
-        console.log('파일명과 크기 일치됨, duration 체크 중...');
-
-        // duration이 제공된 경우 3가지 조건 모두 확인
-        if (videoDuration !== undefined && video.duration > 0) {
-          // duration 비교 시 0.5초 오차범위 허용
-          const durationDiff = Math.abs(video.duration - videoDuration);
-          console.log('Duration 비교:', {
-            videoDuration: video.duration,
-            uploadDuration: videoDuration,
-            diff: durationDiff,
-          });
-
-          if (durationDiff <= 0.5) {
-            console.log('중복 비디오 발견!');
-            // Django 모델을 UploadedVideo 형태로 변환
-            return {
-              isDuplicate: true,
-              duplicateVideo: {
-                id: video.video_id.toString(),
-                name: video.name,
-                filePath: video.file_path || `/uploads/videos/${video.name}`,
-                duration: video.duration,
-                size: video.size,
-                uploadDate: new Date(video.upload_date),
-                thumbnail: video.computed_thumbnail_path || video.thumbnail_path,
-                chatCount: video.chat_count,
-                majorEvent: video.major_event,
-              },
-            };
-          }
-        } else {
-          // duration이 없거나 0인 경우 파일명과 크기만으로 중복 판단
-          console.log('Duration 정보 없음, 파일명과 크기로만 중복 판단');
-          return {
-            isDuplicate: true,
-            duplicateVideo: {
-              id: video.video_id.toString(),
-              name: video.name,
-              filePath: video.file_path || `/uploads/videos/${video.name}`,
-              duration: video.duration,
-              size: video.size,
-              uploadDate: new Date(video.upload_date),
-              thumbnail: video.computed_thumbnail_path || video.thumbnail_path,
-              chatCount: video.chat_count,
-              majorEvent: video.major_event,
-            },
-          };
-        }
-      }
-    }
-
-    console.log('중복 비디오 없음');
-    return { isDuplicate: false };
-  } catch (error) {
-    console.error('Duplicate check error:', error);
-    return { isDuplicate: false, error: '중복 확인 중 오류가 발생했습니다.' };
-  }
-}
-
 // 비디오 파일 저장
 // 로컬 시스템에 직접 저장하고 메타데이터는 Django에 저장하는 구현
 export async function saveVideoFile(
@@ -363,22 +252,8 @@ export async function saveVideoFile(
       };
     }
 
-    // 중복 확인 (duration이 있을 때만 정확한 중복 검사)
-    console.log('중복 체크 실행 중...');
-    const duplicateCheck = await checkDuplicateVideo(file, videoDuration);
-    console.log('중복 체크 결과:', duplicateCheck);
-
-    if (duplicateCheck.isDuplicate && duplicateCheck.duplicateVideo) {
-      console.log('중복 비디오 발견, 업로드 중단');
-      return {
-        success: false,
-        isDuplicate: true,
-        videoId: duplicateCheck.duplicateVideo.id,
-        duplicateVideoId: duplicateCheck.duplicateVideo.id,
-        filePath: duplicateCheck.duplicateVideo.filePath,
-        error: '이미 업로드된 동영상입니다.',
-      };
-    }
+    // 중복 확인은 클라이언트에서 이미 완료됨 (page.tsx에서 checkDuplicateVideo 호출)
+    // 서버 액션에서는 중복 체크 생략
 
     // 원본 파일명 기반 파일명 생성 (언더스코어와 하이픈 허용)
     const timestamp = Date.now();
@@ -447,18 +322,21 @@ export async function saveVideoFile(
       } catch (cleanupError) {
         console.error('로컬 파일 정리 실패:', cleanupError);
       }
-      
-      return { 
-        success: false, 
-        error: `Django 저장 실패: ${djangoResult.error}` 
+
+      return {
+        success: false,
+        error: `Django 저장 실패: ${djangoResult.error}`,
       };
     }
 
-    console.log('비디오 메타데이터가 Django에 저장되었습니다:', djangoResult.video);
+    console.log(
+      '비디오 메타데이터가 Django에 저장되었습니다:',
+      djangoResult.video
+    );
 
     // videoId 추출 - Django 응답에서 직접 video_id만 사용 (우선순위 명확화)
     const videoId = djangoResult.video?.video_id;
-    
+
     console.log('🔍 [SaveVideo] videoId 추출 디버깅:', {
       fullResponse: djangoResult,
       video: djangoResult.video,
@@ -466,10 +344,11 @@ export async function saveVideoFile(
       videoIdType: typeof videoId,
       responseKeys: djangoResult.video ? Object.keys(djangoResult.video) : [],
       videoIdField: djangoResult.video?.video_id,
-      videoIdFieldType: typeof djangoResult.video?.video_id
+      videoIdFieldType: typeof djangoResult.video?.video_id,
     });
-    
-    if (!videoId && videoId !== 0) { // 0도 valid한 ID이므로 확인
+
+    if (!videoId && videoId !== 0) {
+      // 0도 valid한 ID이므로 확인
       console.error('❌ [SaveVideo] Django에서 video_id를 찾을 수 없음:', {
         fullResponse: djangoResult,
         video: djangoResult.video,
@@ -477,16 +356,16 @@ export async function saveVideoFile(
         hasSuccess: 'success' in djangoResult,
         hasVideo: 'video' in djangoResult,
       });
-      return { 
-        success: false, 
-        error: 'Django API에서 video_id를 반환하지 않았습니다.' 
+      return {
+        success: false,
+        error: 'Django API에서 video_id를 반환하지 않았습니다.',
       };
     }
-    
+
     console.log('✅ [SaveVideo] video_id 추출 성공:', {
       videoId,
       type: typeof videoId,
-      stringValue: String(videoId)
+      stringValue: String(videoId),
     });
 
     return {
@@ -501,7 +380,9 @@ export async function saveVideoFile(
 }
 
 // 업로드된 비디오 목록 가져오기
-export async function getUploadedVideos(cleanupThumbnails: boolean = false): Promise<VideoListResponse> {
+export async function getUploadedVideos(
+  cleanupThumbnails: boolean = false
+): Promise<VideoListResponse> {
   try {
     console.log('Django API에서 비디오 목록 가져오는 중...');
 
@@ -511,26 +392,48 @@ export async function getUploadedVideos(cleanupThumbnails: boolean = false): Pro
       return {
         success: false,
         data: [],
-        error: djangoResult.error || '비디오 목록을 불러오는 중 오류가 발생했습니다.',
+        error:
+          djangoResult.error ||
+          '비디오 목록을 불러오는 중 오류가 발생했습니다.',
       };
     }
 
     // Django 모델을 UploadedVideo 형태로 변환
-    const videos: UploadedVideo[] = (djangoResult.videos || []).map((video: any) => ({
-      id: video.video_id.toString(),
-      name: video.name,
-      filePath: video.file_path || `/uploads/videos/${video.name}`,
-      duration: video.duration,
-      size: video.size,
-      uploadDate: new Date(video.upload_date),
-      thumbnail: video.computed_thumbnail_path || video.thumbnail_path,
-      chatCount: video.chat_count,
-      majorEvent: video.major_event,
-      // Django API의 time_in_video 필드를 올바르게 매핑
-      timeInVideo: video.time_in_video ? new Date(video.time_in_video) : null,
-      // summary 필드 추가
-      summary: video.summary || null,
-    }));
+    const videos: UploadedVideo[] = (djangoResult.videos || []).map(
+      (video: any) => ({
+        id: video.video_id.toString(),
+        name: video.name,
+        // ✅ S3 URL 우선 사용, fallback으로 로컬 경로
+        filePath:
+          video.current_s3_url ||
+          video.file_path ||
+          `/uploads/videos/${video.name}`,
+        // Duration NaN 처리
+        duration:
+          isNaN(video.duration) ||
+          video.duration === null ||
+          video.duration === undefined
+            ? 0
+            : video.duration,
+        size: video.size || video.file_size,
+        uploadDate: new Date(video.upload_date || video.created_at),
+        // thumbnail_url 우선 사용 (S3 presigned URL)
+        thumbnail:
+          video.thumbnail_url ||
+          video.computed_thumbnail_path ||
+          video.thumbnail_path,
+        chatCount: video.chat_count,
+        majorEvent: video.major_event,
+        // recorded_at 필드를 time_in_video로 매핑
+        timeInVideo: video.recorded_at
+          ? new Date(video.recorded_at)
+          : video.time_in_video
+          ? new Date(video.time_in_video)
+          : null,
+        // summary 필드 추가
+        summary: video.summary || null,
+      })
+    );
 
     console.log(`✅ Django에서 ${videos.length}개 비디오 로드 완료`);
 
@@ -539,7 +442,9 @@ export async function getUploadedVideos(cleanupThumbnails: boolean = false): Pro
       try {
         const cleanupResult = await cleanupOrphanedThumbnails();
         if (cleanupResult.success && cleanupResult.deletedCount > 0) {
-          console.log(`🧹 고아 썸네일 ${cleanupResult.deletedCount}개 정리 완료`);
+          console.log(
+            `🧹 고아 썸네일 ${cleanupResult.deletedCount}개 정리 완료`
+          );
         }
       } catch (cleanupError) {
         console.warn('⚠️ 고아 썸네일 정리 중 오류 발생:', cleanupError);
@@ -621,16 +526,20 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
     // computed_thumbnail_path도 확인
     if (targetVideo.computed_thumbnail_path) {
       const computedThumbnailWebPath = targetVideo.computed_thumbnail_path;
-      const computedThumbnailFileName = computedThumbnailWebPath.split('/').pop();
+      const computedThumbnailFileName = computedThumbnailWebPath
+        .split('/')
+        .pop();
       if (computedThumbnailFileName) {
-        possibleThumbnailPaths.push(join(THUMBNAIL_DIR, computedThumbnailFileName));
+        possibleThumbnailPaths.push(
+          join(THUMBNAIL_DIR, computedThumbnailFileName)
+        );
       }
     }
 
     // 파일명 기반 썸네일 경로들 추가
     const baseFileName = fileName.replace(/\.[^/.]+$/, ''); // 확장자 제거
     const thumbnailExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
-    
+
     for (const ext of thumbnailExtensions) {
       possibleThumbnailPaths.push(join(THUMBNAIL_DIR, `${baseFileName}${ext}`));
     }
@@ -640,7 +549,9 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
     if (numberMatch) {
       const [, baseName, numberPart, extension] = numberMatch;
       for (const ext of thumbnailExtensions) {
-        possibleThumbnailPaths.push(join(THUMBNAIL_DIR, `${baseName}${numberPart}${ext}`));
+        possibleThumbnailPaths.push(
+          join(THUMBNAIL_DIR, `${baseName}${numberPart}${ext}`)
+        );
         possibleThumbnailPaths.push(join(THUMBNAIL_DIR, `${baseName}${ext}`)); // 번호 없는 버전도
       }
     }
@@ -659,7 +570,10 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
           thumbnailDeleted = true;
         }
       } catch (deleteError) {
-        console.error(`❌ 썸네일 파일 삭제 실패: ${thumbnailPath}`, deleteError);
+        console.error(
+          `❌ 썸네일 파일 삭제 실패: ${thumbnailPath}`,
+          deleteError
+        );
       }
     }
 
@@ -668,18 +582,24 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
       try {
         const thumbnailFiles = await readdir(THUMBNAIL_DIR);
         const baseNameForSearch = baseFileName.toLowerCase();
-        
+
         for (const file of thumbnailFiles) {
           const fileLower = file.toLowerCase();
           // 파일명이 비슷한 썸네일들 찾기
-          if (fileLower.includes(baseNameForSearch) || baseNameForSearch.includes(fileLower.replace(/\.[^.]+$/, ''))) {
+          if (
+            fileLower.includes(baseNameForSearch) ||
+            baseNameForSearch.includes(fileLower.replace(/\.[^.]+$/, ''))
+          ) {
             const fullPath = join(THUMBNAIL_DIR, file);
             try {
               await unlink(fullPath);
               console.log(`✅ 유사 썸네일 파일 삭제 완료: ${fullPath}`);
               thumbnailDeleted = true;
             } catch (deleteError) {
-              console.error(`❌ 유사 썸네일 파일 삭제 실패: ${fullPath}`, deleteError);
+              console.error(
+                `❌ 유사 썸네일 파일 삭제 실패: ${fullPath}`,
+                deleteError
+              );
             }
           }
         }
@@ -700,8 +620,12 @@ export async function deleteVideo(videoId: string): Promise<boolean> {
     const wasVideoDeleted = !existsSync(filePath);
     console.log(`📊 삭제 결과 요약:`);
     console.log(`   - Django 비디오 삭제: ✅ 성공`);
-    console.log(`   - 로컬 비디오 파일 삭제: ${wasVideoDeleted ? '✅ 성공' : '❌ 실패'}`);
-    console.log(`   - 썸네일 삭제: ${thumbnailDeleted ? '✅ 성공' : '⚠️ 없음'}`);
+    console.log(
+      `   - 로컬 비디오 파일 삭제: ${wasVideoDeleted ? '✅ 성공' : '❌ 실패'}`
+    );
+    console.log(
+      `   - 썸네일 삭제: ${thumbnailDeleted ? '✅ 성공' : '⚠️ 없음'}`
+    );
 
     console.log(`🎉 비디오 삭제 작업 완료: ${videoId}`);
     return true;
@@ -718,7 +642,7 @@ export async function updateVideoMetadata(
 ): Promise<boolean> {
   try {
     // Django API로 메타데이터 업데이트
-    const response = await fetch(`${DJANGO_API_BASE}/videos/${videoId}/`, {
+    const response = await fetch(`${DJANGO_DB_BASE}/videos/${videoId}/`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -747,7 +671,9 @@ export async function updateVideoMetadata(
 }
 
 // 모든 비디오 가져오기 (기존 getAllVideos 함수를 단순화)
-export async function getAllVideos(cleanupThumbnails: boolean = true): Promise<VideoListResponse> {
+export async function getAllVideos(
+  cleanupThumbnails: boolean = true
+): Promise<VideoListResponse> {
   try {
     // Django API 기반으로 비디오 목록 반환하고 기본적으로 썸네일 정리 실행
     return await getUploadedVideos(cleanupThumbnails);
@@ -789,7 +715,9 @@ export async function cleanupOrphanedThumbnails(): Promise<{
       }
 
       if (video.computed_thumbnail_path) {
-        const computedThumbnailFileName = video.computed_thumbnail_path.split('/').pop();
+        const computedThumbnailFileName = video.computed_thumbnail_path
+          .split('/')
+          .pop();
         if (computedThumbnailFileName) {
           validThumbnails.add(computedThumbnailFileName);
         }
@@ -819,7 +747,7 @@ export async function cleanupOrphanedThumbnails(): Promise<{
     // 4. 고아 파일들 삭제
     for (const fileName of thumbnailFiles) {
       const fullPath = join(THUMBNAIL_DIR, fileName);
-      
+
       // 파일인지 확인 (디렉토리 제외)
       try {
         const stats = await stat(fullPath);
@@ -848,7 +776,11 @@ export async function cleanupOrphanedThumbnails(): Promise<{
     return { success: true, deletedCount };
   } catch (error) {
     console.error('❌ 고아 썸네일 정리 실패:', error);
-    return { success: false, deletedCount: 0, error: '고아 썸네일 정리 중 오류가 발생했습니다.' };
+    return {
+      success: false,
+      deletedCount: 0,
+      error: '고아 썸네일 정리 중 오류가 발생했습니다.',
+    };
   }
 }
 
@@ -869,12 +801,15 @@ export async function getVideoEventStats(videoId: string): Promise<{
   error?: string;
 }> {
   try {
-    const response = await fetch(`${DJANGO_DB_BASE}/events/video-stats/?video_id=${videoId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    const response = await fetch(
+      `${DJANGO_DB_BASE}/events/video-stats/?video_id=${videoId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
     if (response.ok) {
       const result = await response.json();
@@ -882,20 +817,28 @@ export async function getVideoEventStats(videoId: string): Promise<{
         success: true,
         data: {
           videoId: result.video_id,
-          mostFrequentEvent: result.most_frequent_event ? {
-            eventType: result.most_frequent_event.event_type,
-            count: result.most_frequent_event.count,
-          } : undefined,
+          mostFrequentEvent: result.most_frequent_event
+            ? {
+                eventType: result.most_frequent_event.event_type,
+                count: result.most_frequent_event.count,
+              }
+            : undefined,
           stats: result.stats,
         },
       };
     } else {
       const errorText = await response.text();
       console.error('Event stats API error:', errorText);
-      return { success: false, error: `이벤트 통계 조회 실패: ${response.status}` };
+      return {
+        success: false,
+        error: `이벤트 통계 조회 실패: ${response.status}`,
+      };
     }
   } catch (error) {
     console.error('Event stats fetch error:', error);
-    return { success: false, error: '이벤트 통계 조회 중 오류가 발생했습니다.' };
+    return {
+      success: false,
+      error: '이벤트 통계 조회 중 오류가 발생했습니다.',
+    };
   }
 }

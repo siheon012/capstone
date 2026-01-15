@@ -60,7 +60,7 @@ resource "aws_ecr_lifecycle_policy" "ai_batch" {
 # Launch Template for GPU Instances
 resource "aws_launch_template" "batch_gpu" {
   name_prefix   = "capstone-batch-gpu-"
-  image_id      = "ami-05a7c7234d12946e9"  # Custom AMI with pre-loaded 17GB Docker image
+  image_id      = "ami-061fb5baa7da36413"  # Custom AMI with models in /opt/ml (1.85GB)
   instance_type = "g5.xlarge" # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
 
   iam_instance_profile {
@@ -73,7 +73,7 @@ resource "aws_launch_template" "batch_gpu" {
     device_name = "/dev/xvda"
 
     ebs {
-      volume_size           = 100 # GPU 모델이 크므로 100GB
+      volume_size           = 30 # 모델 분리로 최적화 (Docker 0.3GB + 모델 1.85GB + OS 10GB + 버퍼 10GB = 22GB)
       volume_type           = "gp3"
       delete_on_termination = true
       encrypted             = true
@@ -107,7 +107,6 @@ echo ECS_IMAGE_PULL_BEHAVIOR=prefer-cached >> /etc/ecs/ecs.config
   }
 }
 
-# GPU-optimized Custom AMI (ami-05a7c7234d12946e9)
 # This AMI has the 17GB batch processor image pre-loaded to reduce startup time from 20 min to ~3 min
 # Standard AWS ECS GPU AMI (for reference, not used):
 # data "aws_ami" "ecs_gpu_ami" {
@@ -163,10 +162,10 @@ resource "aws_batch_compute_environment" "video_analysis_gpu" {
       version            = "$Latest"
     }
 
-    # EC2 Configuration to use Custom AMI with pre-loaded Docker image
+    # EC2 Configuration to use Custom AMI with models in /opt/ml
     ec2_configuration {
       image_type = "ECS_AL2_NVIDIA"
-      image_id_override = "ami-05a7c7234d12946e9"  # Custom AMI with 17GB image pre-loaded
+      image_id_override = "ami-061fb5baa7da36413"  # Custom AMI with models in /opt/ml (1.85GB)
     }
 
     tags = {
@@ -219,7 +218,7 @@ resource "aws_batch_job_definition" "video_analysis_processor" {
   container_properties = jsonencode({
     # Use specific digest for production stability
     # Latest pushed: 2025-12-16
-    image = "${data.aws_ecr_repository.ai_batch.repository_url}@sha256:afdb302c3dd89f36a76c81f7716aaa1c7b3ae63a8fcefc854e9daa6bb3891916"
+    image = "${data.aws_ecr_repository.ai_batch.repository_url}@sha256:d21057925cfce9da963e84506d0e4aeec423b747fd88f4a0343e13cd847fa3ed"
 
     resourceRequirements = [
       {
@@ -267,6 +266,46 @@ resource "aws_batch_job_definition" "video_analysis_processor" {
         }
       ]
     }
+
+    # 볼륨 마운트: AMI의 /opt/ml → 컨테이너의 /workspace
+    mountPoints = [
+      {
+        sourceVolume  = "models"
+        containerPath = "/workspace/models"
+        readOnly      = true
+      },
+      {
+        sourceVolume  = "checkpoints"
+        containerPath = "/workspace/checkpoints"
+        readOnly      = true
+      },
+      {
+        sourceVolume  = "experiments"
+        containerPath = "/workspace/experiments"
+        readOnly      = true
+      }
+    ]
+
+    volumes = [
+      {
+        name = "models"
+        host = {
+          sourcePath = "/opt/ml/models"
+        }
+      },
+      {
+        name = "checkpoints"
+        host = {
+          sourcePath = "/opt/ml/checkpoints"
+        }
+      },
+      {
+        name = "experiments"
+        host = {
+          sourcePath = "/opt/ml/experiments"
+        }
+      }
+    ]
 
     environment = [
       {

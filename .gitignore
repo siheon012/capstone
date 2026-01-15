@@ -190,7 +190,9 @@ video-analysis/mypy.ini
 video-analysis/setup.py
 video-analysis/setup.cfg
 
-
+# Docker 설정 (로컬 개발용만, 배포는 batch/Dockerfile 사용)
+video-analysis/Dockerfile
+video-analysis/.dockerignore
 
 
 # Bedrock 테스트 파일들 (임시 테스트용)

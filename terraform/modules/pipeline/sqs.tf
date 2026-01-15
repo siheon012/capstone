@@ -82,18 +82,22 @@ resource "aws_sqs_queue_policy" "video_processing" {
 # ========================================
 
 # S3 버킷 알림 설정 - 비디오 업로드 시 SQS로 이벤트 전송
-resource "aws_s3_bucket_notification" "video_upload" {
-  bucket = var.s3_raw_videos_bucket
-
-  queue {
-    queue_arn     = aws_sqs_queue.video_processing.arn
-    events        = ["s3:ObjectCreated:*"]
-    filter_prefix = "videos/"  # videos/ 폴더 내 파일만
-    filter_suffix = ""         # 모든 확장자
-  }
-
-  depends_on = [aws_sqs_queue_policy.video_processing]
-}
+# S3 Bucket Notification 제거
+# Backend API에서 직접 SQS로 메시지를 보내므로 S3 notification 불필요
+# 중복 메시지 방지를 위해 주석 처리
+#
+# resource "aws_s3_bucket_notification" "video_upload" {
+#   bucket = var.s3_raw_videos_bucket
+# 
+#   queue {
+#     queue_arn     = aws_sqs_queue.video_processing.arn
+#     events        = ["s3:ObjectCreated:*"]
+#     filter_prefix = "videos/"  # videos/ 폴더 내 파일만
+#     filter_suffix = ""         # 모든 확장자
+#   }
+# 
+#   depends_on = [aws_sqs_queue_policy.video_processing]
+# }
 
 # ========================================
 # CloudWatch Alarms for SQS Monitoring

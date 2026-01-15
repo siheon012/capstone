@@ -5,9 +5,6 @@
 # ==========================================
 FROM node:18-alpine AS base
 
-# FFmpeg 설치 (비디오 처리용)
-RUN apk add --no-cache ffmpeg
-
 # 보안을 위한 사용자 생성
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -117,7 +114,7 @@ USER nextjs
 
 # 헬스체크 추가 (더 상세한 체크)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
 
 # 프로덕션 서버 실행
 CMD ["yarn", "start"]

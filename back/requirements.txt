@@ -1,43 +1,27 @@
-asgiref==3.8.1
+# --- Django Core & Middleware ---
 Django==5.2
 djangorestframework==3.16.0
 django-environ==0.11.2
 django-cors-headers==4.3.1
-sqlparse==0.5.3
-typing_extensions==4.13.2
 gunicorn==22.0.0
+
+# --- Database (PostgreSQL) ---
+# psycopg[binary]는 제거 (psycopg2-binary와 중복)
 psycopg2-binary==2.9.7
-
-# Database URL parsing
 dj-database-url==2.2.0
-
-# Cloud & Vector Database Support
 pgvector==0.3.6
-psycopg[binary]==3.2.3
 
-# AWS Services (최신 버전 사용)
+# --- AWS Services ---
 boto3==1.35.72
 botocore==1.35.72
-
-# Django S3 Storage
 django-storages[boto3]==1.14.4
 
-# AWS Bedrock Support
-langchain==0.3.13
-langchain-aws==0.2.6
-langchain-community==0.3.13
+# --- ML & Image Processing (Optimized) ---
+numpy>=1.22.4,<2.0.0
+# [중요 변경] 서버용 headless 버전으로 교체 (버전은 동일하게 유지하거나 최신 사용)
+opencv-python-headless==4.10.0.84
 
-# Machine Learning & Embeddings
-openai==1.55.3
-numpy>=1.22.4,<2.0.0  # langchain compatibility
-scikit-learn==1.6.0
-opencv-python==4.10.0.84  # 비디오 프레임 추출용
-
-# Additional Utilities
-python-dateutil==2.9.0
+# --- Utilities & Auth ---
 requests==2.32.3
-urllib3==2.2.3
-certifi==2024.8.30
-
-# JWT 인증
+# urllib3, certifi 등은 requests가 알아서 설치하므로 생략 가능 (깔끔함 유지)
 PyJWT==2.9.0

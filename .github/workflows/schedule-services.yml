@@ -2,10 +2,10 @@ name: AWS Services Scheduler (ECS + RDS)
 
 on:
   schedule:
-    # 매일 오전 8시 (KST 08:00 = UTC 전날 23:00) - 서비스 중지
-    - cron: '0 23 * * *'
-    # 매일 오후 2시 (KST 14:00 = UTC 05:00) - 서비스 시작
-    - cron: '0 5 * * *'
+    # 매일 오전 7시 50분 (KST 07:50 = UTC 전날 22:50) - 서비스 중지
+    - cron: '50 22 * * *'
+    # 매일 오후 1시 50분 (KST 13:50 = UTC 04:50) - 서비스 시작
+    - cron: '50 4 * * *'
     # 매주 토요일 오전 10시 (7일 자동 시작 방지)
     - cron: '0 1 * * 6'
   workflow_dispatch:

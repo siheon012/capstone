@@ -2,14 +2,20 @@
 # Lambda Function: SQS to Batch Trigger
 # ========================================
 # Note: Lambda IAM role and policies are defined in security module
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  # terraform/modules/pipeline 에서 3칸 올라가면(capstone) -> lambda 폴더로 이동
+  source_file = "${path.module}/../../../lambda/sqs_to_batch.py"
+  output_path = "${path.module}/lambda_deployment.zip"
+}
 
 # Lambda Function
 resource "aws_lambda_function" "sqs_to_batch" {
-  filename         = "lambda_deployment.zip"  # 배포 패키지
+  filename         = data.archive_file.lambda_zip.output_path  # 배포 패키지
   function_name    = "capstone-${var.environment}-sqs-to-batch"
   role             = var.lambda_sqs_to_batch_role_arn
   handler          = "sqs_to_batch.lambda_handler"
-  source_code_hash = filebase64sha256("lambda_deployment.zip")
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   runtime          = "python3.11"
   timeout          = 60
   memory_size      = 256

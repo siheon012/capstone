@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { UploadedVideo } from '@/app/types/video';
-import { getUploadedVideos } from '@/app/actions/video-service-client';
+import { getUploadedVideos } from '@/app/actions/video/video-service-client';
 
 interface UseSummaryOptions {
   onSuccess?: (summary: string) => void;
@@ -48,7 +48,7 @@ export function useSummary(options?: UseSummaryOptions) {
       if (shouldRegenerate) {
         console.log('📦 [useSummary] ai-service 임포트 중...');
         const { generateVideoSummary } = await import(
-          '@/app/actions/ai-service'
+          '@/app/actions/ai/ai-service'
         );
         console.log('📞 [useSummary] generateVideoSummary 호출:', video.id);
         const result = await generateVideoSummary(video.id);

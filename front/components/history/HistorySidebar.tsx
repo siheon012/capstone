@@ -18,9 +18,15 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import type { HistoryItem } from '@/app/types/history';
-import { getHistoryList, deleteHistory } from '@/app/actions/history-service';
+import {
+  getHistoryList,
+  deleteHistory,
+} from '@/app/actions/storage/history-service';
 import type { ChatSession } from '@/app/types/session';
-import { getAllSessions, deleteSession } from '@/app/actions/session-service';
+import {
+  getAllSessions,
+  deleteSession,
+} from '@/app/actions/storage/session-service';
 
 // HistoryItem과 ChatSession을 모두 처리할 수 있는 유니온 타입 정의
 type HistoryOrSession = HistoryItem | ChatSession;

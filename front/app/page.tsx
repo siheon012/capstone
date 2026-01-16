@@ -29,11 +29,14 @@ import VideoMinimap from '@/components/video/VideoMinimap';
 import DragDropZone from '@/components/upload/DragDropZone';
 import SmartHeader from '@/components/layout/SmartHeader';
 import HistoryLayout from '@/components/layout/HistoryLayout';
-import { saveHistory, getHistoryList } from '@/app/actions/history-service';
+import {
+  saveHistory,
+  getHistoryList,
+} from '@/app/actions/storage/history-service';
 import JQueryCounterAnimation from '@/components/legacy/JQueryCounterAnimation';
-import { saveVideoFile } from '@/app/actions/video-service';
-import { getUploadedVideos } from '@/app/actions/video-service-client';
-import { uploadVideoToS3 } from '@/app/actions/s3-upload-service';
+import { saveVideoFile } from '@/app/actions/video/video-service';
+import { getUploadedVideos } from '@/app/actions/video/video-service-client';
+import { uploadVideoToS3 } from '@/app/actions/video/s3-upload-service';
 import type { ChatSession } from '@/app/types/session';
 import type { UploadedVideo } from '@/app/types/video';
 import EventTimeline from '@/components/video/EventTimeline';
@@ -41,13 +44,13 @@ import VideoPlayer from '@/components/video/VideoPlayer';
 import UploadSection from '@/components/upload/UploadSection';
 import ChatInterface from '@/components/chat/ChatInterface';
 import SummaryButton from '@/components/video/SummaryButton';
-import { useSummary } from '@/hooks/useSummary';
-import { useVideoControls } from '@/hooks/useVideoControls';
-import { useToast } from '@/hooks/useToast';
-import { useAnalysisProgress } from '@/hooks/useAnalysisProgress';
-import { useChatMessage } from '@/hooks/useChatMessage';
-import { useFileUpload } from '@/hooks/useFileUpload';
-import { useVideoEventListeners } from '@/hooks/useVideoEventListeners';
+import { useSummary } from '@/hooks/video/useSummary';
+import { useVideoControls } from '@/hooks/video/useVideoControls';
+import { useToast } from '@/hooks/ui/useToast';
+import { useAnalysisProgress } from '@/hooks/data/useAnalysisProgress';
+import { useChatMessage } from '@/hooks/data/useChatMessage';
+import { useFileUpload } from '@/hooks/data/useFileUpload';
+import { useVideoEventListeners } from '@/hooks/video/useVideoEventListeners';
 import Footer from '@/components/layout/Footer';
 
 export default function CCTVAnalysis() {

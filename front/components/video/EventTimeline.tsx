@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { Event } from '@/app/types/event';
 import { UploadedVideo } from '@/app/types/video';
-import { getEvents } from '@/app/actions/event-service';
+import { getEvents } from '@/app/actions/search/event-service';
 import { formatAbsoluteTime, formatRelativeTime } from '@/app/types/event';
 
 interface EventTimelineProps {

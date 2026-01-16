@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { uploadVideoToS3 } from '@/app/actions/s3-upload-service';
+import { uploadVideoToS3 } from '@/app/actions/video/s3-upload-service';
 
 interface UseFileUploadProps {
   setVideoSrc: (src: string | null) => void;
@@ -197,7 +197,7 @@ export const useFileUpload = ({
       let serverSaveResult = null;
       try {
         const { checkDuplicateVideo } = await import(
-          '@/app/actions/video-service-client'
+          '@/app/actions/video/video-service-client'
         );
         const duplicateCheck = await checkDuplicateVideo(file, videoDuration);
 

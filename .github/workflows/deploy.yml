@@ -2,7 +2,7 @@ name: Deploy to Production
 
 on:
   push:
-    branches: [chore/dependency-cleanup]
+    branches: [feature/terraform_backend]
   workflow_dispatch:
 
 env:

@@ -7,7 +7,16 @@ terraform {
       version = "~> 5.0"
     }
   }
+#  Backend 설정 블록
+  backend "s3" {
+    bucket         = "capstone-dev-terraform-state-backup" # 사용자님이 이미 만든 S3 버킷 이름
+    key            = "backend_state/terraform.tfstate"            # S3 안에 저장될 파일 경로
+    region         = "ap-northeast-2"
+    encrypt        = true                           # 보안을 위해 암호화
+    dynamodb_table = "terraform-state-lock"         # 방금 만든 DynamoDB 테이블 이름
+  }
 }
+
 
 # AWS Provider 설정
 provider "aws" {

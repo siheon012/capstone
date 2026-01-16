@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write # PR에 댓글을 달아야 해서 권한 필요
+  pull-requests: write # PR에 댓글을 달아야 해서 권한 필요함
 
 jobs:
   terraform:

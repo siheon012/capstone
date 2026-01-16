@@ -35,8 +35,8 @@ import {
   getUploadedVideos,
   getVideoEventStats,
   deleteVideo,
-} from '@/app/actions/video-service-client';
-import { getAllSessions } from '@/app/actions/session-service';
+} from '@/app/actions/video/video-service-client';
+import { getAllSessions } from '@/app/actions/storage/session-service';
 import Link from 'next/link';
 import SmartHeader from '@/components/layout/SmartHeader';
 import HistoryLayout from '@/components/layout/HistoryLayout';

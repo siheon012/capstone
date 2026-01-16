@@ -2,8 +2,8 @@ import { useRef } from 'react';
 import {
   getAnalysisProgress,
   getAnalysisResult,
-} from '@/app/actions/ai-service';
-import { getUploadedVideos } from '@/app/actions/video-service-client';
+} from '@/app/actions/ai/ai-service';
+import { getUploadedVideos } from '@/app/actions/video/video-service-client';
 import type { UploadedVideo } from '@/app/types/video';
 
 interface UseAnalysisProgressProps {

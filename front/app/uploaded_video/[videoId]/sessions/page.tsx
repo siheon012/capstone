@@ -27,8 +27,11 @@ import {
   getUploadedVideos,
   getVideoEventStats,
   deleteVideo,
-} from '@/app/actions/video-service-client';
-import { getVideoSessions, deleteSession } from '@/app/actions/session-service';
+} from '@/app/actions/video/video-service-client';
+import {
+  getVideoSessions,
+  deleteSession,
+} from '@/app/actions/storage/session-service';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import SmartHeader from '@/components/layout/SmartHeader';
@@ -316,7 +319,7 @@ export default function VideoSessionsPage() {
       case 'sitting':
         return '점거';
       case 'interaction':
-        return '없음'
+        return '없음';
       default:
         return eventType;
     }
@@ -356,18 +359,23 @@ export default function VideoSessionsPage() {
     const translatedEvents = eventTypes.map((eventType) =>
       translateEventType(eventType)
     );
-    
+
     // interaction만 있는 경우 "없음"으로 표시
-    if (translatedEvents.length === 1 && translatedEvents[0] === '특이 사건 없음') {
+    if (
+      translatedEvents.length === 1 &&
+      translatedEvents[0] === '특이 사건 없음'
+    ) {
       return '없음';
     }
-    
+
     // interaction 제외한 실제 사건들만 표시
-    const actualEvents = translatedEvents.filter(event => event !== '특이 사건 없음');
+    const actualEvents = translatedEvents.filter(
+      (event) => event !== '특이 사건 없음'
+    );
     if (actualEvents.length === 0) {
       return '없음';
     }
-    
+
     return actualEvents.join(', ');
   };
 
@@ -377,7 +385,7 @@ export default function VideoSessionsPage() {
     if (formattedText === '없음') {
       return 'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500 border-opacity-30';
     }
-    
+
     switch (eventType) {
       case 'theft':
       case '도난':

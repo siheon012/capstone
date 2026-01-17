@@ -1,5 +1,5 @@
 # --- Django Core & Middleware ---
-Django>=5.1.14,<5.2
+Django>=5.1.9,<5.2
 djangorestframework==3.16.0
 django-environ==0.11.2
 django-cors-headers==4.3.1
@@ -22,6 +22,6 @@ numpy>=1.22.4,<2.0.0
 opencv-python-headless==4.10.0.84
 
 # --- Utilities & Auth ---
-requests==2.32.3
+requests==2.32.4
 # urllib3, certifi 등은 requests가 알아서 설치하므로 생략 가능 (깔끔함 유지)
 PyJWT==2.9.0

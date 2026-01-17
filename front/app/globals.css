@@ -251,9 +251,9 @@
 }
 
 /* 주의: ::before/::after는 ::-webkit-scrollbar-thumb와 함께 사용할 수 없음 (Turbopack 파싱 오류) */
-/* :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb::before - 제거됨 hover로*/
+/* :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb::before - 제거됨 */
 
-:not(.no-custom-scrollbar)::-webkit-scrollbar-thumb::before {
+:not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(
     135deg,
     #6c5ce7 0%,

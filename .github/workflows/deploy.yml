@@ -224,10 +224,10 @@ jobs:
           }
 
           try:
-              # 서울 리전 사용
+              # 서울 리전 Haiku 사용
               client = boto3.client('bedrock-runtime', region_name='${{ env.AWS_REGION }}')
               response = client.invoke_model(
-                  modelId='anthropic.claude-3-5-sonnet-20241022-v2:0',
+                  modelId='anthropic.claude-3-haiku-20240307-v1:0',
                   body=json.dumps(payload, ensure_ascii=False)
               )
               

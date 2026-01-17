@@ -69,6 +69,7 @@ module "pipeline" {
   region                          = var.region
   account_id                      = data.aws_caller_identity.current.account_id
   vpc_id                          = module.network.vpc_id
+  public_subnet_ids               = module.network.public_subnet_ids
   private_subnet_ids              = module.network.private_subnet_ids
   batch_compute_security_group_id = module.network.batch_compute_security_group_id
   s3_raw_videos_bucket            = module.storage.s3_raw_videos_bucket
@@ -84,6 +85,7 @@ module "pipeline" {
   ecs_cluster_id                  = module.compute.ecs_cluster_id
   ecs_cluster_arn                 = module.compute.ecs_cluster_arn
   batch_service_role_arn          = module.security.batch_service_role_arn
+  batch_spot_fleet_role_arn       = module.security.batch_spot_fleet_role_arn
   batch_execution_role_arn        = module.security.batch_execution_role_arn
   batch_task_role_arn             = module.security.batch_task_role_arn
   batch_instance_profile_arn      = module.security.batch_instance_profile_arn

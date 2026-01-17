@@ -268,9 +268,7 @@
   animation: scrollbar-glow 2s infinite;
 }
 
-:not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:hover::before {
-  left: 100%;
-}
+/* :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:hover::before - 제거됨 */
 
 :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:active {
   background: linear-gradient(
@@ -377,16 +375,7 @@ body:not(.no-custom-scrollbar),
   overflow: hidden;
 }
 
-.history-scrollbar::-webkit-scrollbar-track::before {
-  content: '✨';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 10px;
-  opacity: 0.3;
-  animation: scrollbar-pulse 4s infinite;
-}
+/* .history-scrollbar::-webkit-scrollbar-track::before - 제거됨 (스크롤바 의사 요소와 호환 불가) */
 
 .history-scrollbar::-webkit-scrollbar-thumb {
   background: linear-gradient(
@@ -422,10 +411,7 @@ body:not(.no-custom-scrollbar),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.history-scrollbar::-webkit-scrollbar-thumb:hover::before {
-  opacity: 0.7;
-  animation: bounce-gentle 1s infinite;
-}
+/* .history-scrollbar::-webkit-scrollbar-thumb:hover::before - 제거됨 */
 
 /* 스크롤 중일 때 특별한 효과 */
 .history-scrollbar.scrolling::-webkit-scrollbar-thumb {

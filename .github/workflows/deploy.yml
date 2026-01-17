@@ -29,8 +29,6 @@ jobs:
         with:
           fetch-depth: 2
 
-      # 1. AWS 자격 증명 설정 (맨 위로 배치)
-      # Trivy가 실패하더라도 이후 단계(Bedrock, Log 수집)에서 AWS CLI를 써야 하므로 필수입니다.
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -49,7 +47,7 @@ jobs:
             echo "has_diff=false" >> $GITHUB_OUTPUT
           fi
 
-      # 2. 보안 취약점 스캔 (Frontend)
+      # 🛡️ Trivy Security Scan
       - name: Security Scan - Frontend (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
@@ -60,7 +58,6 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
-      # 3. 보안 취약점 스캔 (Backend)
       - name: Security Scan - Backend (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
@@ -124,49 +121,43 @@ jobs:
         run: |
           aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_FRONTEND_SERVICE }} ${{ env.ECS_BACKEND_SERVICE }} --region ${{ env.AWS_REGION }}
 
-      # --- 실패 시 진단 및 리포팅 (DevOps 핵심) ---
+      # --- 실패 시 진단 및 리포팅 ---
 
       - name: Collect failure diagnostics
         if: failure()
         id: diagnostics
         run: |
           echo "🔍 Collecting diagnostics..."
-
-          # 파일 생성 (없으면 생성해서 에러 방지)
           touch /tmp/frontend_logs.txt
           touch /tmp/backend_logs.txt
 
-          # Frontend 중지 원인
           TASK_ARN=$(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_FRONTEND_SERVICE }} --desired-status STOPPED --max-results 1 --query 'taskArns[0]' --output text)
           if [ "$TASK_ARN" != "None" ] && [ ! -z "$TASK_ARN" ]; then
             REASON=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].stoppedReason' --output text)
             echo "frontend_stop_reason=$REASON" >> $GITHUB_OUTPUT
           else
-            echo "frontend_stop_reason=Unknown (No stopped task found)" >> $GITHUB_OUTPUT
+            echo "frontend_stop_reason=Unknown" >> $GITHUB_OUTPUT
           fi
 
-          # Backend 중지 원인
           TASK_ARN=$(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_BACKEND_SERVICE }} --desired-status STOPPED --max-results 1 --query 'taskArns[0]' --output text)
           if [ "$TASK_ARN" != "None" ] && [ ! -z "$TASK_ARN" ]; then
             REASON=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].stoppedReason' --output text)
             echo "backend_stop_reason=$REASON" >> $GITHUB_OUTPUT
           else
-            echo "backend_stop_reason=Unknown (No stopped task found)" >> $GITHUB_OUTPUT
+            echo "backend_stop_reason=Unknown" >> $GITHUB_OUTPUT
           fi
 
-          # 로그 수집
           aws logs tail ${{ env.CLOUDWATCH_FRONTEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/frontend_logs.txt || echo "No logs" > /tmp/frontend_logs.txt
           aws logs tail ${{ env.CLOUDWATCH_BACKEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/backend_logs.txt || echo "No logs" > /tmp/backend_logs.txt
 
-      # 🛠️ [핵심 수정] Python + Boto3를 사용하여 한글/특수문자 인코딩 에러 완벽 해결
+      # 🛠️ [최종 수정] 서울 리전 유지 + Haiku 모델 사용
+      # 이것이 'on-demand throughput isn’t supported' 에러를 피하는 가장 확실한 방법입니다.
       - name: Summarize logs with Bedrock
         if: failure()
         id: bedrock-summary
         run: |
-          # 1. AWS SDK 설치 (boto3)
           pip install boto3
 
-          # 2. Python 스크립트 실행
           python3 -c "
           import json
           import os
@@ -175,19 +166,16 @@ jobs:
           def read_file_safe(path):
               try:
                   if os.path.exists(path):
-                      # errors='replace'로 인코딩 에러 방지
                       with open(path, 'r', encoding='utf-8', errors='replace') as f:
-                          return f.read()[:5000] # 너무 길면 5000자에서 자름
+                          return f.read()[:5000]
               except Exception as e:
                   return f'Error reading file: {str(e)}'
               return 'No data'
 
-          # 파일 읽기
           code_changes = read_file_safe('/tmp/code_changes.diff')
           front_logs = read_file_safe('/tmp/frontend_logs.txt')
           back_logs = read_file_safe('/tmp/backend_logs.txt')
 
-          # 프롬프트 구성
           prompt = f'''You are a DevOps engineer analyzing deployment failure logs. 
           Summarize the root cause in Korean. Focus on the error logs provided.
 
@@ -201,22 +189,22 @@ jobs:
           {back_logs}
           '''
 
-          # Bedrock 호출을 위한 JSON 페이로드 생성
           payload = {
               'anthropic_version': 'bedrock-2023-05-31',
               'max_tokens': 2000,
               'messages': [{'role': 'user', 'content': prompt}]
           }
 
-          # AWS Bedrock 호출
           try:
+              # ✅ 서울 리전(ap-northeast-2) 사용
               client = boto3.client('bedrock-runtime', region_name='${{ env.AWS_REGION }}')
+              
               response = client.invoke_model(
-                  modelId='anthropic.claude-3-5-sonnet-20241022-v2:0',
+                  # ✅ Haiku 사용 (서울 리전에서 On-Demand 호출 즉시 가능)
+                  modelId='anthropic.claude-3-haiku-20240307-v1:0',
                   body=json.dumps(payload, ensure_ascii=False)
               )
               
-              # 결과 파싱 및 저장
               result = json.loads(response['body'].read())
               summary = result['content'][0]['text']
               

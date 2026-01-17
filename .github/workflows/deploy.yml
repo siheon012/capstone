@@ -2,8 +2,13 @@ name: Deploy to Production
 
 on:
   push:
-    branches: [chore/dependency-cleanup]
+    branches: [develop, feature/*]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  security-events: write
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -24,6 +29,13 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Collect code changes
         id: git-diff
         run: |
@@ -35,12 +47,50 @@ jobs:
             echo "has_diff=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      # 🛡️ Trivy Frontend Scan (파일로 결과 저장)
+      - name: Security Scan - Frontend (Trivy)
+        uses: aquasecurity/trivy-action@master
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          scan-type: 'fs'
+          scan-ref: './front'
+          ignore-unfixed: true
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          output: 'trivy_front.txt'
+
+      # Trivy 결과 처리 (실패해도 로그 확보)
+      - name: Check Trivy Frontend Result
+        if: always()
+        run: |
+          if [ -f trivy_front.txt ]; then
+            cat trivy_front.txt
+            mv trivy_front.txt /tmp/trivy_front_log.txt
+          else
+            echo "No Trivy logs" > /tmp/trivy_front_log.txt
+          fi
+
+      # 🛡️ Trivy Backend Scan
+      - name: Security Scan - Backend (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './back'
+          ignore-unfixed: true
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          output: 'trivy_back.txt'
+
+      - name: Check Trivy Backend Result
+        if: always()
+        run: |
+          if [ -f trivy_back.txt ]; then
+            cat trivy_back.txt
+            mv trivy_back.txt /tmp/trivy_back_log.txt
+          else
+             echo "No Trivy logs" > /tmp/trivy_back_log.txt
+          fi
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -57,6 +107,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
+      # 🐳 Frontend 빌드 (로그 캡처 추가)
       - name: Build and push Frontend
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -67,8 +118,9 @@ jobs:
             --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
             -t $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:$IMAGE_TAG \
             -t $ECR_REGISTRY/${{ env.ECR_FRONTEND_REPO }}:latest \
-            --push ./front
+            --push ./front > /tmp/front_build.log 2>&1 || (cat /tmp/front_build.log && exit 1)
 
+      # 🐳 Backend 빌드 (로그 캡처 추가)
       - name: Build and push Backend
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -79,9 +131,8 @@ jobs:
             --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
             -t $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:$IMAGE_TAG \
             -t $ECR_REGISTRY/${{ env.ECR_BACKEND_REPO }}:latest \
-            --push ./back
+            --push ./back > /tmp/back_build.log 2>&1 || (cat /tmp/back_build.log && exit 1)
 
-      # 캐시 갱신 (오래된 캐시 삭제 후 새 캐시 이동)
       - name: Update Cache
         run: |
           rm -rf /tmp/.buildx-cache
@@ -89,7 +140,6 @@ jobs:
 
       - name: Deploy to ECS
         run: |
-          # Circuit Breaker 적용: 실패 시 자동 롤백
           aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_FRONTEND_SERVICE }} --force-new-deployment --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true}" --region ${{ env.AWS_REGION }}
           aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_BACKEND_SERVICE }} --force-new-deployment --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true}" --region ${{ env.AWS_REGION }}
 
@@ -97,66 +147,102 @@ jobs:
         run: |
           aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_FRONTEND_SERVICE }} ${{ env.ECS_BACKEND_SERVICE }} --region ${{ env.AWS_REGION }}
 
+      # --- 실패 시 진단 및 리포팅 ---
+
       - name: Collect failure diagnostics
         if: failure()
         id: diagnostics
         run: |
           echo "🔍 Collecting diagnostics..."
+          touch /tmp/frontend_cw_logs.txt
+          touch /tmp/backend_cw_logs.txt
 
-          # Frontend 중지 원인 파악
-          TASK_ARN=$(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_FRONTEND_SERVICE }} --desired-status STOPPED --max-results 1 --query 'taskArns[0]' --output text)
-          if [ "$TASK_ARN" != "None" ] && [ ! -z "$TASK_ARN" ]; then
-            REASON=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].stoppedReason' --output text)
-            echo "frontend_stop_reason=$REASON" >> $GITHUB_OUTPUT
-          else
-            echo "frontend_stop_reason=Unknown (No stopped task found)" >> $GITHUB_OUTPUT
-          fi
+          # CloudWatch 로그 수집 (실행 로그)
+          aws logs tail ${{ env.CLOUDWATCH_FRONTEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/frontend_cw_logs.txt || echo "No CW logs" > /tmp/frontend_cw_logs.txt
+          aws logs tail ${{ env.CLOUDWATCH_BACKEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/backend_cw_logs.txt || echo "No CW logs" > /tmp/backend_cw_logs.txt
 
-          # Backend 중지 원인 파악
-          TASK_ARN=$(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_BACKEND_SERVICE }} --desired-status STOPPED --max-results 1 --query 'taskArns[0]' --output text)
-          if [ "$TASK_ARN" != "None" ] && [ ! -z "$TASK_ARN" ]; then
-            REASON=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].stoppedReason' --output text)
-            echo "backend_stop_reason=$REASON" >> $GITHUB_OUTPUT
-          else
-            echo "backend_stop_reason=Unknown (No stopped task found)" >> $GITHUB_OUTPUT
-          fi
-
-          # 로그 수집 (최근 50줄)
-          aws logs tail ${{ env.CLOUDWATCH_FRONTEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/frontend_logs.txt || echo "No logs" > /tmp/frontend_logs.txt
-          aws logs tail ${{ env.CLOUDWATCH_BACKEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/backend_logs.txt || echo "No logs" > /tmp/backend_logs.txt
-
+      # 🛠️ [최종] 빌드 로그 + 보안 로그 + 실행 로그 모두 분석
       - name: Summarize logs with Bedrock
         if: failure()
         id: bedrock-summary
         run: |
-          # 프롬프트 내용을 파일로 작성 (따옴표 충돌 방지)
-          cat <<EOF > /tmp/prompt.txt
-          You are a DevOps engineer analyzing deployment failure logs. Summarize the root cause in Korean.
+          pip install boto3
 
-          [Context]
-          Code Changes:
-          $(cat /tmp/code_changes.diff | head -c 2000)
+          python3 -c "
+          import json
+          import os
+          import boto3
 
-          Frontend Logs:
-          $(cat /tmp/frontend_logs.txt)
+          def read_file_safe(path):
+              try:
+                  if os.path.exists(path):
+                      with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                          return f.read()[:5000] # 너무 길면 5000자 자름
+              except Exception as e:
+                  return f'Error reading file: {str(e)}'
+              return 'No log found'
 
-          Backend Logs:
-          $(cat /tmp/backend_logs.txt)
-          EOF
+          # 1. GitHub Actions Build Logs (빌드 에러)
+          front_build_log = read_file_safe('/tmp/front_build.log')
+          back_build_log = read_file_safe('/tmp/back_build.log')
 
-          # jq를 사용하여 안전한 JSON 페이로드 생성 (이스케이프 처리 자동화)
-          jq -n --rawfile prompt /tmp/prompt.txt \
-            '{anthropic_version: "bedrock-2023-05-31", max_tokens: 2000, messages: [{role: "user", content: $prompt}]}' > /tmp/payload.json
+          # 2. Trivy Security Logs (보안 에러)
+          trivy_front = read_file_safe('/tmp/trivy_front_log.txt')
+          trivy_back = read_file_safe('/tmp/trivy_back_log.txt')
 
-          # Bedrock 호출
-          aws bedrock-runtime invoke-model \
-            --model-id anthropic.claude-3-sonnet-20240229-v1:0 \
-            --body file:///tmp/payload.json \
-            --region ${{ env.AWS_REGION }} \
-            /tmp/bedrock_response.json
-            
-          # 응답 추출
-          jq -r '.content[0].text' /tmp/bedrock_response.json > /tmp/bedrock_summary.txt
+          # 3. CloudWatch Logs (런타임 에러)
+          front_cw = read_file_safe('/tmp/frontend_cw_logs.txt')
+          back_cw = read_file_safe('/tmp/backend_cw_logs.txt')
+
+          code_changes = read_file_safe('/tmp/code_changes.diff')
+
+          prompt = f'''You are a DevOps expert. Analyze the failure.
+          Use Korean.
+
+          [Code Changes]
+          {code_changes}
+
+          [Build Logs (Docker/Build Error)]
+          Frontend Build: {front_build_log}
+          Backend Build: {back_build_log}
+
+          [Security Scan Logs (Trivy)]
+          Frontend Security: {trivy_front}
+          Backend Security: {trivy_back}
+
+          [Runtime Logs (CloudWatch)]
+          Frontend Runtime: {front_cw}
+          Backend Runtime: {back_cw}
+
+          Summarize the root cause based on the logs above.
+          '''
+
+          payload = {
+              'anthropic_version': 'bedrock-2023-05-31',
+              'max_tokens': 2000,
+              'messages': [{'role': 'user', 'content': prompt}]
+          }
+
+          try:
+              # 서울 리전 Haiku 사용
+              client = boto3.client('bedrock-runtime', region_name='${{ env.AWS_REGION }}')
+              response = client.invoke_model(
+                  modelId='anthropic.claude-3-haiku-20240307-v1:0',
+                  body=json.dumps(payload, ensure_ascii=False)
+              )
+              
+              result = json.loads(response['body'].read())
+              summary = result['content'][0]['text']
+              
+              with open('/tmp/bedrock_summary.txt', 'w', encoding='utf-8') as f:
+                  f.write(summary)
+              print('✅ Bedrock analysis complete.')
+              
+          except Exception as e:
+              print(f'❌ Bedrock failed: {str(e)}')
+              with open('/tmp/bedrock_summary.txt', 'w', encoding='utf-8') as f:
+                  f.write(f'AI Analysis Failed: {str(e)}')
+          "
 
       - name: Create deployment failure issue
         if: failure()
@@ -177,26 +263,16 @@ jobs:
               console.log("No bedrock summary found");
             }
 
-            const feReason = '${{ steps.diagnostics.outputs.frontend_stop_reason }}';
-            const beReason = '${{ steps.diagnostics.outputs.backend_stop_reason }}';
-
-            // AWS 콘솔 링크 동적 생성 (리전 반영)
-            const logLink = `https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#logsV2:log-groups`;
-
-            const body = `## 🚨 배포 실패 (${date})
+            const body = `## 🚨 배포 실패 리포트 - ${date}
 
             **Commit:** ${commit}
             **Branch:** ${{ github.ref_name }}
 
-            ### 🤖 AI 분석 결과
+            ### 🤖 AI 분석 결과 (Build & Security & Runtime)
             ${summary}
 
             ---
-            ### 🔍 상세 진단
-            - **Frontend 중지 사유:** ${feReason}
-            - **Backend 중지 사유:** ${beReason}
-
-            [CloudWatch 로그 확인하기](${logLink})
+            **참고:** 빌드/보안 단계에서 실패한 경우 ECS 로그는 없을 수 있습니다.
             `;
 
             await github.rest.issues.create({

@@ -26,9 +26,9 @@ import ToastNotification, {
 import VideoMinimap from '@/components/video/VideoMinimap';
 import EventTimeline from '@/components/video/EventTimeline';
 import type { ChatSession } from '@/app/types/session';
-import { getUploadedVideos } from '@/app/actions/video-service-client';
-import { getSession } from '@/app/actions/session-service';
-import { sendMessage, sendVlmMessage } from '@/app/actions/ai-service';
+import { getUploadedVideos } from '@/app/actions/video/video-service-client';
+import { getSession } from '@/app/actions/storage/session-service';
+import { sendMessage, sendVlmMessage } from '@/app/actions/ai/ai-service';
 import type { UploadedVideo } from '@/app/types/video';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -40,13 +40,13 @@ import {
   logVideoState,
 } from '@/utils/video-utils';
 import SummaryButton from '@/components/video/SummaryButton';
-import { useSummary } from '@/hooks/useSummary';
+import { useSummary } from '@/hooks/video/useSummary';
 import Footer from '@/components/layout/Footer';
 import VideoPlayer from '@/components/video/VideoPlayer';
-import { useVideoControls } from '@/hooks/useVideoControls';
-import { useToast } from '@/hooks/useToast';
-import { useChatMessage } from '@/hooks/useChatMessage';
-import { useVideoEventListeners } from '@/hooks/useVideoEventListeners';
+import { useVideoControls } from '@/hooks/video/useVideoControls';
+import { useToast } from '@/hooks/ui/useToast';
+import { useChatMessage } from '@/hooks/data/useChatMessage';
+import { useVideoEventListeners } from '@/hooks/video/useVideoEventListeners';
 import ChatInterface from '@/components/chat/ChatInterface';
 
 export default function CCTVAnalysis() {

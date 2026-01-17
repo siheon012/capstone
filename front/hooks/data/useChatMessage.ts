@@ -1,5 +1,5 @@
-import { sendVlmMessage, sendMessage } from '@/app/actions/ai-service';
-import { saveHistory } from '@/app/actions/history-service';
+import { sendVlmMessage, sendMessage } from '@/app/actions/ai/ai-service';
+import { saveHistory } from '@/app/actions/storage/history-service';
 import type { ChatSession } from '@/app/types/session';
 
 interface UseChatMessageProps {

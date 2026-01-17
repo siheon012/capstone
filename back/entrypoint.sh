@@ -199,6 +199,7 @@ try:
         print(f" Applied migrations: {count}")
 except Exception as e:
     print(f"❌ Health check failed: {e}")
+END
 
 echo "=================================="
 echo " Starting Gunicorn server..."

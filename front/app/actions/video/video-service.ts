@@ -4,7 +4,7 @@ import type { UploadedVideo, VideoListResponse } from '@/app/types/video';
 import { mkdir, writeFile, readdir, unlink, stat, readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { deleteSessionsByVideoId } from './session-service';
+import { deleteSessionsByVideoId } from '../storage/session-service';
 import { getAppConfig } from '@/lib/env-config';
 
 // 환경 설정

@@ -396,116 +396,117 @@ class BedrockVLMService:
         logger.info("📝 텍스트 기반 요약 사용 (이미지 분석 건너뛀)")
         return self._generate_text_based_summary(video, sampled_events)
 
-        logger.info(f"🖼️ 프레임 추출 결과: {len(frames) if frames else 0}개")
-
-        # 프레임이 없으면 텍스트 정보로 요약 생성
-        if not frames:
-            logger.warning("⚠️ 프레임 추출 실패, 텍스트 정보로 요약 생성")
-            return self._generate_text_based_summary(video, events)
-
-        # 2. 프레임 정보를 텍스트로 구성 (scene_analysis와 action 포함)
-        events_text = ""
-        for i, frame_data in enumerate(frames, 1):
-            timestamp = frame_data["timestamp"]
-            minutes = int(timestamp // 60)
-            seconds = int(timestamp % 60)
-            event_type = frame_data["event_type"]
-
-            # Event 객체에서 추가 정보 가져오기
-            event = frame_data.get("event")
-
-            events_text += f"{i}. {minutes}분 {seconds}초: {event_type}"
-
-            # scene_analysis 추가
-            if event and hasattr(event, "scene_analysis") and event.scene_analysis:
-                events_text += f" - {event.scene_analysis}"
-
-            # action 추가
-            if event and event.action:
-                events_text += f" (행동: {event.action})"
-
-            events_text += "\n"
-
-        # 3. Claude 3 Vision에 프롬프트 + 이미지 전송
-        content = [
-            {
-                "type": "text",
-                "text": f"""다음은 편의점 CCTV 영상 '{video.name}'의 주요 방문자 장면들입니다.
-각 방문자별로 상세한 분석 보고서를 작성해주세요.
-
-주요 이벤트:
-{events_text}
-
-출력 형식 (반드시 이 양식을 따라주세요):
-
-📋 CCTV 방문객 분석 보고서
-
-방문자 1 (visitor_id: X_X)
-방문 시간: XX분 XX초부터 XX분 XX초까지
-성별: XX 추정
-평균 추정 나이: 약 XX세
-행동 및 장면 요약:
-[3-4문장으로 방문자의 외형, 착용한 옷, 위치, 행동을 상세히 묘사]
-
-방문자 2 (visitor_id: X_X)
-방문 시간: XX분 XX초부터 XX분 XX초까지
-성별: XX 추정
-평균 추정 나이: 약 XX세
-행동 및 장면 요약:
-[3-4문장으로 방문자의 외형, 착용한 옷, 위치, 행동을 상세히 묘사]
-
-... (모든 방문자에 대해 반복)
-
-📊 종합 의견
-[전체 방문자 패턴, 연령대 분포, 특이사항을 3-5문장으로 요약]
-
-중요:
-- 방문 시간은 반드시 "XX분 XX초부터 XX분 XX초까지" 형식
-- 각 방문자를 개별적으로 구분하여 분석
-- 외형 특징(옷 색깔, 스타일 등)을 구체적으로 묘사
-- 존댓말 사용
-
-분석 결과:""",
-            }
-        ]
-
-        # 이미지 추가 (최대 10개)
-        for frame_data in frames[:10]:
-            content.append(
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": frame_data["frame"],
-                    },
-                }
-            )
-
-        # 4. Bedrock API 호출
-        try:
-            body = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1000,
-                "messages": [{"role": "user", "content": content}],
-                "temperature": 0.5,
-            }
-
-            response = self.bedrock_runtime.invoke_model(
-                modelId=self.model_id, body=json.dumps(body)
-            )
-
-            response_body = json.loads(response["body"].read())
-            summary = response_body["content"][0]["text"]
-
-            return summary
-
-        except Exception as e:
-            logger.error(f"❌ VLM 요약 생성 오류: {str(e)}")
-            import traceback
-
-            traceback.print_exc()
-            return self._generate_fallback_summary(events)
+        # 아래 코드는 현재 사용되지 않음 (Vision API 비활성화됨)
+        # logger.info(f"🖼️ 프레임 추출 결과: {len(frames) if frames else 0}개")
+        #
+        # # 프레임이 없으면 텍스트 정보로 요약 생성
+        # if not frames:
+        #     logger.warning("⚠️ 프레임 추출 실패, 텍스트 정보로 요약 생성")
+        #     return self._generate_text_based_summary(video, events)
+        #
+        # # 2. 프레임 정보를 텍스트로 구성 (scene_analysis와 action 포함)
+        # events_text = ""
+        # for i, frame_data in enumerate(frames, 1):
+        #     timestamp = frame_data["timestamp"]
+        #     minutes = int(timestamp // 60)
+        #     seconds = int(timestamp % 60)
+        #     event_type = frame_data["event_type"]
+        #
+        #     # Event 객체에서 추가 정보 가져오기
+        #     event = frame_data.get("event")
+        #
+        #     events_text += f"{i}. {minutes}분 {seconds}초: {event_type}"
+        #
+        #     # scene_analysis 추가
+        #     if event and hasattr(event, "scene_analysis") and event.scene_analysis:
+        #         events_text += f" - {event.scene_analysis}"
+        #
+        #     # action 추가
+        #     if event and event.action:
+        #         events_text += f" (행동: {event.action})"
+        #
+        #     events_text += "\n"
+        #
+        # # 3. Claude 3 Vision에 프롬프트 + 이미지 전송
+        # content = [
+        #     {
+        #         "type": "text",
+        #         "text": f"""다음은 편의점 CCTV 영상 '{video.name}'의 주요 방문자 장면들입니다.
+        # 각 방문자별로 상세한 분석 보고서를 작성해주세요.
+        #
+        # 주요 이벤트:
+        # {events_text}
+        #
+        # 출력 형식 (반드시 이 양식을 따라주세요):
+        #
+        # 📋 CCTV 방문객 분석 보고서
+        #
+        # 방문자 1 (visitor_id: X_X)
+        # 방문 시간: XX분 XX초부터 XX분 XX초까지
+        # 성별: XX 추정
+        # 평균 추정 나이: 약 XX세
+        # 행동 및 장면 요약:
+        # [3-4문장으로 방문자의 외형, 착용한 옷, 위치, 행동을 상세히 묘사]
+        #
+        # 방문자 2 (visitor_id: X_X)
+        # 방문 시간: XX분 XX초부터 XX분 XX초까지
+        # 성별: XX 추정
+        # 평균 추정 나이: 약 XX세
+        # 행동 및 장면 요약:
+        # [3-4문장으로 방문자의 외형, 착용한 옷, 위치, 행동을 상세히 묘사]
+        #
+        # ... (모든 방문자에 대해 반복)
+        #
+        # 📊 종합 의견
+        # [전체 방문자 패턴, 연령대 분포, 특이사항을 3-5문장으로 요약]
+        #
+        # 중요:
+        # - 방문 시간은 반드시 "XX분 XX초부터 XX분 XX초까지" 형식
+        # - 각 방문자를 개별적으로 구분하여 분석
+        # - 외형 특징(옷 색깔, 스타일 등)을 구체적으로 묘사
+        # - 존댓말 사용
+        #
+        # 분석 결과:""",
+        #     }
+        # ]
+        #
+        # # 이미지 추가 (최대 10개)
+        # for frame_data in frames[:10]:
+        #     content.append(
+        #         {
+        #             "type": "image",
+        #             "source": {
+        #                 "type": "base64",
+        #                 "media_type": "image/jpeg",
+        #                 "data": frame_data["frame"],
+        #             },
+        #         }
+        #     )
+        #
+        # # 4. Bedrock API 호출
+        # try:
+        #     body = {
+        #         "anthropic_version": "bedrock-2023-05-31",
+        #         "max_tokens": 1000,
+        #         "messages": [{"role": "user", "content": content}],
+        #         "temperature": 0.5,
+        #     }
+        #
+        #     response = self.bedrock_runtime.invoke_model(
+        #         modelId=self.model_id, body=json.dumps(body)
+        #     )
+        #
+        #     response_body = json.loads(response["body"].read())
+        #     summary = response_body["content"][0]["text"]
+        #
+        #     return summary
+        #
+        # except Exception as e:
+        #     logger.error(f"❌ VLM 요약 생성 오류: {str(e)}")
+        #     import traceback
+        #
+        #     traceback.print_exc()
+        #     return self._generate_fallback_summary(events)
 
     def _generate_full_video_summary(self, video: Video) -> str:
         """

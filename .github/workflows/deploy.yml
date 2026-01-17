@@ -212,7 +212,7 @@ jobs:
           try:
               client = boto3.client('bedrock-runtime', region_name='${{ env.AWS_REGION }}')
               response = client.invoke_model(
-                  modelId='anthropic.claude-3-sonnet-20240229-v1:0',
+                  modelId='anthropic.claude-3-5-sonnet-20241022-v2:0',
                   body=json.dumps(payload, ensure_ascii=False)
               )
               

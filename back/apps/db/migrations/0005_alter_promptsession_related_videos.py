@@ -6,17 +6,15 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('db', '0004_video_summary_status'),
+        ("db", "0004_video_summary_status"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='promptsession',
-            name='related_videos',
+            model_name="promptsession",
+            name="related_videos",
             field=models.ManyToManyField(
-                blank=True,
-                related_name='prompt_sessions',
-                to='db.video'
+                blank=True, related_name="prompt_sessions", to="db.video"
             ),
         ),
     ]

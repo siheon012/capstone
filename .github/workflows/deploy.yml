@@ -29,8 +29,8 @@ jobs:
         with:
           fetch-depth: 2
 
-      # 🔄 [위치 변경] AWS 설정을 맨 위로 올림!
-      # 그래야 밑에서 Trivy가 실패해도, 마지막 단계에서 Bedrock/AWS CLI가 작동함
+      # 1. AWS 자격 증명 설정 (맨 위로 배치)
+      # Trivy가 실패하더라도 이후 단계(Bedrock, Log 수집)에서 AWS CLI를 써야 하므로 필수입니다.
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -49,7 +49,7 @@ jobs:
             echo "has_diff=false" >> $GITHUB_OUTPUT
           fi
 
-      # 🛡️ Frontend 보안 취약점 스캔 (이제 여기서 실패해도 AWS 권한은 있음)
+      # 2. 보안 취약점 스캔 (Frontend)
       - name: Security Scan - Frontend (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
@@ -60,7 +60,7 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
-      # 🛡️ Backend 보안 취약점 스캔
+      # 3. 보안 취약점 스캔 (Backend)
       - name: Security Scan - Backend (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
@@ -124,13 +124,15 @@ jobs:
         run: |
           aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_FRONTEND_SERVICE }} ${{ env.ECS_BACKEND_SERVICE }} --region ${{ env.AWS_REGION }}
 
+      # --- 실패 시 진단 및 리포팅 (DevOps 핵심) ---
+
       - name: Collect failure diagnostics
         if: failure()
         id: diagnostics
         run: |
           echo "🔍 Collecting diagnostics..."
 
-          # 파일 생성 (없어도 에러 안 나게)
+          # 파일 생성 (없으면 생성해서 에러 방지)
           touch /tmp/frontend_logs.txt
           touch /tmp/backend_logs.txt
 
@@ -156,39 +158,77 @@ jobs:
           aws logs tail ${{ env.CLOUDWATCH_FRONTEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/frontend_logs.txt || echo "No logs" > /tmp/frontend_logs.txt
           aws logs tail ${{ env.CLOUDWATCH_BACKEND_LOG_GROUP }} --since 10m --format short | tail -50 > /tmp/backend_logs.txt || echo "No logs" > /tmp/backend_logs.txt
 
+      # 🛠️ [핵심 수정] Python + Boto3를 사용하여 한글/특수문자 인코딩 에러 완벽 해결
       - name: Summarize logs with Bedrock
         if: failure()
         id: bedrock-summary
         run: |
-          # 파일 읽기 방어 코드
-          CODE_CHANGES=$(cat /tmp/code_changes.diff 2>/dev/null || echo "No code changes captured.")
-          FRONT_LOGS=$(cat /tmp/frontend_logs.txt 2>/dev/null || echo "No frontend logs captured.")
-          BACK_LOGS=$(cat /tmp/backend_logs.txt 2>/dev/null || echo "No backend logs captured.")
+          # 1. AWS SDK 설치 (boto3)
+          pip install boto3
 
-          cat <<EOF > /tmp/prompt.txt
-          You are a DevOps engineer analyzing deployment failure logs. Summarize the root cause in Korean.
+          # 2. Python 스크립트 실행
+          python3 -c "
+          import json
+          import os
+          import boto3
 
-          [Context]
-          Code Changes:
-          $CODE_CHANGES
+          def read_file_safe(path):
+              try:
+                  if os.path.exists(path):
+                      # errors='replace'로 인코딩 에러 방지
+                      with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                          return f.read()[:5000] # 너무 길면 5000자에서 자름
+              except Exception as e:
+                  return f'Error reading file: {str(e)}'
+              return 'No data'
 
-          Frontend Logs:
-          $FRONT_LOGS
+          # 파일 읽기
+          code_changes = read_file_safe('/tmp/code_changes.diff')
+          front_logs = read_file_safe('/tmp/frontend_logs.txt')
+          back_logs = read_file_safe('/tmp/backend_logs.txt')
 
-          Backend Logs:
-          $BACK_LOGS
-          EOF
+          # 프롬프트 구성
+          prompt = f'''You are a DevOps engineer analyzing deployment failure logs. 
+          Summarize the root cause in Korean. Focus on the error logs provided.
 
-          jq -n --rawfile prompt /tmp/prompt.txt \
-            '{anthropic_version: "bedrock-2023-05-31", max_tokens: 2000, messages: [{role: "user", content: $prompt}]}' > /tmp/payload.json
+          [Code Changes]
+          {code_changes}
 
-          aws bedrock-runtime invoke-model \
-            --model-id anthropic.claude-3-sonnet-20240229-v1:0 \
-            --body file:///tmp/payload.json \
-            --region ${{ env.AWS_REGION }} \
-            /tmp/bedrock_response.json || echo '{"content":[{"text":"Bedrock call failed"}]}' > /tmp/bedrock_response.json
-            
-          jq -r '.content[0].text' /tmp/bedrock_response.json > /tmp/bedrock_summary.txt
+          [Frontend Logs]
+          {front_logs}
+
+          [Backend Logs]
+          {back_logs}
+          '''
+
+          # Bedrock 호출을 위한 JSON 페이로드 생성
+          payload = {
+              'anthropic_version': 'bedrock-2023-05-31',
+              'max_tokens': 2000,
+              'messages': [{'role': 'user', 'content': prompt}]
+          }
+
+          # AWS Bedrock 호출
+          try:
+              client = boto3.client('bedrock-runtime', region_name='${{ env.AWS_REGION }}')
+              response = client.invoke_model(
+                  modelId='anthropic.claude-3-sonnet-20240229-v1:0',
+                  body=json.dumps(payload, ensure_ascii=False)
+              )
+              
+              # 결과 파싱 및 저장
+              result = json.loads(response['body'].read())
+              summary = result['content'][0]['text']
+              
+              with open('/tmp/bedrock_summary.txt', 'w', encoding='utf-8') as f:
+                  f.write(summary)
+              print('✅ Bedrock analysis complete.')
+              
+          except Exception as e:
+              print(f'❌ Bedrock failed: {str(e)}')
+              with open('/tmp/bedrock_summary.txt', 'w', encoding='utf-8') as f:
+                  f.write(f'AI 분석 실패 (System Error): {str(e)}')
+          "
 
       - name: Create deployment failure issue
         if: failure()

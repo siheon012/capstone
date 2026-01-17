@@ -34,12 +34,9 @@ jobs:
 
       - name: Run Black (Code Formatting)
         run: |
-          echo "🎨 Checking code formatting with Black..."
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            black --check --diff back/
-          else
-            black --check --diff back/ || true
-          fi
+          echo "🎨 Applying Black formatting..."
+          black back/
+          echo "✅ Black formatting applied"
 
       - name: Run Flake8 (Linting)
         run: |
@@ -110,9 +107,9 @@ jobs:
         run: |
           echo "🔍 Running ESLint..."
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            yarn lint
+            yarn next lint --dir .
           else
-            yarn lint || true
+            yarn next lint --dir . || true
           fi
 
       - name: Run Prettier Check

@@ -6,17 +6,17 @@ from .analysis import (
     DisplayDataViewSet,
     VideoAnalysisViewSet,
     AnalysisJobViewSet,
-    TierManagementViewSet
+    TierManagementViewSet,
 )
 
 __all__ = [
-    'VideoViewSet',
-    'EventViewSet',
-    'PromptSessionViewSet',
-    'PromptInteractionViewSet',
-    'DepthDataViewSet',
-    'DisplayDataViewSet',
-    'VideoAnalysisViewSet',
-    'AnalysisJobViewSet',
-    'TierManagementViewSet',
+    "VideoViewSet",
+    "EventViewSet",
+    "PromptSessionViewSet",
+    "PromptInteractionViewSet",
+    "DepthDataViewSet",
+    "DisplayDataViewSet",
+    "VideoAnalysisViewSet",
+    "AnalysisJobViewSet",
+    "TierManagementViewSet",
 ]

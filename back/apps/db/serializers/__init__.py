@@ -4,23 +4,23 @@ from .video import VideoSerializer
 from .event import EventSerializer
 from .prompt import PromptSessionSerializer, PromptInteractionSerializer
 from .analysis import (
-    DepthDataSerializer, 
-    DisplayDataSerializer, 
-    VideoAnalysisSerializer, 
+    DepthDataSerializer,
+    DisplayDataSerializer,
+    VideoAnalysisSerializer,
     AnalysisJobSerializer,
     DepthDataBulkCreateSerializer,
-    DisplayDataBulkCreateSerializer
+    DisplayDataBulkCreateSerializer,
 )
 
 __all__ = [
-    'VideoSerializer',
-    'EventSerializer',
-    'PromptSessionSerializer',
-    'PromptInteractionSerializer',
-    'DepthDataSerializer',
-    'DisplayDataSerializer',
-    'VideoAnalysisSerializer',
-    'AnalysisJobSerializer',
-    'DepthDataBulkCreateSerializer',
-    'DisplayDataBulkCreateSerializer',
+    "VideoSerializer",
+    "EventSerializer",
+    "PromptSessionSerializer",
+    "PromptInteractionSerializer",
+    "DepthDataSerializer",
+    "DisplayDataSerializer",
+    "VideoAnalysisSerializer",
+    "AnalysisJobSerializer",
+    "DepthDataBulkCreateSerializer",
+    "DisplayDataBulkCreateSerializer",
 ]

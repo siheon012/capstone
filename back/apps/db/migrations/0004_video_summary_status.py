@@ -6,23 +6,23 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('db', '0003_event_thumbnail_fields'),
+        ("db", "0003_event_thumbnail_fields"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='video',
-            name='summary_status',
+            model_name="video",
+            name="summary_status",
             field=models.CharField(
                 max_length=20,
-                default='pending',
+                default="pending",
                 choices=[
-                    ('pending', 'Pending'),
-                    ('processing', 'Processing'),
-                    ('completed', 'Completed'),
-                    ('failed', 'Failed')
+                    ("pending", "Pending"),
+                    ("processing", "Processing"),
+                    ("completed", "Completed"),
+                    ("failed", "Failed"),
                 ],
-                help_text='영상 요약 생성 상태'
+                help_text="영상 요약 생성 상태",
             ),
         ),
     ]

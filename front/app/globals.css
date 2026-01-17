@@ -250,21 +250,8 @@
   /* 모바일 커스텀 스크롤바 관련 스타일은 제거됨 - 모바일 브라우저 지원 제한으로 인해 */
 }
 
-:not(.no-custom-scrollbar)::-webkit-scrollbar-thumb::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.3) 50%,
-    transparent 100%
-  );
-  transition: left 0.5s ease;
-}
+/* 주의: ::before/::after는 ::-webkit-scrollbar-thumb와 함께 사용할 수 없음 (Turbopack 파싱 오류) */
+/* :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb::before - 제거됨 */
 
 :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(
@@ -281,9 +268,7 @@
   animation: scrollbar-glow 2s infinite;
 }
 
-:not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:hover::before {
-  left: 100%;
-}
+/* :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:hover::before - 제거됨 */
 
 :not(.no-custom-scrollbar)::-webkit-scrollbar-thumb:active {
   background: linear-gradient(
@@ -390,16 +375,7 @@ body:not(.no-custom-scrollbar),
   overflow: hidden;
 }
 
-.history-scrollbar::-webkit-scrollbar-track::before {
-  content: '✨';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 10px;
-  opacity: 0.3;
-  animation: scrollbar-pulse 4s infinite;
-}
+/* .history-scrollbar::-webkit-scrollbar-track::before - 제거됨 (스크롤바 의사 요소와 호환 불가) */
 
 .history-scrollbar::-webkit-scrollbar-thumb {
   background: linear-gradient(
@@ -418,16 +394,8 @@ body:not(.no-custom-scrollbar),
   position: relative;
 }
 
-.history-scrollbar::-webkit-scrollbar-thumb::before {
-  content: '🎵';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 8px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
+/* 주의: ::before/::after는 ::-webkit-scrollbar-thumb와 함께 사용할 수 없음 (Turbopack 파싱 오류) */
+/* .history-scrollbar::-webkit-scrollbar-thumb::before - 제거됨 */
 
 .history-scrollbar::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(
@@ -443,10 +411,7 @@ body:not(.no-custom-scrollbar),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.history-scrollbar::-webkit-scrollbar-thumb:hover::before {
-  opacity: 0.7;
-  animation: bounce-gentle 1s infinite;
-}
+/* .history-scrollbar::-webkit-scrollbar-thumb:hover::before - 제거됨 */
 
 /* 스크롤 중일 때 특별한 효과 */
 .history-scrollbar.scrolling::-webkit-scrollbar-thumb {

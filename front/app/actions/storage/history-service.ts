@@ -9,7 +9,7 @@ const config = getAppConfig();
 // 히스토리 목록 가져오기
 export async function getHistoryList(): Promise<HistoryResponse> {
   try {
-    const response = await fetch(`${config.apiUrl}/db/prompt-sessions/`, {
+    const response = await fetch(`${config.api.baseUrl}/db/prompt-sessions/`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

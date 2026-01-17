@@ -2,12 +2,13 @@ name: Deploy to Production
 
 on:
   push:
-    branches: [develop]
+    branches: [develop, feature/*] # 🛡️ 기능 브랜치에서도 테스트 가능하게 추가함
   workflow_dispatch:
 
 permissions:
   contents: read # 코드 읽기 권한
   issues: write # 이슈 생성 권한 (이게 핵심!)
+  security-events: write # 🛡️ Trivy 결과를 GitHub Security 탭에 올리려면 필요 (선택)
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -27,6 +28,29 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
+
+      # 🛡️ [추가 1] Frontend 보안 취약점 스캔 (Trivy)
+      # 빌드하기 전에 소스 코드 단계에서 미리 검사합니다.
+      - name: Security Scan - Frontend (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs' # 파일 시스템 스캔
+          scan-ref: './front' # 프론트엔드 폴더 지정
+          ignore-unfixed: true # 패치 없는 취약점은 무시 (실용적 설정)
+          format: 'table' # 결과를 테이블로 보기 좋게 출력
+          exit-code: '1' # 🚨 취약점 발견 시 에러(1)를 내서 배포 중단!
+          severity: 'CRITICAL,HIGH' # 심각(Critical)이나 높음(High) 단계만 잡기
+
+      # 🛡️ [추가 2] Backend 보안 취약점 스캔 (Trivy)
+      - name: Security Scan - Backend (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './back' # 백엔드 폴더 지정
+          ignore-unfixed: true
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
 
       - name: Collect code changes
         id: git-diff

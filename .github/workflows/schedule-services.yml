@@ -2,12 +2,16 @@ name: AWS Services Scheduler (ECS + RDS)
 
 on:
   schedule:
-    # 매일 오전 7시 50분 (KST 07:50 = UTC 전날 22:50) - 서비스 중지
-    - cron: '50 22 * * *'
-    # 매일 오후 1시 50분 (KST 13:50 = UTC 04:50) - 서비스 시작
-    - cron: '50 4 * * *'
-    # 매주 토요일 오전 10시 (7일 자동 시작 방지)
+    # 1. [STOP] 매일 오전 07:30 (KST 07:30 = UTC 전날 22:30)
+    - cron: '30 22 * * *'
+
+    # 2. [START] 매일 오후 01:30 (KST 13:30 = UTC 04:30)
+    - cron: '30 4 * * *'
+
+    # 3. [CYCLE] 매주 토요일 오전 10:00 (KST 10:00 = UTC 01:00)
+    # (RDS가 7일 이상 꺼져 있으면 AWS가 강제로 켜버리는 것을 방지하기 위해 잠깐 켰다 끄는 로직)
     - cron: '0 1 * * 6'
+
   workflow_dispatch:
     inputs:
       action:
@@ -29,6 +33,7 @@ env:
 
 jobs:
   schedule-ecs:
+    name: Manage ECS & RDS Schedule
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials
@@ -38,31 +43,39 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # 🛠️ [핵심] Cron 식을 직접 비교하여 오작동 방지
       - name: Determine action
         id: determine-action
         run: |
+          echo "🔍 Analyzing trigger source..."
+
+          # 1. 수동 실행 처리
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             ACTION="${{ inputs.action }}"
+            echo "👉 Triggered manually. Action: $ACTION"
+
+          # 2. 자동 스케줄 처리
           else
-            # Cron 기반 자동 실행 로직
-            HOUR=$(date -u +%H)
+            SCHEDULE_CRON="${{ github.event.schedule }}"
+            echo "⏰ Triggered by schedule cron: $SCHEDULE_CRON"
             
-            # UTC 23:00 (KST 08:00) -> STOP
-            if [ "$HOUR" == "23" ]; then
+            # UTC 22:30 (KST 07:30) -> STOP
+            if [[ "$SCHEDULE_CRON" == *"30 22"* ]]; then
               ACTION="stop"
-            # UTC 05:00 (KST 14:00) -> START
-            elif [ "$HOUR" == "05" ]; then
+            # UTC 04:30 (KST 13:30) -> START
+            elif [[ "$SCHEDULE_CRON" == *"30 4"* ]]; then
               ACTION="start"
-            # 토요일 01:00 (KST 10:00) -> CYCLE (7일 방지)
-            elif [ "${{ github.event.schedule }}" == "0 1 * * 6" ]; then
+            # UTC 01:00 (KST 10:00) -> CYCLE
+            elif [[ "$SCHEDULE_CRON" == *"0 1"* ]]; then
               ACTION="cycle"
             else
               ACTION="status"
+              echo "⚠️ Warning: Unknown schedule pattern. Defaulting to status check."
             fi
           fi
 
           echo "action=$ACTION" >> $GITHUB_OUTPUT
-          echo "🎯 Action determined: $ACTION"
+          echo "🎯 Final Action Determined: $ACTION"
 
       - name: Get current status
         id: status
@@ -73,9 +86,10 @@ jobs:
             --output text 2>/dev/null || echo "not-found")
 
           echo "rds_status=$RDS_STATUS" >> $GITHUB_OUTPUT
+          echo "Current RDS Status: $RDS_STATUS"
 
-      # [STOP] 서비스 중지
-      - name: Stop Services (save costs)
+      # [STOP] 서비스 중지 (오전 7시반)
+      - name: Stop Services (Save Costs)
         if: steps.determine-action.outputs.action == 'stop'
         run: |
           echo "🛑 Stopping ECS services..."
@@ -85,41 +99,41 @@ jobs:
           echo "🛑 Stopping RDS instance..."
           if [ "${{ steps.status.outputs.rds_status }}" == "available" ]; then
             aws rds stop-db-instance --db-instance-identifier ${{ env.RDS_INSTANCE_ID }}
-            echo "✅ RDS stop initiated."
+            echo "✅ RDS stop command sent."
           else
-            echo "ℹ️ RDS is already stopped or not available ($RDS_STATUS)."
+            echo "ℹ️ RDS is already stopped or busy ($RDS_STATUS). Skipping."
           fi
 
-      # [CYCLE] 7일 자동 시작 방지 (토요일)
+      # [CYCLE] 7일 자동 시작 방지 (토요일 오전 10시)
       - name: Prevent RDS 7-day auto-restart
         if: steps.determine-action.outputs.action == 'cycle'
         run: |
           echo "🔄 Running weekly cycle to reset 7-day timer..."
-
+          # 꺼져있으면 켰다가 -> 5분 대기 -> 다시 끔
           if [ "${{ steps.status.outputs.rds_status }}" == "stopped" ]; then
             aws rds start-db-instance --db-instance-identifier ${{ env.RDS_INSTANCE_ID }}
-            echo "⏳ RDS starting... waiting 3 minutes before stopping again."
-            sleep 180 
+            echo "⏳ RDS starting... waiting 5 minutes..."
+            aws rds wait db-instance-available --db-instance-identifier ${{ env.RDS_INSTANCE_ID }}
+            
+            echo "✅ RDS is available. Stopping immediately."
             aws rds stop-db-instance --db-instance-identifier ${{ env.RDS_INSTANCE_ID }}
             echo "✅ RDS cycle complete."
           else
-            echo "ℹ️ RDS is not stopped, skipping cycle."
+            echo "ℹ️ RDS is not stopped. Skipping cycle."
           fi
 
-      # [START] 서비스 시작
+      # [START] 서비스 시작 (오후 1시반)
       - name: Start Services
         if: steps.determine-action.outputs.action == 'start'
         run: |
           echo "🚀 Starting Services..."
 
-          # RDS 먼저 시작
           if [ "${{ steps.status.outputs.rds_status }}" == "stopped" ]; then
             aws rds start-db-instance --db-instance-identifier ${{ env.RDS_INSTANCE_ID }}
             echo "⏳ Waiting for RDS to become available..."
             aws rds wait db-instance-available --db-instance-identifier ${{ env.RDS_INSTANCE_ID }}
           fi
 
-          # ECS 시작
           aws ecs update-service --cluster ${{ env.CLUSTER_NAME }} --service ${{ env.FRONTEND_SERVICE }} --desired-count 1
           aws ecs update-service --cluster ${{ env.CLUSTER_NAME }} --service ${{ env.BACKEND_SERVICE }} --desired-count 1
 
@@ -127,29 +141,21 @@ jobs:
           aws ecs wait services-stable --cluster ${{ env.CLUSTER_NAME }} --services ${{ env.FRONTEND_SERVICE }} ${{ env.BACKEND_SERVICE }}
           echo "✅ All services started successfully."
 
-      # 최종 상태 리포트 (항상 실행)
       - name: Generate status summary
         if: always()
         run: |
           echo "### 📊 Final Status Report" >> $GITHUB_STEP_SUMMARY
-          echo "**Action Performed:** ${{ steps.determine-action.outputs.action }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Timestamp (KST):** $(TZ=Asia/Seoul date)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered By:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Action:** ${{ steps.determine-action.outputs.action }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Time (KST):** $(TZ=Asia/Seoul date)" >> $GITHUB_STEP_SUMMARY
 
           FRONTEND_COUNT=$(aws ecs describe-services --cluster ${{ env.CLUSTER_NAME }} --services ${{ env.FRONTEND_SERVICE }} --query 'services[0].desiredCount' --output text)
           BACKEND_COUNT=$(aws ecs describe-services --cluster ${{ env.CLUSTER_NAME }} --services ${{ env.BACKEND_SERVICE }} --query 'services[0].desiredCount' --output text)
           RDS_STATUS=$(aws rds describe-db-instances --db-instance-identifier ${{ env.RDS_INSTANCE_ID }} --query 'DBInstances[0].DBInstanceStatus' --output text 2>/dev/null || echo "unknown")
 
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Service | Status / Count |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🖥️ Frontend | $FRONTEND_COUNT tasks |" >> $GITHUB_STEP_SUMMARY
-          echo "| ⚙️ Backend | $BACKEND_COUNT tasks |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🗄️ RDS | $RDS_STATUS |" >> $GITHUB_STEP_SUMMARY
-
-          if [ "$FRONTEND_COUNT" == "0" ] && [ "$BACKEND_COUNT" == "0" ] && [ "$RDS_STATUS" == "stopped" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "💰 **All services stopped - Maximizing savings!**" >> $GITHUB_STEP_SUMMARY
-          elif [ "$FRONTEND_COUNT" != "0" ] && [ "$RDS_STATUS" == "available" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "🟢 **Services running - Ready for traffic**" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "| 🖥️ Frontend | **$FRONTEND_COUNT** tasks |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚙️ Backend | **$BACKEND_COUNT** tasks |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🗄️ RDS | **$RDS_STATUS** |" >> $GITHUB_STEP_SUMMARY

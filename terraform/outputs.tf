@@ -68,8 +68,8 @@ output "api_url" {
 }
 
 output "s3_endpoint_id" {
-  description = "S3 VPC Endpoint ID"
-  value       = module.network.vpc_endpoints_security_group_id
+  description = "S3 VPC Endpoint ID (Gateway Endpoint - 무료)"
+  value       = module.network.s3_endpoint_id
 }
 
 # ==========================================

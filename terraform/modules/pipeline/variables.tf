@@ -31,8 +31,13 @@ variable "vpc_id" {
   type        = string
 }
 
+variable "public_subnet_ids" {
+  description = "Public subnet IDs (비용 절감: NAT Gateway 없이 직접 인터넷 연결)"
+  type        = list(string)
+}
+
 variable "private_subnet_ids" {
-  description = "Private subnet IDs (Batch compute environment에서 사용)"
+  description = "Private subnet IDs (RDS 전용)"
   type        = list(string)
 }
 

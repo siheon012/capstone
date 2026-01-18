@@ -205,6 +205,35 @@ resource "aws_iam_role_policy_attachment" "batch_service_role" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole"
 }
 
+# Batch Spot Fleet Role (Spot 인스턴스 관리용)
+resource "aws_iam_role" "batch_spot_fleet_role" {
+  name = "capstone-${var.environment}-batch-spot-fleet-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "spotfleet.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "capstone-batch-spot-fleet-role"
+    Environment = var.environment
+    Project     = "Capstone"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "batch_spot_fleet_role" {
+  role       = aws_iam_role.batch_spot_fleet_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole"
+}
+
 # Batch Execution Role (컨테이너 시작 권한)
 resource "aws_iam_role" "batch_execution_role" {
   name = "capstone-${var.environment}-batch-execution-role"

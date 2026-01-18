@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write # PR에 댓글을 달아야 해서 권한 필요
+  pull-requests: write
 
 jobs:
   infracost:
@@ -30,15 +30,15 @@ jobs:
             --format=json \
             --out-file=/tmp/infracost-base.json
 
-      # 2. PR로 변경된 코드의 비용 계산
+      # 2. 변경점 계산 (❌ breakdown -> ✅ diff 로 변경!)
       - name: Generate Infracost cost estimate diff
         run: |
-          infracost breakdown --path=terraform \
-            --format=diff \
-            --out-file=/tmp/infracost.json \
-            --compare-to=/tmp/infracost-base.json
+          infracost diff --path=terraform \
+            --compare-to=/tmp/infracost-base.json \
+            --format=json \
+            --out-file=/tmp/infracost.json
 
-      # 3. PR에 댓글 달기
+      # 3. PR에 댓글 달기 (CLI 직접 실행)
       - name: Post Infracost comment
         run: |
           infracost comment github \

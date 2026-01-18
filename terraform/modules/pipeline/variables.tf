@@ -125,11 +125,6 @@ variable "batch_service_role_arn" {
   type        = string
 }
 
-variable "batch_spot_fleet_role_arn" {
-  description = "Batch Spot Fleet role ARN (for Spot instances)"
-  type        = string
-}
-
 variable "batch_execution_role_arn" {
   description = "Batch execution role ARN"
   type        = string

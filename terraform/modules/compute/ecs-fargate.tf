@@ -273,6 +273,11 @@ resource "aws_ecs_service" "frontend" {
     container_port   = 3000
   }
 
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   # depends_on removed - ALB listener is in network module
 
   tags = {
@@ -298,6 +303,11 @@ resource "aws_ecs_service" "backend" {
     target_group_arn = var.backend_target_group_arn
     container_name   = "backend"
     container_port   = 8000
+  }
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
   }
 
   # depends_on 제거: aws_lb_listener.http는 network 모듈, aws_db_instance.postgres는 storage 모듈에 있음

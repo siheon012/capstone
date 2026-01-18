@@ -1,0 +1,49 @@
+name: Infracost FinOps Check
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  infracost:
+    name: Show Cost Estimate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      # 1. 현재 메인 브랜치의 비용 계산 (기준점)
+      - name: Generate Infracost cost estimate baseline
+        run: |
+          infracost breakdown --path=terraform \
+            --format=json \
+            --out-file=/tmp/infracost-base.json
+
+      # 2. 변경점 계산 (❌ breakdown -> ✅ diff 로 변경!)
+      - name: Generate Infracost cost estimate diff
+        run: |
+          infracost diff --path=terraform \
+            --compare-to=/tmp/infracost-base.json \
+            --format=json \
+            --out-file=/tmp/infracost.json
+
+      # 3. PR에 댓글 달기 (CLI 직접 실행)
+      - name: Post Infracost comment
+        run: |
+          infracost comment github \
+            --path=/tmp/infracost.json \
+            --repo=$GITHUB_REPOSITORY \
+            --github-token=${{ secrets.GITHUB_TOKEN }} \
+            --pull-request=${{ github.event.pull_request.number }} \
+            --behavior=update

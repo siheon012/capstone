@@ -106,7 +106,7 @@ tfplan
 tfplan.*
 .terraform.lock.hcl
 terraform/lambda_deployment.zip
-
+terraform/modules/pipeline/lambda_deployment.zip
 # localstack data
 localstack/
 

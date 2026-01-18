@@ -2,7 +2,7 @@ name: 'Terraform CI'
 
 on:
   pull_request:
-    branches: ['ci/terraform_comment']
+    branches: ['ci/terraform-comment']
 
 permissions:
   contents: read

@@ -63,7 +63,7 @@ resource "aws_ecr_lifecycle_policy" "ai_batch" {
 resource "aws_launch_template" "batch_gpu" {
   name_prefix   = "capstone-batch-gpu-"
   image_id      = "ami-061fb5baa7da36413"  # Custom AMI with models in /opt/ml (1.85GB)
-  instance_type = "g5.xlarge" # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
+  instance_type = "p3.2xlarge" # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
 
   iam_instance_profile {
     arn = var.batch_instance_profile_arn
@@ -150,7 +150,7 @@ resource "aws_batch_compute_environment" "video_analysis_gpu" {
     max_vcpus      = 16 # 최대 4개의 g5.xlarge 인스턴스 (각 4 vCPU)
 
 
-    instance_type = ["g5.xlarge"]
+    instance_type = ["p3.2xlarge"]
 
     # ✅ 비용 절감: Public Subnet 사용 (NAT Gateway $44/월 → $0)
     # Security Group으로 인바운드를 차단하므로 보안 문제 없음

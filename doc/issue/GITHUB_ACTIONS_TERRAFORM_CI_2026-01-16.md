@@ -1,6 +1,6 @@
 # 🤖 GitHub Actions CI 파이프라인 구축: Terraform 자동 검증
 
-**작업 일자**: 2026년 1월 16일  
+**작업 일자**: 2026년 1월 16일 ~ 2026년 1월 18일  
 **작업자**: DeepSentinel Team  
 **관련 파일**: `.github/workflows/terraform.yml`
 
@@ -13,6 +13,7 @@
 - [기술적 구현](#기술적-구현)
 - [워크플로우 다이어그램](#워크플로우-다이어그램)
 - [상세 구현 내용](#상세-구현-내용)
+- [AI 분석 기능 (NEW)](#ai-분석-기능-new)
 - [결과 및 기대 효과](#결과-및-기대-효과)
 - [실제 동작 예시](#실제-동작-예시)
 - [트러블슈팅](#트러블슈팅)
@@ -52,13 +53,20 @@
 
 ## 목표
 
-### "Human Error 최소화 및 코드 리뷰 프로세스 자동화"
+### "Human Error 최소화 및 AI 기반 인프라 변경 분석 자동화"
 
 ✅ **자동 문법 검사**: 코드가 저장소에 올라오기 전에 스타일(`fmt`)과 유효성을 기계가 먼저 검사
 
 ✅ **변경 사항 예측 (Plan)**: 실제 AWS에 적용하기 전, `terraform plan` 결과를 자동으로 시뮬레이션
 
-✅ **리포팅 자동화**: 시뮬레이션 결과를 PR 코멘트로 자동 등록하여, 팀원이 인프라 변경 폭(Blast Radius)을 눈으로 확인하고 승인할 수 있도록 지원
+✅ **AI 분석 (NEW)**: AWS Bedrock을 활용하여 Plan 결과를 지능적으로 분석
+
+- **실패 시**: 실패 원인 진단, 구체적인 해결 방법 제시, 체크리스트 제공
+- **성공 시**: 변경될 리소스 요약, destroy 강조 경고, 비용 영향 분석, 승인 권장사항
+
+✅ **자동 이슈 생성**: 분석 결과를 GitHub Issue로 자동 등록하여 팀 전체가 인프라 변경 히스토리 추적 가능
+
+✅ **리포팅 자동화**: PR 코멘트에 AI 분석 결과 포함하여 리뷰어의 의사결정 지원
 
 ---
 
@@ -75,13 +83,16 @@
 
 ### B. 워크플로우 구성
 
-파이프라인은 크게 **4단계의 검증 과정**을 거칩니다:
+파이프라인은 크게 **7단계의 검증 및 분석 과정**을 거칩니다:
 
 ```
 1️⃣ Format Check    → terraform fmt -check
 2️⃣ Init            → terraform init (S3 Backend 연결)
 3️⃣ Plan            → terraform plan (변경 사항 시뮬레이션)
-4️⃣ Comment         → PR에 Plan 결과 자동 게시
+4️⃣ Convert Plan    → Plan 결과를 텍스트로 변환
+5️⃣ AI Analysis     → AWS Bedrock으로 지능형 분석 (NEW)
+6️⃣ Create Issue    → GitHub Issue에 분석 결과 등록 (NEW)
+7️⃣ Comment PR      → PR에 AI 분석 결과 포함하여 게시
 ```
 
 ---
@@ -131,18 +142,38 @@
         │  Step 6: Terraform Plan             │
         │  - terraform plan -no-color         │
         │  - 변경 사항 시뮬레이션              │
-        │  - 출력 결과 저장                    │
+        │  - 출력 결과를 파일로 저장           │
         └─────────────────────────────────────┘
                           ↓
         ┌─────────────────────────────────────┐
-        │  Step 7: Comment PR                 │
-        │  - github-script@v6                 │
-        │  - Plan 결과를 Markdown으로 포맷팅   │
-        │  - PR에 자동 코멘트 등록             │
+        │  Step 7: Convert Plan to Text       │
+        │  - terraform show tfplan.binary     │
+        │  - 사람이 읽기 쉬운 형태로 변환      │
+        └─────────────────────────────────────┘
+                          ↓
+        ┌─────────────────────────────────────┐
+        │  Step 8: AI Analysis (Bedrock) 🤖   │
+        │  - AWS Bedrock Claude 3 Haiku 호출  │
+        │  - 실패 시: 원인 분석 + 해결책       │
+        │  - 성공 시: 리소스 변경 요약         │
+        │  - Destroy 감지 및 강조 경고         │
+        └─────────────────────────────────────┘
+                          ↓
+        ┌─────────────────────────────────────┐
+        │  Step 9: Create GitHub Issue        │
+        │  - github-script@v7                 │
+        │  - AI 분석 결과를 Issue로 등록       │
+        │  - 라벨 자동 태깅 (성공/실패)        │
+        └─────────────────────────────────────┘
+                          ↓
+        ┌─────────────────────────────────────┐
+        │  Step 10: Comment PR                │
+        │  - github-script@v7                 │
+        │  - AI 분석 + Plan 결과 PR 댓글 등록  │
         └─────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  리뷰어: PR 코멘트에서 변경 사항 확인 후 Approve/Request     │
+│  리뷰어: AI 분석 보고서 + Plan 확인 후 Approve/Request       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -167,6 +198,7 @@ on:
 permissions:
   contents: read
   pull-requests: write # PR 코멘트 작성 권한
+  issues: write # GitHub Issue 생성 권한 (NEW)
 
 jobs:
   terraform:
@@ -246,9 +278,10 @@ jobs:
 - name: Terraform Plan
   id: plan
   env:
-    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  run: terraform plan -no-color -input=false
+    TF_VAR_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+  run: |
+    terraform plan -no-color -out=tfplan.binary 2>&1 | tee /tmp/terraform_plan_output.txt
+    echo "exit_code=$?" >> $GITHUB_OUTPUT
   continue-on-error: true
 ```
 
@@ -257,15 +290,239 @@ jobs:
 - `+` (생성): 새로운 리소스 추가
 - `~` (수정): 기존 리소스 속성 변경
 - `-` (삭제): 리소스 제거 ⚠️ **주의 필요**
+- **출력 파일 생성**: `tfplan.binary` (바이너리 Plan 파일), `/tmp/terraform_plan_output.txt` (텍스트 로그)
 
-#### Step 7: Update Pull Request ⭐⭐⭐
+#### Step 7: Convert Plan to Text
+
+```yaml
+- name: Convert Plan to Text
+  if: always()
+  run: |
+    if [ -f tfplan.binary ]; then
+      terraform show -no-color tfplan.binary > /tmp/terraform_plan_readable.txt 2>&1 || echo "Plan conversion failed" > /tmp/terraform_plan_readable.txt
+    else
+      echo "No plan file generated" > /tmp/terraform_plan_readable.txt
+    fi
+```
+
+**기능**: 바이너리 Plan 파일을 사람이 읽을 수 있는 텍스트로 변환
+
+- `terraform show` 명령어로 상세 변경 내역 생성
+- AI 분석을 위한 입력 데이터 준비
+
+---
+
+#### Step 8: Analyze Terraform Plan with Bedrock 🤖 ⭐⭐⭐⭐
+
+```yaml
+- name: Analyze Terraform Plan with Bedrock
+  if: always()
+  id: bedrock-analysis
+  run: |
+    pip install boto3
+    python3 -c "
+    import json
+    import os
+    import boto3
+
+    def read_file_safe(path):
+        try:
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                    return f.read()[:8000]  # 토큰 제한 고려
+        except Exception as e:
+            return f'Error reading file: {str(e)}'
+        return 'No log found'
+
+    plan_output = read_file_safe('/tmp/terraform_plan_output.txt')
+    plan_readable = read_file_safe('/tmp/terraform_plan_readable.txt')
+
+    fmt_outcome = '${{ steps.fmt.outcome }}'
+    init_outcome = '${{ steps.init.outcome }}'
+    plan_outcome = '${{ steps.plan.outcome }}'
+
+    # Plan 실패 시와 성공 시 다른 프롬프트 사용
+    if plan_outcome == 'failure' or init_outcome == 'failure' or fmt_outcome == 'failure':
+        prompt = f'''You are a Terraform expert. Analyze the failure and provide solutions in Korean.
+
+    **Format Check:** {fmt_outcome}
+    **Init Check:** {init_outcome}
+    **Plan Check:** {plan_outcome}
+
+    **Plan Output:**
+    {plan_output}
+
+    **Detailed Plan:**
+    {plan_readable}
+
+    Please provide:
+    1. 🔴 **실패 원인**: 무엇이 잘못되었는지
+    2. 💡 **해결 방법**: 구체적인 수정 방법 (코드 예시 포함)
+    3. 📌 **체크리스트**: 확인해야 할 사항들
+
+    답변은 명확하고 실행 가능한 한국어로 작성해주세요.
+    '''
+    else:
+        prompt = f'''You are a Terraform expert. Analyze the successful plan and summarize changes in Korean.
+
+    **Plan Output:**
+    {plan_output}
+
+    **Detailed Plan:**
+    {plan_readable}
+
+    Please provide:
+    1. 📊 **변경 요약**: 
+       - 생성될 리소스 (create)
+       - 수정될 리소스 (update/change)
+       - 삭제될 리소스 (destroy) ⚠️ **굵게 강조**
+
+    2. 💰 **비용 영향**: 예상되는 비용 변화
+
+    3. ⚠️ **주의사항**: 
+       - Destroy가 있다면 **강력하게 경고**
+       - 중요한 인프라 변경사항
+       - 다운타임 가능성
+
+    4. ✅ **승인 권장사항**: 이 변경을 승인해도 되는지 의견
+
+    답변은 명확하고 구조화된 한국어로 작성해주세요.
+    '''
+
+    payload = {
+        'anthropic_version': 'bedrock-2023-05-31',
+        'max_tokens': 3000,
+        'messages': [{'role': 'user', 'content': prompt}]
+    }
+
+    try:
+        client = boto3.client('bedrock-runtime', region_name='ap-northeast-2')
+        response = client.invoke_model(
+            modelId='anthropic.claude-3-haiku-20240307-v1:0',
+            body=json.dumps(payload, ensure_ascii=False)
+        )
+        
+        result = json.loads(response['body'].read())
+        summary = result['content'][0]['text']
+        
+        with open('/tmp/bedrock_terraform_analysis.txt', 'w', encoding='utf-8') as f:
+            f.write(summary)
+        print('✅ Bedrock analysis complete.')
+        
+    except Exception as e:
+        print(f'❌ Bedrock failed: {str(e)}')
+        with open('/tmp/bedrock_terraform_analysis.txt', 'w', encoding='utf-8') as f:
+            f.write(f'AI 분석 실패: {str(e)}')
+    "
+```
+
+**핵심 기능**: AWS Bedrock Claude 3 Haiku를 활용한 지능형 분석
+
+**실패 시 프롬프트**:
+
+- 실패 원인 진단 (문법 오류, 리소스 충돌 등)
+- 구체적인 해결 방법 제시 (코드 예시 포함)
+- 확인해야 할 체크리스트
+
+**성공 시 프롬프트**:
+
+- 변경될 리소스 요약 (create/update/destroy)
+- **Destroy 리소스 강조 경고**
+- 예상 비용 영향 분석
+- 다운타임 가능성 및 주의사항
+- 승인 권장 여부
+
+**AI 분석 결과 예시**:
+
+![Bedrock Terraform Checker](../../picture/github_actions/bedrock%20terraform%20checker.png)
+
+---
+
+#### Step 9: Create GitHub Issue ⭐⭐⭐
+
+```yaml
+- name: Create Terraform Analysis Issue
+  if: always()
+  uses: actions/github-script@v7
+  with:
+    script: |
+      const fs = require('fs');
+      const date = new Date().toISOString().split('T')[0];
+      const time = new Date().toISOString().split('T')[1].substring(0, 8);
+      const commit = '${{ github.sha }}'.substring(0, 7);
+
+      let analysis = "Bedrock 분석을 사용할 수 없습니다.";
+      try {
+        analysis = fs.readFileSync('/tmp/bedrock_terraform_analysis.txt', 'utf8');
+      } catch (e) {
+        console.log("No bedrock analysis found");
+      }
+
+      const fmtStatus = '${{ steps.fmt.outcome }}';
+      const initStatus = '${{ steps.init.outcome }}';
+      const planStatus = '${{ steps.plan.outcome }}';
+
+      const isFailure = fmtStatus === 'failure' || initStatus === 'failure' || planStatus === 'failure';
+      const emoji = isFailure ? '🚨' : '✅';
+      const status = isFailure ? '실패' : '성공';
+      const labels = isFailure 
+        ? ['terraform', 'plan-failure', 'needs-fix'] 
+        : ['terraform', 'plan-success', 'review-needed'];
+
+      const body = `## ${emoji} Terraform Plan ${status} - ${date} ${time}
+
+      **Commit:** [\`${commit}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+      **Branch:** \`${{ github.ref_name }}\`
+      **Actor:** @${{ github.actor }}
+
+      ### 📋 실행 결과
+      - **Format Check:** \`${fmtStatus}\`
+      - **Init Check:** \`${initStatus}\`
+      - **Plan Check:** \`${planStatus}\`
+
+      ### 🤖 AI 분석 결과
+      ${analysis}
+
+      <details>
+      <summary>📝 Terraform Plan 원본 출력 보기</summary>
+
+      \`\`\`terraform
+      ${planOutput.substring(0, 10000)}
+      \`\`\`
+
+      </details>
+
+      ---
+      *자동 생성된 리포트입니다. 질문이 있으시면 @${{ github.actor }}에게 문의하세요.*
+      `;
+
+      await github.rest.issues.create({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        title: `${emoji} Terraform Plan ${status} - ${date} (${commit})`,
+        body: body,
+        labels: labels
+      });
+```
+
+**핵심 기능**: GitHub Issue에 분석 결과 자동 등록
+
+- ✅ **성공 시**: `terraform`, `plan-success`, `review-needed` 라벨
+- ❌ **실패 시**: `terraform`, `plan-failure`, `needs-fix` 라벨
+- AI 분석 결과 + 원본 Plan 출력 포함
+- 커밋 링크, 브랜치, 작업자 정보 자동 기록
+- **장점**: PR이 닫혀도 히스토리 추적 가능, 팀 전체 알림
+
+---
+
+#### Step 10: Update Pull Request ⭐⭐⭐
 
 ```yaml
 - name: Update Pull Request
-  uses: actions/github-script@v6
+  uses: actions/github-script@v7
   if: github.event_name == 'pull_request'
   env:
-    PLAN: '${{ steps.plan.outputs.stdout }}'
+    PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
   with:
     script: |
       const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
@@ -424,7 +681,53 @@ resource "aws_s3_bucket" "new_bucket" {
 
 ![GitHub Actions Terraform Checker](../../picture/github_actions/github%20actions%20terraform%20checker.png)
 
-#### 3. PR 코멘트 자동 생성
+#### 3. AI 분석 실행 (Bedrock)
+
+![Bedrock Terraform Checker](../../picture/github_actions/bedrock%20terraform%20checker.png)
+
+**AI 분석 결과 예시**:
+
+```markdown
+### 🤖 AI 분석 결과
+
+#### 📊 변경 요약
+
+- **생성될 리소스**: S3 버킷 1개 (capstone-dev-new-feature)
+- **수정될 리소스**: 없음
+- **삭제될 리소스**: 없음
+
+#### 💰 비용 영향
+
+- 예상 비용: 약 $0.023/GB-월 (Standard 저장 기준)
+- 초기 비용 영향: 미미함
+
+#### ⚠️ 주의사항
+
+- 새로운 S3 버킷 생성으로 상대적으로 안전한 변경
+- Destroy 리소스 없음 ✅
+- 버킷 이름 중복 여부 확인 권장
+
+#### ✅ 승인 권장사항
+
+이 변경은 안전하고 예상 가능한 변경입니다. 승인을 권장합니다.
+```
+
+#### 4. GitHub Issue 자동 생성
+
+GitHub Issue에 다음과 같은 리포트가 자동 생성됩니다:
+
+**Issue 제목**: `✅ Terraform Plan 성공 - 2026-01-18 (a1b2c3d)`
+
+**라벨**: `terraform`, `plan-success`, `review-needed`
+
+**Issue 본문**:
+
+- 실행 결과 (Format/Init/Plan 체크)
+- AI 분석 결과 (변경 요약, 비용 영향, 주의사항)
+- Terraform Plan 원본 출력 (접힘 가능)
+- 커밋 링크 및 작업자 정보
+
+#### 5. PR 코멘트 자동 생성
 
 ```markdown
 #### Terraform Format and Style 🖌 `success`
@@ -434,6 +737,10 @@ resource "aws_s3_bucket" "new_bucket" {
 #### Terraform Validation 🤖 `success`
 
 #### Terraform Plan 📖 `success`
+
+### 🤖 AI 분석 결과
+
+[위의 AI 분석 결과 내용 포함]
 
 <details><summary>Show Plan</summary>
 
@@ -456,13 +763,13 @@ Plan: 1 to add, 0 to change, 0 to destroy.
 _Pushed by: @your-username, Action: `pull_request`_
 ```
 
-#### 4. 리뷰어 확인 및 Approve
+#### 6. 리뷰어 확인 및 Approve
 
 ```
-리뷰어: "S3 버킷 1개 추가되는 거네요. LGTM! 👍"
+리뷰어: "AI 분석 결과 확인. S3 버킷 1개 추가, 비용 영향 미미, Destroy 없음. LGTM! 👍"
 ```
 
-#### 5. Merge 후 수동 Apply
+#### 7. Merge 후 수동 Apply
 
 ```bash
 # 로컬 또는 별도 CD 파이프라인에서

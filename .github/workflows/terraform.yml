@@ -2,7 +2,7 @@ name: 'Terraform CI'
 
 on:
   pull_request:
-    branches: ['develop']
+    branches: ['develop, main']
 
 permissions:
   contents: read

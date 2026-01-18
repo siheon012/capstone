@@ -199,6 +199,11 @@ jobs:
             const fmtStatus = '${{ steps.fmt.outcome }}';
             const initStatus = '${{ steps.init.outcome }}';
             const planStatus = '${{ steps.plan.outcome }}';
+            const serverUrl = '${{ github.server_url }}';
+            const repository = '${{ github.repository }}';
+            const sha = '${{ github.sha }}';
+            const refName = '${{ github.ref_name }}';
+            const actor = '${{ github.actor }}';
 
             const isFailure = fmtStatus === 'failure' || initStatus === 'failure' || planStatus === 'failure';
             const emoji = isFailure ? '🚨' : '✅';
@@ -209,9 +214,9 @@ jobs:
 
             const body = `## ${emoji} Terraform Plan ${status} - ${date} ${time}
 
-            **Commit:** [\`${commit}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
-            **Branch:** \`${{ github.ref_name }}\`
-            **Actor:** @${{ github.actor }}
+            **Commit:** [\`${commit}\`](${serverUrl}/${repository}/commit/${sha})
+            **Branch:** \`${refName}\`
+            **Actor:** @${actor}
 
             ### 📋 실행 결과
             - **Format Check:** \`${fmtStatus}\`
@@ -231,13 +236,13 @@ jobs:
             </details>
 
             ---
-            *자동 생성된 리포트입니다. 질문이 있으시면 @${{ github.actor }}에게 문의하세요.*
+            *자동 생성된 리포트입니다. 질문이 있으시면 @${actor}에게 문의하세요.*
             `;
 
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: \`${emoji} Terraform Plan ${status} - ${date} (${commit})\`,
+              title: `${emoji} Terraform Plan ${status} - ${date} (${commit})`,
               body: body,
               labels: labels
             });

@@ -102,7 +102,7 @@ Users upload videos through the frontend, which triggers the `S3 → SQS → Lam
 | **Frontend**       | ![Next.js](https://img.shields.io/badge/Next.js%2015-000000?style=flat&logo=next.js&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white) ![React](https://img.shields.io/badge/React%2019-61DAFB?style=flat&logo=react&logoColor=black) ![Tailwind](https://img.shields.io/badge/Tailwind%20CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white) |
 | **AI / ML**        | ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white) ![YOLO](https://img.shields.io/badge/YOLOv8-00FFFF?style=flat) ![AWS Bedrock](https://img.shields.io/badge/AWS%20Bedrock-FF9900?style=flat&logo=amazon-aws&logoColor=white) ![CUDA](https://img.shields.io/badge/CUDA%2011.8-76B900?style=flat&logo=nvidia&logoColor=white)                                               |
 | **DevOps**         | ![AWS Batch](https://img.shields.io/badge/AWS%20Batch-FF9900?style=flat&logo=amazon-aws&logoColor=white) ![ECS](https://img.shields.io/badge/ECS%20Fargate-FF9900?style=flat&logo=amazon-ecs&logoColor=white) ![Lambda](https://img.shields.io/badge/Lambda-FF9900?style=flat&logo=aws-lambda&logoColor=white) ![SQS](https://img.shields.io/badge/SQS-FF4F8B?style=flat&logo=amazon-sqs&logoColor=white)                 |
-| **CI/CD & FinOps** | ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=github-actions&logoColor=white) ![Infracost](https://img.shields.io/badge/Infracost-DB44B8?style=flat&logo=terraform&logoColor=white) ![k6](https://img.shields.io/badge/k6-7D64FF?style=flat&logo=k6&logoColor=white)                                                                                                                |
+| **CI/CD & FinOps** | ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=github-actions&logoColor=white) ![Infracost](https://img.shields.io/badge/Infracost-DB44B8?style=flat&logo=terraform&logoColor=white) ![k6](https://img.shields.io/badge/k6-7D64FF?style=flat&logo=k6&logoColor=white)                                                                                                             |
 
 ---
 
@@ -168,12 +168,14 @@ Comprehensive documentation for each module - click links to dive deeper:
 
 ### 🏗️ Infrastructure (IaC)
 
-| Module                     | Description                                                      | Link                                       |
-| -------------------------- | ---------------------------------------------------------------- | ------------------------------------------ |
-| **Terraform**              | 153 AWS resources managed across 6 specialized modules           | [terraform/README.md](terraform/README.md) |
-| **Infrastructure Diagram** | Visual representation of network, compute, pipeline architecture | [INFRA.md](INFRA.md)                       |
+| Module                     | Description                                                                 | Link                                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Terraform**              | 153 AWS resources managed across 6 specialized modules                      | [terraform/README.md](terraform/README.md)                                                                 |
+| **Infrastructure Diagram** | Visual representation of network, compute, pipeline architecture            | [INFRA.md](INFRA.md)                                                                                       |
+| **Terraform CI/CD**        | AI-powered Terraform validation with Bedrock analysis & auto-issue creation | [doc/issue/GITHUB_ACTIONS_TERRAFORM_CI_2026-01-16.md](doc/issue/GITHUB_ACTIONS_TERRAFORM_CI_2026-01-16.md) |
+| **Terraform Refactoring**  | Module separation & state management for scalable IaC                       | [doc/issue/TERRAFORM_REFACTORING.md](doc/issue/TERRAFORM_REFACTORING.md)                                   |
 
-**Key Topics**: Modular design, zero-downtime migration with `moved` blocks, S3 remote state
+**Key Topics**: Modular design, zero-downtime migration with `moved` blocks, S3 remote state, AI-powered Plan analysis
 
 ---
 
@@ -216,14 +218,15 @@ Comprehensive documentation for each module - click links to dive deeper:
 
 Through strategic architecture improvements, we achieved **93% network cost reduction**:
 
-| Item                    | Before      | After   | Savings     | Method                         |
-| ----------------------- | ----------- | ------- | ----------- | ------------------------------ |
-| NAT Gateway             | $44.36/mo   | $0      | **-$44.36** | Public Subnet migration        |
-| VPC Interface Endpoints | $29.34/mo   | $0      | **-$29.34** | Direct IGW access              |
-| **Total Network**       | **$73.70**  | **~$0** | **-$73.70** | **93% reduction**              |
+| Item                    | Before      | After            | Savings         | Method                  |
+| ----------------------- | ----------- | ---------------- | --------------- | ----------------------- |
+| NAT Gateway             | $44.36/mo   | $0               | **-$44.36**     | Public Subnet migration |
+| VPC Interface Endpoints | $29.34/mo   | $0               | **-$29.34**     | Direct IGW access       |
+| **Total Network**       | **$73.70**  | **~$0**          | **-$73.70**     | **93% reduction**       |
 | GPU Processing          | $720/mo EC2 | $1-3/video Batch | **99% savings** | Serverless auto-scaling |
 
 **Key Optimizations**:
+
 - ✅ ECS on Public Subnet with Internet Gateway (no NAT needed)
 - ✅ S3 Gateway Endpoint (free) for storage access
 - ✅ Security Group-based access control (ALB → ECS only)
@@ -245,6 +248,7 @@ Posts cost impact comment on PR
 ```
 
 **Benefits**:
+
 - 💰 Prevent unexpected cost increases before deployment
 - 📊 Track monthly cost trends across infrastructure changes
 - 🔍 Line-by-line resource cost breakdown
@@ -255,15 +259,16 @@ Posts cost impact comment on PR
 
 ### Load Testing Results (k6 @ 50 concurrent users)
 
-| Metric              | Target    | Result        | Status |
-| ------------------- | --------- | ------------- | ------ |
-| **Success Rate**    | > 99%     | **99.93%**    | ✅ Pass |
-| **HTTP Failure**    | < 1%      | **0.03%**     | ✅ Pass |
-| **Avg Response**    | < 300ms   | **171.4ms**   | ✅ Pass |
-| **p95 Response**    | < 500ms   | **472.58ms**  | ✅ Pass |
-| **Throughput**      | > 20 req/s | **44.7 req/s** | ✅ Pass |
+| Metric           | Target     | Result         | Status  |
+| ---------------- | ---------- | -------------- | ------- |
+| **Success Rate** | > 99%      | **99.93%**     | ✅ Pass |
+| **HTTP Failure** | < 1%       | **0.03%**      | ✅ Pass |
+| **Avg Response** | < 300ms    | **171.4ms**    | ✅ Pass |
+| **p95 Response** | < 500ms    | **472.58ms**   | ✅ Pass |
+| **Throughput**   | > 20 req/s | **44.7 req/s** | ✅ Pass |
 
 **Infrastructure**:
+
 - ECS Auto Scaling: 1-4 tasks (CPU 70% threshold)
 - Handles **100+ concurrent users** with auto-scaling
 - Supports **10-15 unmanned stores** simultaneously
@@ -281,21 +286,23 @@ Every deployment is protected by **comprehensive security scanning**:
 ```yaml
 # .github/workflows/deploy.yml
 Trivy Scan → Detect Vulnerabilities
-  ↓ (if CRITICAL/HIGH found)
+↓ (if CRITICAL/HIGH found)
 Block Deployment ⛔
-  ↓ (if failure occurs)
+↓ (if failure occurs)
 AI Analysis (AWS Bedrock)
-  ↓
+↓
 Auto-create GitHub Issue 📝
 ```
 
 **Key Features**:
+
 - 🛡️ **Pre-deployment Security Gate**: Blocks deployment if CRITICAL/HIGH vulnerabilities detected
 - 🤖 **AI-Powered Root Cause Analysis**: AWS Bedrock analyzes build/security/runtime logs
 - 📝 **Automated Issue Creation**: Korean-language failure reports in GitHub Issues
 - 📊 **100% Vulnerability Resolution**: CRITICAL 0, HIGH 0 vulnerabilities in production
 
 **Benefits**:
+
 - ⚡ **5-minute MTTR**: AI analysis reduces incident response time from 30min → 5min
 - 🔒 **Shift-Left Security**: Vulnerabilities caught before reaching production
 - 📈 **Continuous Compliance**: Every commit triggers automated security checks

@@ -2,11 +2,12 @@ name: 'Terraform CI'
 
 on:
   pull_request:
-    branches: ['main'] # main으로 가는 PR이 생기면 발동!
+    branches: [develop, main]
 
 permissions:
   contents: read
   pull-requests: write # PR에 댓글을 달아야 해서 권한 필요함
+  issues: write # GitHub Issue 생성을 위한 권한
 
 jobs:
   terraform:
@@ -38,35 +39,246 @@ jobs:
 
       # 4. 코드 스타일 검사 (들여쓰기 엉망이면 여기서 탈락)
       - name: Terraform Format
+        id: fmt
         run: terraform fmt -check
+        continue-on-error: true
 
       # 5. 초기화 (S3 Backend 연결)
       - name: Terraform Init
+        id: init
         run: terraform init
-
-        # 6. 변경 사항 예측 (Plan)
-      - name: Terraform Plan
-        id: plan
-        # 👇 [CHECK] 이 env 부분이 run: 바로 위에, 같은 들여쓰기로 있어야 합니다!
-        env:
-          TF_VAR_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
-        run: terraform plan -no-color
         continue-on-error: true
 
-      # 7. PR에 댓글 달기 (여기가 하이라이트! ✨)
+      # 6. 변경 사항 예측 (Plan)
+      - name: Terraform Plan
+        id: plan
+        env:
+          TF_VAR_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          terraform plan -no-color -out=tfplan.binary 2>&1 | tee /tmp/terraform_plan_output.txt
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      # 7. Terraform Plan을 텍스트로 변환
+      - name: Convert Plan to Text
+        if: always()
+        run: |
+          if [ -f tfplan.binary ]; then
+            terraform show -no-color tfplan.binary > /tmp/terraform_plan_readable.txt 2>&1 || echo "Plan conversion failed" > /tmp/terraform_plan_readable.txt
+          else
+            echo "No plan file generated" > /tmp/terraform_plan_readable.txt
+          fi
+
+      # 8. Bedrock으로 Plan 분석
+      - name: Analyze Terraform Plan with Bedrock
+        if: always()
+        id: bedrock-analysis
+        run: |
+          pip install boto3
+
+          python3 -c "
+          import json
+          import os
+          import boto3
+
+          def read_file_safe(path):
+              try:
+                  if os.path.exists(path):
+                      with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                          return f.read()[:8000]  # 토큰 제한 고려
+              except Exception as e:
+                  return f'Error reading file: {str(e)}'
+              return 'No log found'
+
+          plan_output = read_file_safe('/tmp/terraform_plan_output.txt')
+          plan_readable = read_file_safe('/tmp/terraform_plan_readable.txt')
+
+          fmt_outcome = '${{ steps.fmt.outcome }}'
+          init_outcome = '${{ steps.init.outcome }}'
+          plan_outcome = '${{ steps.plan.outcome }}'
+
+          # Plan 실패 시와 성공 시 다른 프롬프트 사용
+          if plan_outcome == 'failure' or init_outcome == 'failure' or fmt_outcome == 'failure':
+              prompt = f'''You are a Terraform expert. Analyze the failure and provide solutions in Korean.
+
+          **Format Check:** {fmt_outcome}
+          **Init Check:** {init_outcome}
+          **Plan Check:** {plan_outcome}
+
+          **Plan Output:**
+          {plan_output}
+
+          **Detailed Plan:**
+          {plan_readable}
+
+          Please provide:
+          1. 🔴 **실패 원인**: 무엇이 잘못되었는지
+          2. 💡 **해결 방법**: 구체적인 수정 방법 (코드 예시 포함)
+          3. 📌 **체크리스트**: 확인해야 할 사항들
+
+          답변은 명확하고 실행 가능한 한국어로 작성해주세요.
+          '''
+          else:
+              prompt = f'''You are a Terraform expert. Analyze the successful plan and summarize changes in Korean.
+
+          **Plan Output:**
+          {plan_output}
+
+          **Detailed Plan:**
+          {plan_readable}
+
+          Please provide:
+          1. 📊 **변경 요약**: 
+             - 생성될 리소스 (create)
+             - 수정될 리소스 (update/change)
+             - 삭제될 리소스 (destroy) ⚠️ **굵게 강조**
+
+          2. 💰 **비용 영향**: 예상되는 비용 변화
+
+          3. ⚠️ **주의사항**: 
+             - Destroy가 있다면 **강력하게 경고**
+             - 중요한 인프라 변경사항
+             - 다운타임 가능성
+
+          4. ✅ **승인 권장사항**: 이 변경을 승인해도 되는지 의견
+
+          답변은 명확하고 구조화된 한국어로 작성해주세요.
+          '''
+
+          payload = {
+              'anthropic_version': 'bedrock-2023-05-31',
+              'max_tokens': 3000,
+              'messages': [{'role': 'user', 'content': prompt}]
+          }
+
+          try:
+              client = boto3.client('bedrock-runtime', region_name='ap-northeast-2')
+              response = client.invoke_model(
+                  modelId='anthropic.claude-3-haiku-20240307-v1:0',
+                  body=json.dumps(payload, ensure_ascii=False)
+              )
+              
+              result = json.loads(response['body'].read())
+              summary = result['content'][0]['text']
+              
+              with open('/tmp/bedrock_terraform_analysis.txt', 'w', encoding='utf-8') as f:
+                  f.write(summary)
+              print('✅ Bedrock analysis complete.')
+              
+          except Exception as e:
+              print(f'❌ Bedrock failed: {str(e)}')
+              with open('/tmp/bedrock_terraform_analysis.txt', 'w', encoding='utf-8') as f:
+                  f.write(f'AI 분석 실패: {str(e)}')
+          "
+
+      # 9. GitHub Issue 생성
+      - name: Create Terraform Analysis Issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const date = new Date().toISOString().split('T')[0];
+            const time = new Date().toISOString().split('T')[1].substring(0, 8);
+            const commit = '${{ github.sha }}'.substring(0, 7);
+
+            let analysis = "Bedrock 분석을 사용할 수 없습니다.";
+            try {
+              analysis = fs.readFileSync('/tmp/bedrock_terraform_analysis.txt', 'utf8');
+            } catch (e) {
+              console.log("No bedrock analysis found");
+            }
+
+            let planOutput = "";
+            try {
+              planOutput = fs.readFileSync('/tmp/terraform_plan_output.txt', 'utf8');
+            } catch (e) {
+              planOutput = "Plan output not available";
+            }
+
+            const fmtStatus = '${{ steps.fmt.outcome }}';
+            const initStatus = '${{ steps.init.outcome }}';
+            const planStatus = '${{ steps.plan.outcome }}';
+            const serverUrl = '${{ github.server_url }}';
+            const repository = '${{ github.repository }}';
+            const sha = '${{ github.sha }}';
+            const refName = '${{ github.ref_name }}';
+            const actor = '${{ github.actor }}';
+
+            const isFailure = fmtStatus === 'failure' || initStatus === 'failure' || planStatus === 'failure';
+            const emoji = isFailure ? '🚨' : '✅';
+            const status = isFailure ? '실패' : '성공';
+            const labels = isFailure 
+              ? ['terraform', 'plan-failure', 'needs-fix'] 
+              : ['terraform', 'plan-success', 'review-needed'];
+
+            const body = `## ${emoji} Terraform Plan ${status} - ${date} ${time}
+
+            **Commit:** [\`${commit}\`](${serverUrl}/${repository}/commit/${sha})
+            **Branch:** \`${refName}\`
+            **Actor:** @${actor}
+
+            ### 📋 실행 결과
+            - **Format Check:** \`${fmtStatus}\`
+            - **Init Check:** \`${initStatus}\`
+            - **Plan Check:** \`${planStatus}\`
+
+            ### 🤖 AI 분석 결과
+            ${analysis}
+
+            <details>
+            <summary>📝 Terraform Plan 원본 출력 보기</summary>
+
+            \`\`\`terraform
+            ${planOutput.substring(0, 10000)}
+            \`\`\`
+
+            </details>
+
+            ---
+            *자동 생성된 리포트입니다. 질문이 있으시면 @${actor}에게 문의하세요.*
+            `;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `${emoji} Terraform Plan ${status} - ${date} (${commit})`,
+              body: body,
+              labels: labels
+            });
+
+      # 10. PR에 댓글 달기 (기존 기능 유지)
       - name: Update Pull Request
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
         env:
           PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const output = `#### 🖌 Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
-            #### ⚙️ Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            #### 📖 Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+            const fs = require('fs');
 
-            <details><summary>Show Plan</summary>
+            let analysis = "Bedrock 분석 결과를 불러올 수 없습니다.";
+            try {
+              analysis = fs.readFileSync('/tmp/bedrock_terraform_analysis.txt', 'utf8');
+            } catch (e) {
+              console.log("No bedrock analysis found");
+            }
+
+            const fmtStatus = '${{ steps.fmt.outcome }}';
+            const initStatus = '${{ steps.init.outcome }}';
+            const planStatus = '${{ steps.plan.outcome }}';
+            const actor = '${{ github.actor }}';
+            const eventName = '${{ github.event_name }}';
+
+            const output = `#### 🖌 Terraform Format and Style 🖌\`${fmtStatus}\`
+            #### ⚙️ Terraform Initialization ⚙️\`${initStatus}\`
+            #### 📖 Terraform Plan 📖\`${planStatus}\`
+
+            ### 🤖 AI 분석 결과
+            ${analysis}
+
+            <details><summary>Show Raw Plan</summary>
 
             \`\`\`terraform
             ${process.env.PLAN}
@@ -74,11 +286,11 @@ jobs:
 
             </details>
 
-            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            *Pusher: @${actor}, Action: \`${eventName}\`*`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: output
-            })
+            });

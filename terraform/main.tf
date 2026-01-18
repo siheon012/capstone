@@ -85,7 +85,6 @@ module "pipeline" {
   ecs_cluster_id                  = module.compute.ecs_cluster_id
   ecs_cluster_arn                 = module.compute.ecs_cluster_arn
   batch_service_role_arn          = module.security.batch_service_role_arn
-  batch_spot_fleet_role_arn       = module.security.batch_spot_fleet_role_arn
   batch_execution_role_arn        = module.security.batch_execution_role_arn
   batch_task_role_arn             = module.security.batch_task_role_arn
   batch_instance_profile_arn      = module.security.batch_instance_profile_arn

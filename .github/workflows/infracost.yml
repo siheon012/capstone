@@ -1,0 +1,45 @@
+name: Infracost FinOps Check
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**' # 👈 주의: 테라폼 코드가 있는 폴더명으로 수정하세요! (예: infra/** 또는 modules/**)
+permissions:
+  contents: read
+  pull-requests: write # PR에 댓글을 달아야 해서 권한 필요
+
+jobs:
+  infracost:
+    name: Show Cost Estimate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      # 1. 현재 메인 브랜치의 비용 계산 (기준점)
+      - name: Generate Infracost cost estimate baseline
+        run: |
+          infracost breakdown --path=terraform \
+            --format=json \
+            --out-file=/tmp/infracost-base.json
+
+      # 2. PR로 변경된 코드의 비용 계산
+      - name: Generate Infracost cost estimate diff
+        run: |
+          infracost breakdown --path=terraform \
+            --format=diff \
+            --out-file=/tmp/infracost.json \
+            --compare-to=/tmp/infracost-base.json
+
+      # 3. PR에 댓글 달기
+      - name: Post Infracost comment
+        uses: infracost/actions/comment@v3
+        with:
+          path: /tmp/infracost.json
+          behavior: update # 기존 댓글이 있으면 수정 (도배 방지)s

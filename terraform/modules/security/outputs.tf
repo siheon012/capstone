@@ -36,6 +36,11 @@ output "batch_service_role_arn" {
   value       = aws_iam_role.batch_service_role.arn
 }
 
+output "batch_spot_fleet_role_arn" {
+  description = "Batch Spot Fleet role ARN (for Spot instances)"
+  value       = aws_iam_role.batch_spot_fleet_role.arn
+}
+
 output "batch_execution_role_arn" {
   description = "Batch execution role ARN (for Batch job definitions)"
   value       = aws_iam_role.batch_execution_role.arn

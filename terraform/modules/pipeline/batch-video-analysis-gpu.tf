@@ -1,18 +1,20 @@
 # ========================================
 # AWS Batch - Video Analysis GPU Processing
 # ========================================
-# This file configures AWS Batch for on-demand GPU video processing.
+# This file configures AWS Batch for Spot GPU video processing.
 # 
 # Key Features:
-# - Custom AMI (ami-05a7c7234d12946e9) with pre-loaded 17GB Docker image
+# - Custom AMI (ami-061fb5baa7da36413) with pre-loaded models (1.85GB)
 # - Reduces startup time from 20 minutes to ~3 minutes
 # - g5.xlarge GPU instances (NVIDIA A10G, 4 vCPU, 16GB RAM)
-# - Auto-scaling: min_vcpus=0, max_vcpus=8 (supports 2 concurrent jobs)
+# - Auto-scaling: min_vcpus=0, max_vcpus=16 (supports 4 concurrent jobs)
 # 
 # Cost Optimization:
+# - **Spot Instances**: 70-90% cheaper than On-Demand
+# - **bid_percentage=60**: Maximum 60% of On-Demand price
 # - Only provisions GPU instances when Batch jobs are submitted
 # - Instances terminate automatically after job completion
-# - Estimated cost: $1-3 per video (vs $720/month for 24/7 ECS)
+# - Estimated cost: $0.3-1 per video (vs $1-3 On-Demand, $720/month 24/7 ECS)
 # 
 # Related Files:
 # - batch.tf: Common IAM roles and security groups
@@ -143,13 +145,16 @@ resource "aws_batch_compute_environment" "video_analysis_gpu" {
   state        = "ENABLED"
 
   compute_resources {
-    type      = "EC2"
-    min_vcpus = 0
-    max_vcpus = 16 # 최대 4개의 g5.xlarge 인스턴스 (각 4 vCPU)
+    type           = "EC2"
+    min_vcpus      = 0
+    max_vcpus      = 16 # 최대 4개의 g5.xlarge 인스턴스 (각 4 vCPU)
+
 
     instance_type = ["g5.xlarge"]
 
-    subnets = var.private_subnet_ids  # from network module
+    # ✅ 비용 절감: Public Subnet 사용 (NAT Gateway $44/월 → $0)
+    # Security Group으로 인바운드를 차단하므로 보안 문제 없음
+    subnets = var.public_subnet_ids  # from network module
 
     security_group_ids = [
       var.batch_compute_security_group_id  # from network module

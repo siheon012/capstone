@@ -39,7 +39,7 @@ jobs:
 
       # 3. PR에 댓글 달기
       - name: Post Infracost comment
-        uses: infracost/actions/comment@v3
+        uses: infracost/actions/comment@v3.0.1
         with:
           path: /tmp/infracost.json
           behavior: update # 기존 댓글이 있으면 수정 (도배 방지)s

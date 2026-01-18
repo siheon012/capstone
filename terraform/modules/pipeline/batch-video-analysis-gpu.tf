@@ -145,13 +145,10 @@ resource "aws_batch_compute_environment" "video_analysis_gpu" {
   state        = "ENABLED"
 
   compute_resources {
-    type           = "SPOT"
+    type           = "EC2"
     min_vcpus      = 0
     max_vcpus      = 16 # 최대 4개의 g5.xlarge 인스턴스 (각 4 vCPU)
-    bid_percentage = 60
 
-    # Spot Fleet IAM Role (Spot 인스턴스 관리용)
-    spot_iam_fleet_role = var.batch_spot_fleet_role_arn
 
     instance_type = ["g5.xlarge"]
 

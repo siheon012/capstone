@@ -260,22 +260,28 @@ jobs:
               console.log("No bedrock analysis found");
             }
 
-            const output = \`#### 🖌 Terraform Format and Style 🖌\\\`${{ steps.fmt.outcome }}\\\`
-            #### ⚙️ Terraform Initialization ⚙️\\\`${{ steps.init.outcome }}\\\`
-            #### 📖 Terraform Plan 📖\\\`${{ steps.plan.outcome }}\\\`
+            const fmtStatus = '${{ steps.fmt.outcome }}';
+            const initStatus = '${{ steps.init.outcome }}';
+            const planStatus = '${{ steps.plan.outcome }}';
+            const actor = '${{ github.actor }}';
+            const eventName = '${{ github.event_name }}';
+
+            const output = `#### 🖌 Terraform Format and Style 🖌\`${fmtStatus}\`
+            #### ⚙️ Terraform Initialization ⚙️\`${initStatus}\`
+            #### 📖 Terraform Plan 📖\`${planStatus}\`
 
             ### 🤖 AI 분석 결과
             ${analysis}
 
             <details><summary>Show Raw Plan</summary>
 
-            \\\`\\\`\\\`terraform
+            \`\`\`terraform
             ${process.env.PLAN}
-            \\\`\\\`\\\`
+            \`\`\`
 
             </details>
 
-            *Pusher: @${{ github.actor }}, Action: \\\`${{ github.event_name }}\\\`*`;
+            *Pusher: @${actor}, Action: \`${eventName}\`*`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,

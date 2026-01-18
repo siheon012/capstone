@@ -69,34 +69,118 @@ CRITICAL, HIGH 등급의 취약점 발견 시 배포 프로세스를 즉시 **Fa
 
 ### 🤖 3. AIOps (AI 기반 장애 대응)
 
-#### AWS Bedrock (Claude 3 Haiku)
+#### 배포 실패 자동 분석 프로세스
 
-배포 실패 시 자동으로 로그(Build, Security, Runtime)를 수집하여 AI가 분석.
+배포 파이프라인에서 실패가 발생하면 다음과 같은 자동화된 진단 및 리포팅 프로세스가 실행됩니다:
 
-#### 한글 리포팅
+**1단계: 로그 수집 (Multi-Source)**
+```yaml
+# .github/workflows/deploy.yml
+- name: Collect failure diagnostics
+  if: failure()
+  run: |
+    # 1. Docker 빌드 로그 (Build Error)
+    cat /tmp/front_build.log
+    cat /tmp/back_build.log
+    
+    # 2. Trivy 보안 스캔 결과 (Security Error)
+    cat /tmp/trivy_front_log.txt
+    cat /tmp/trivy_back_log.txt
+    
+    # 3. CloudWatch 런타임 로그 (Runtime Error)
+    aws logs tail /ecs/frontend --since 10m > /tmp/frontend_cw_logs.txt
+    aws logs tail /ecs/backend --since 10m > /tmp/backend_cw_logs.txt
+```
 
-복잡한 영어 로그 대신, 근본 원인을 요약한 **한글 리포트**를 GitHub Issue에 자동 등록하여 평균 복구 시간(MTTR) 단축.
+**2단계: AWS Bedrock (Claude 3 Haiku)로 AI 분석**
+
+수집된 모든 로그를 AI에게 전달하여 근본 원인을 자동으로 분석합니다:
 
 ```python
-# AI 분석 프롬프트 예시
-prompt = f"""
-배포 실패 로그를 분석하여 한글로 요약해주세요.
+# Python inline script in GitHub Actions
+import boto3, json
 
-Build Logs:
-{build_logs}
+# 빌드 로그 + 보안 로그 + 런타임 로그 통합
+prompt = f'''You are a DevOps expert. Analyze the failure in Korean.
 
-Security Scan:
-{trivy_logs}
+[Code Changes]
+{code_changes}
 
-Runtime Logs:
-{cloudwatch_logs}
-"""
+[Build Logs (Docker Error)]
+Frontend: {front_build_log}
+Backend: {back_build_log}
 
-response = bedrock_runtime.invoke_model(
+[Security Scan (Trivy)]
+Frontend: {trivy_front}
+Backend: {trivy_back}
+
+[Runtime Logs (CloudWatch)]
+Frontend: {front_cw}
+Backend: {back_cw}
+
+Summarize the root cause and suggest fixes.
+'''
+
+client = boto3.client('bedrock-runtime', region_name='ap-northeast-2')
+response = client.invoke_model(
     modelId='anthropic.claude-3-haiku-20240307-v1:0',
-    body=json.dumps({"messages": [{"role": "user", "content": prompt}]})
+    body=json.dumps({
+        'anthropic_version': 'bedrock-2023-05-31',
+        'max_tokens': 2000,
+        'messages': [{'role': 'user', 'content': prompt}]
+    })
 )
+
+summary = json.loads(response['body'].read())['content'][0]['text']
 ```
+
+**3단계: GitHub Issue 자동 생성**
+
+AI 분석 결과를 GitHub Issues에 한글 리포트로 자동 등록:
+
+```javascript
+// GitHub Actions Script
+await github.rest.issues.create({
+  title: `🚨 배포 실패 - ${date} (${commit})`,
+  body: `
+    ## 🚨 배포 실패 리포트
+    
+    **Commit:** ${commit}
+    **Branch:** ${github.ref_name}
+    
+    ### 🤖 AI 분석 결과 (Build & Security & Runtime)
+    ${summary}
+  `,
+  labels: ['deployment', 'failure', 'automated']
+});
+```
+
+#### 실제 작동 예시
+
+**Trivy 보안 스캔 실패 감지**
+
+![Trivy Backend Scan Failure](../../picture/github_actions/trivy%20deploy%20stop%20backend.png)
+
+Django 5.2 버전의 Critical SQL Injection 취약점을 Trivy가 감지하여 배포를 자동 차단합니다.
+
+**배포 파이프라인 자동 중단**
+
+![Deploy Pipeline Stopped](../../picture/github_actions/trivy%20deploy%20stop.png)
+
+보안 취약점 발견 시 즉시 파이프라인이 중단되며, AI 분석이 시작됩니다.
+
+**AI 분석 결과를 GitHub Issue에 자동 등록**
+
+![Bedrock AI Analysis Comment](../../picture/github_actions/trivy%20deploy%20bedrock%20comment.png)
+
+AWS Bedrock이 **빌드 로그 + 보안 스캔 + 런타임 로그**를 종합 분석하여 한글로 근본 원인과 해결 방법을 제시합니다. 복잡한 영어 로그를 읽지 않고도 **즉시 문제를 파악**할 수 있습니다.
+
+#### 효과
+
+- **MTTR 단축**: 로그 분석 30분 → **AI 분석 5분 이내**
+- **한글 리포팅**: 복잡한 영어 로그 대신 명확한 한글 설명
+- **이력 관리**: 모든 실패 케이스가 GitHub Issues에 자동 기록
+- **학습 효과**: 과거 장애 패턴 분석 가능
 
 ---
 
@@ -105,9 +189,9 @@ response = bedrock_runtime.invoke_model(
 | 이슈 (Issue)                  | 원인 (Root Cause)                                                                             | 해결 (Solution)                                                                                              |
 | ----------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | **Terraform State 충돌 위험** | 로컬에서 상태 파일을 관리할 경우, 팀원 간 버전 불일치 및 동시 수정 시 덮어쓰기 사고 발생 위험 | S3 Backend로 상태 파일을 공유하고, DynamoDB Table을 연결하여 LockID를 통한 동시 수정 방지(Locking) 체계 구축 |
-| **Django SQL Injection**      | Django 5.2 초기 버전의 Critical CVE 발견                                                      | requirements.txt에서 보안 패치 버전(5.1.9) 고정 및 Python 3.10으로 런타임 업그레이드                         |
+| **Django SQL Injection**      | Django 5.2 초기 버전의 Critical CVE 발견 (Trivy 자동 감지)                                     | requirements.txt에서 보안 패치 버전(5.1.9) 고정 및 Python 3.10으로 런타임 업그레이드. Bedrock AI가 자동으로 해결 방법 제시 |
 | **Bedrock 호출 에러**         | 서울 리전에서 Claude 3.5 Sonnet v2 직접 호출 시 프로파일 정책 에러 발생                       | 서울 리전 지원 및 비용/속도 효율이 좋은 Claude 3 Haiku 모델로 변경하여 해결                                  |
-| **AI 분석 결과 "Unknown"**    | 빌드 실패 시 런타임 로그가 없어 AI가 분석을 못함                                              | stdout을 파일로 리다이렉션하여 빌드 로그 + 보안 로그까지 AI에게 전달하도록 개선                              |
+| **AI 분석 결과 "Unknown"**    | 빌드 실패 시 런타임 로그가 없어 AI가 분석을 못함                                              | stdout을 파일로 리다이렉션하여 빌드 로그 + 보안 로그 + 런타임 로그 모두 AI에게 전달하도록 개선              |
 
 ---
 
@@ -132,13 +216,20 @@ graph TD
         Scan -- Pass --> Build[🐳 Docker Build & Push]
 
         Build --> Deploy[🚀 Deploy to ECS]
-        Deploy -- Fail --> AI[🤖 AWS Bedrock Analysis]
-        AI --> Issue[📝 GitHub Issue Report]
+        Deploy -- Fail --> Collect[📋 Collect Logs]
+        
+        Collect --> AI[🤖 AWS Bedrock Analysis]
+        AI -->|Build + Security + Runtime| Analysis[AI Root Cause Analysis]
+        Analysis --> Issue[📝 Auto Create GitHub Issue]
+        Issue --> Report[한글 장애 리포트]
     end
 
     AWS_Res --> ECS[ECS Fargate Cluster]
     ECS --> Frontend[Frontend Service]
     ECS --> Backend[Backend Service]
+    
+    ECS -.->|Runtime Logs| CW[CloudWatch Logs]
+    CW -.->|Collect on Failure| Collect
 ```
 
 ---
@@ -173,11 +264,14 @@ graph TD
 
 - **Before**: CRITICAL 취약점 3건, HIGH 취약점 12건
 - **After**: CRITICAL 0건, HIGH 0건 (✅ 100% 해결)
+- **자동 감지**: Trivy가 Django SQL Injection 취약점 실시간 차단
+- **AI 가이드**: Bedrock이 자동으로 패치 버전 제시
 
 ### 평균 복구 시간 (MTTR)
 
 - **Before**: 로그 분석 및 원인 파악 평균 **30분**
 - **After**: AI 분석 리포트 기반 **5분 이내** 원인 파악
+- **자동화**: GitHub Issue 자동 생성으로 이력 관리 100%
 
 ### 인프라 변경 안정성
 
@@ -208,7 +302,20 @@ graph TD
 
 ## 💡 포트폴리오 한 줄 요약
 
-**"Terraform을 통한 안정적인 협업 인프라 구축부터, AWS Bedrock과 Trivy를 활용한 지능형 DevSecOps 파이프라인까지 End-to-End 자동화 환경을 구현했습니다."**
+**"Terraform을 통한 안정적인 협업 인프라 구축부터, AWS Bedrock과 Trivy를 활용한 지능형 DevSecOps 파이프라인까지 End-to-End 자동화 환경을 구현했습니다. 배포 실패 시 빌드/보안/런타임 로그를 종합 분석하여 한글 리포트를 자동 생성하는 AI 기반 장애 대응 시스템을 갖추었습니다."**
+
+---
+
+## 📸 실제 작동 스크린샷
+
+### 1. Trivy 보안 스캔 실패 감지
+![Trivy Scan Failure](../../picture/github_actions/trivy%20deploy%20stop%20backend.png)
+
+### 2. 배포 파이프라인 자동 중단
+![Pipeline Stopped](../../picture/github_actions/trivy%20deploy%20stop.png)
+
+### 3. AI 분석 결과 GitHub Issue 자동 생성
+![Bedrock Analysis Report](../../picture/github_actions/trivy%20deploy%20bedrock%20comment.png)
 
 ---
 

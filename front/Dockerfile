@@ -3,7 +3,7 @@
 # ==========================================
 # Base Stage: 공통 의존성 및 환경 설정
 # ==========================================
-FOM node:20-alpine AS base
+FROM node:20-alpine AS base
 
 # 보안을 위한 사용자 생성
 RUN addgroup --system --gid 1001 nodejs

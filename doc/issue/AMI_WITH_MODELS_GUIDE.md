@@ -12,11 +12,11 @@
 
 ## 📊 효과
 
-| 항목 | 기존 (모델 포함) | 개선 (모델 분리) |
-|------|-----------------|-----------------|
-| **Docker 이미지** | 17GB | 300MB |
-| **ECR Push 시간** | 20분 | 2분 |
-| **빌드 속도** | 코드 수정 시 17GB 재빌드 | 코드 수정 시 300MB만 재빌드 |
+| 항목              | 기존 (모델 포함)           | 개선 (모델 분리)             |
+| ----------------- | -------------------------- | ---------------------------- |
+| **Docker 이미지** | 17GB                       | 300MB                        |
+| **ECR Push 시간** | 20분                       | 2분                          |
+| **빌드 속도**     | 코드 수정 시 17GB 재빌드   | 코드 수정 시 300MB만 재빌드  |
 | **모델 업데이트** | Docker 재빌드 + AMI 재생성 | AMI만 재생성 (Docker 그대로) |
 
 ---
@@ -161,7 +161,7 @@ resource "aws_launch_template" "batch_gpu" {
   name_prefix   = "capstone-batch-gpu-"
   image_id      = "ami-NEW_AMI_ID_HERE"  # 새로 생성한 AMI ID로 교체
   instance_type = "g5.xlarge"
-  
+
   # ... (나머지 동일)
 }
 ```
@@ -175,7 +175,7 @@ Job Definition의 `container_properties`에 추가:
 ```terraform
 container_properties = jsonencode({
   # ... (기존 설정)
-  
+
   mountPoints = [
     {
       sourceVolume  = "models"
@@ -193,7 +193,7 @@ container_properties = jsonencode({
       readOnly      = true
     }
   ]
-  
+
   volumes = [
     {
       name = "models"
@@ -285,6 +285,6 @@ aws ecr get-login-password --region ap-northeast-2 | \
 
 ## 📚 참고
 
-- 기존 AMI: `ami-05a7c7234d12946e9` (Docker 이미지만 포함, 17GB)
+- 기존 AMI: `ami-05a7c7234d12946e9` (Docker 이미지만 포함, 15GB)
 - 새 AMI: `ami-NEW_ID` (Docker 이미지 + 모델 분리, 2GB)
 - S3 버킷: `s3://capstone-ai-models-dev/`

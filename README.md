@@ -35,7 +35,8 @@ As unmanned stores and convenience shops proliferate, **theft, vandalism, and ju
 ✅ **Real-time Monitoring**: Live analysis progress tracking and event timeline visualization  
 ✅ **IaC Managed**: 153 AWS resources managed via Terraform with zero-downtime deployment  
 ✅ **FinOps Automation**: Automated cost estimation via Infracost on every PR  
-✅ **Performance Validated**: 99.93% success rate with 50 concurrent users (p95 < 500ms)
+✅ **Performance Validated**: 99.93% success rate with 50 concurrent users (p95 < 500ms)  
+✅ **DevSecOps Pipeline**: Trivy security scanning + AI-powered failure analysis
 
 ---
 
@@ -268,6 +269,38 @@ Posts cost impact comment on PR
 - Supports **10-15 unmanned stores** simultaneously
 
 📊 **Full Report**: [Performance Testing →](test/README.md)
+
+---
+
+## 🛡️ Security & DevSecOps
+
+### Automated Security Scanning with Trivy
+
+Every deployment is protected by **comprehensive security scanning**:
+
+```yaml
+# .github/workflows/deploy.yml
+Trivy Scan → Detect Vulnerabilities
+  ↓ (if CRITICAL/HIGH found)
+Block Deployment ⛔
+  ↓ (if failure occurs)
+AI Analysis (AWS Bedrock)
+  ↓
+Auto-create GitHub Issue 📝
+```
+
+**Key Features**:
+- 🛡️ **Pre-deployment Security Gate**: Blocks deployment if CRITICAL/HIGH vulnerabilities detected
+- 🤖 **AI-Powered Root Cause Analysis**: AWS Bedrock analyzes build/security/runtime logs
+- 📝 **Automated Issue Creation**: Korean-language failure reports in GitHub Issues
+- 📊 **100% Vulnerability Resolution**: CRITICAL 0, HIGH 0 vulnerabilities in production
+
+**Benefits**:
+- ⚡ **5-minute MTTR**: AI analysis reduces incident response time from 30min → 5min
+- 🔒 **Shift-Left Security**: Vulnerabilities caught before reaching production
+- 📈 **Continuous Compliance**: Every commit triggers automated security checks
+
+📄 **Detailed Report**: [DevSecOps Pipeline Implementation →](doc/issue/DEVSECOPS_PIPELINE_IMPLEMENTATION.md)
 
 ---
 

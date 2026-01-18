@@ -3,7 +3,8 @@ name: Infracost FinOps Check
 on:
   pull_request:
     paths:
-      - 'terraform/**' # 👈 주의: 테라폼 코드가 있는 폴더명으로 수정하세요! (예: infra/** 또는 modules/**)
+      - 'terraform/**'
+
 permissions:
   contents: read
   pull-requests: write # PR에 댓글을 달아야 해서 권한 필요
@@ -39,7 +40,10 @@ jobs:
 
       # 3. PR에 댓글 달기
       - name: Post Infracost comment
-        uses: infracost/actions/comment@v3.0.1
-        with:
-          path: /tmp/infracost.json
-          behavior: update # 기존 댓글이 있으면 수정 (도배 방지)s
+        run: |
+          infracost comment github \
+            --path=/tmp/infracost.json \
+            --repo=$GITHUB_REPOSITORY \
+            --github-token=${{ secrets.GITHUB_TOKEN }} \
+            --pull-request=${{ github.event.pull_request.number }} \
+            --behavior=update

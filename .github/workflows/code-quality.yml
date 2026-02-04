@@ -1,11 +1,13 @@
 name: Code Quality Check
 
-on:
-  pull_request:
-    branches: [main, ECSFargate, develop]
-  push:
-    branches: [main, ECSFargate, develop]
-  workflow_dispatch:
+# ⛔ DISABLED - terraform destroy 준비 중
+on: []
+# on:
+#   pull_request:
+#     branches: [main, ECSFargate, develop]
+#   push:
+#     branches: [main, ECSFargate, develop]
+#   workflow_dispatch:
 
 jobs:
   python-quality:

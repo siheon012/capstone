@@ -1078,7 +1078,7 @@ terraform/
 - [Terraform Documentation](https://developer.hashicorp.com/terraform/docs)
 - [AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
 - [Moved Block Guide](https://developer.hashicorp.com/terraform/language/modules/develop/refactoring)
-- [Project Refactoring Documentation](../doc/issue/TERRAFORM_REFACTORING.md)
+- [Project Refactoring Documentation](../docs/02_infrastructure/TERRAFORM_REFACTORING.md)
 
 ---
 

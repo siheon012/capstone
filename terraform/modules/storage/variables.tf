@@ -31,4 +31,9 @@ variable "rds_security_group_id" {
   type        = string
 }
 
+variable "domain_name" {
+  description = "Domain name for CORS configuration"
+  type        = string
+}
+
 # Note: ecs_task_execution_role은 security 모듈로 이동됨

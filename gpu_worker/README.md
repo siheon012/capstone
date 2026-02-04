@@ -94,7 +94,7 @@ The GPU Worker was an initial implementation of a video processing system using 
 
 - **GPUVideoWorker Class**: Main worker loop with graceful shutdown
 - **Long Polling**: Receives messages with 20-second wait time
-- **Message Processing**: 
+- **Message Processing**:
   - Parse SQS message body
   - Register with visibility manager
   - Download video from S3
@@ -104,6 +104,7 @@ The GPU Worker was an initial implementation of a video processing system using 
 - **Statistics Tracking**: Success/error counts, processing time
 
 **Key Issues**:
+
 ```python
 # Requires Django setup in GPU worker
 sys.path.insert(0, str(DJANGO_ROOT))
@@ -125,11 +126,13 @@ from apps.db.models import Video
 - **Graceful Cleanup**: Unregisters messages on completion/failure
 
 **Why Needed**:
+
 - Default SQS visibility timeout: 5 minutes
 - Video processing can take 10-60 minutes
 - Without extension, messages reappear and get processed twice
 
 **Complexity Example**:
+
 ```python
 def _monitor_visibility_timeouts(self):
     """Background thread that extends visibility"""
@@ -152,7 +155,6 @@ def _monitor_visibility_timeouts(self):
   - `TEMPORARY`: Retry with backoff (ConnectionError, TimeoutError)
   - `PERMANENT`: Delete message (PermissionError, FileNotFoundError)
   - `SYSTEM`: Shutdown worker (MemoryError, OSError)
-  
 - **Retry Strategy**:
   - Exponential backoff: 2s → 4s → 8s
   - Max retries: 3 attempts
@@ -229,6 +231,7 @@ Even with 0 videos to process, you pay $723/month for idle GPU.
 #### 7. **Incomplete AI Pipeline**
 
 The mock implementation didn't include actual AI models:
+
 ```python
 def _run_gpu_inference(self, video_path: str) -> Dict[str, Any]:
     """Mock Implementation - no real AI processing"""
@@ -241,6 +244,7 @@ def _run_gpu_inference(self, video_path: str) -> Dict[str, Any]:
 ```
 
 To make this work, we'd need to:
+
 - Install YOLO, MiVOLO, MEBOW, LLaVA
 - Manage model weights (10GB+)
 - Handle CUDA memory management
@@ -254,10 +258,10 @@ We replaced this with **AWS Batch + video-analysis pipeline**. Here's why:
 
 ### 1. **Cost Efficiency (97% Cost Reduction)**
 
-| Approach | Cost per Video | Monthly Cost (10 videos) | Monthly Cost (100 videos) |
-|----------|----------------|-------------------------|--------------------------|
-| **GPU Worker (EC2 24/7)** | $723 ÷ videos | $723 | $723 |
-| **AWS Batch (On-Demand)** | $1-3 | $10-30 | $100-300 |
+| Approach                  | Cost per Video | Monthly Cost (10 videos) | Monthly Cost (100 videos) |
+| ------------------------- | -------------- | ------------------------ | ------------------------- |
+| **GPU Worker (EC2 24/7)** | $723 ÷ videos  | $723                     | $723                      |
+| **AWS Batch (On-Demand)** | $1-3           | $10-30                   | $100-300                  |
 
 **Savings**: $693/month for 10 videos, $423/month for 100 videos
 
@@ -285,14 +289,14 @@ Job Queue:
 
 ### 3. **No Infrastructure Management**
 
-| Task | GPU Worker | AWS Batch |
-|------|------------|-----------|
-| GPU Driver Installation | Manual | Handled by AWS |
-| Instance Provisioning | Manual | Automatic |
-| Health Monitoring | Custom scripts | CloudWatch built-in |
-| Failure Recovery | Manual restart | Auto-retry with backoff |
-| Security Patching | Manual | AWS managed |
-| Scaling Logic | Write custom code | Configure min/max vCPUs |
+| Task                    | GPU Worker        | AWS Batch               |
+| ----------------------- | ----------------- | ----------------------- |
+| GPU Driver Installation | Manual            | Handled by AWS          |
+| Instance Provisioning   | Manual            | Automatic               |
+| Health Monitoring       | Custom scripts    | CloudWatch built-in     |
+| Failure Recovery        | Manual restart    | Auto-retry with backoff |
+| Security Patching       | Manual            | AWS managed             |
+| Scaling Logic           | Write custom code | Configure min/max vCPUs |
 
 ### 4. **Decoupled Architecture**
 
@@ -312,6 +316,7 @@ Backend Django → SQS → Lambda → AWS Batch
 ```
 
 **Benefits**:
+
 - Backend changes don't affect video analysis
 - Can version video-analysis independently
 - Easy to test video-analysis locally
@@ -369,28 +374,31 @@ The video-analysis pipeline includes actual production models:
 
 ### 7. **Built-in Reliability Features**
 
-| Feature | GPU Worker | AWS Batch |
-|---------|------------|-----------|
-| Job Retry | Custom error_handler.py | Built-in (max 3 attempts) |
-| Timeout Handling | Custom visibility_manager.py | Job timeout config (2 hours) |
-| Dead Letter Queue | Manual SQS config | Automatic DLQ routing |
-| Job Monitoring | Custom logging | CloudWatch Logs + Metrics |
-| Progress Tracking | Update DB manually | CloudWatch Events + API |
+| Feature           | GPU Worker                   | AWS Batch                    |
+| ----------------- | ---------------------------- | ---------------------------- |
+| Job Retry         | Custom error_handler.py      | Built-in (max 3 attempts)    |
+| Timeout Handling  | Custom visibility_manager.py | Job timeout config (2 hours) |
+| Dead Letter Queue | Manual SQS config            | Automatic DLQ routing        |
+| Job Monitoring    | Custom logging               | CloudWatch Logs + Metrics    |
+| Progress Tracking | Update DB manually           | CloudWatch Events + API      |
 
 ### 8. **Simplified Codebase**
 
 **GPU Worker Complexity**:
+
 - `video_processor.py`: 734 lines (message handling, visibility, retry)
 - `visibility_manager.py`: 197 lines (background thread, timeout logic)
 - `error_handler.py`: 301 lines (error classification, backoff)
 - **Total**: 1,232 lines of infrastructure code
 
 **AWS Batch Simplicity**:
+
 - `batch/run_analysis.py`: ~200 lines (just video processing)
 - `lambda/sqs_to_batch.py`: ~100 lines (job submission)
 - **Total**: 300 lines (75% reduction)
 
 **Why?** AWS Batch handles all the complexity:
+
 - Visibility timeouts → Not needed (Batch manages job state)
 - Error retry → Built-in retry policy
 - Background threads → Not needed (Batch scheduler)
@@ -401,28 +409,28 @@ The video-analysis pipeline includes actual production models:
 
 ### Scenario 1: Low Volume (10 videos/month)
 
-| Item | GPU Worker | AWS Batch | Savings |
-|------|------------|-----------|---------|
-| Compute | $723/month | $2.50 (10 × $0.25) | **$720.50** |
-| Storage | $5/month (EBS) | $0 (ephemeral) | $5 |
-| Data Transfer | $1/month | $1/month | $0 |
-| **Total** | **$729/month** | **$3.50/month** | **$725.50 (99.5%)** |
+| Item          | GPU Worker     | AWS Batch          | Savings             |
+| ------------- | -------------- | ------------------ | ------------------- |
+| Compute       | $723/month     | $2.50 (10 × $0.25) | **$720.50**         |
+| Storage       | $5/month (EBS) | $0 (ephemeral)     | $5                  |
+| Data Transfer | $1/month       | $1/month           | $0                  |
+| **Total**     | **$729/month** | **$3.50/month**    | **$725.50 (99.5%)** |
 
 ### Scenario 2: Medium Volume (100 videos/month)
 
-| Item | GPU Worker | AWS Batch | Savings |
-|------|------------|-----------|---------|
-| Compute | $723/month | $25 (100 × $0.25) | **$698** |
-| Scaling (need 2 instances) | +$723 = $1,446 | $25 (auto-scales) | **$1,421** |
-| **Total** | **$1,446/month** | **$25/month** | **$1,421 (98.3%)** |
+| Item                       | GPU Worker       | AWS Batch         | Savings            |
+| -------------------------- | ---------------- | ----------------- | ------------------ |
+| Compute                    | $723/month       | $25 (100 × $0.25) | **$698**           |
+| Scaling (need 2 instances) | +$723 = $1,446   | $25 (auto-scales) | **$1,421**         |
+| **Total**                  | **$1,446/month** | **$25/month**     | **$1,421 (98.3%)** |
 
 ### Scenario 3: High Volume (1,000 videos/month)
 
-| Item | GPU Worker | AWS Batch | Savings |
-|------|------------|-----------|---------|
-| Compute (need 10 instances) | $7,230/month | $250 (1,000 × $0.25) | **$6,980** |
-| Management Overhead | High | None | - |
-| **Total** | **$7,230/month** | **$250/month** | **$6,980 (96.5%)** |
+| Item                        | GPU Worker       | AWS Batch            | Savings            |
+| --------------------------- | ---------------- | -------------------- | ------------------ |
+| Compute (need 10 instances) | $7,230/month     | $250 (1,000 × $0.25) | **$6,980**         |
+| Management Overhead         | High             | None                 | -                  |
+| **Total**                   | **$7,230/month** | **$250/month**       | **$6,980 (96.5%)** |
 
 ---
 
@@ -434,7 +442,7 @@ The GPU Worker approach was a valid initial design but had fundamental limitatio
 ❌ **Poor scalability** (manual instance management)  
 ❌ **Complex state management** (visibility, retry, error handling)  
 ❌ **Tight coupling** (Django dependency)  
-❌ **Incomplete AI pipeline** (mock implementation)  
+❌ **Incomplete AI pipeline** (mock implementation)
 
 The **AWS Batch + video-analysis pipeline** solves all these issues:
 
@@ -444,7 +452,7 @@ The **AWS Batch + video-analysis pipeline** solves all these issues:
 ✅ **Decoupled architecture** (Lambda orchestration)  
 ✅ **Production AI models** (YOLO + MiVOLO + MEBOW + LLaVA + Claude)  
 ✅ **Built-in reliability** (retries, DLQ, monitoring)  
-✅ **75% less code** (AWS handles complexity)  
+✅ **75% less code** (AWS handles complexity)
 
 **This is why we migrated to AWS Batch.**
 
@@ -455,8 +463,8 @@ The **AWS Batch + video-analysis pipeline** solves all these issues:
 - [AWS Batch Documentation](https://docs.aws.amazon.com/batch/)
 - [video-analysis Pipeline](../video-analysis/README.md)
 - [Lambda SQS-to-Batch Trigger](../lambda/README.md)
-- [Batch Deployment Guide](../doc/SQS_BATCH_DEPLOYMENT.md)
-- [Cost Optimization Analysis](../doc/COST_OPTIMIZATION.md)
+- [Batch Deployment Guide](../docs/07_optimization/OLD_VER_SQS_BATCH_DEPLOYMENT.md)
+- [Cost Optimization Analysis](../docs/04_cost_optimization/COST_REDUCTION_JAN_2026.md)
 
 ---
 

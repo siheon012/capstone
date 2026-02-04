@@ -1,22 +1,25 @@
 name: AWS Services Scheduler (ECS + RDS)
 
-on:
-  schedule:
-    # 1. [STOP] 매일 오전 07:30 (KST 07:30 = UTC 전날 22:30)
-    - cron: '45 14 * * *'
-
-    # 2. [START] 매일 오후 01:30 (KST 13:30 = UTC 04:30)
-    - cron: '15 9 * * *'
-
-    # 3. [CYCLE] 매주 토요일 오전 10:00 (KST 10:00 = UTC 01:00)
-    # (RDS가 7일 이상 꺼져 있으면 AWS가 강제로 켜버리는 것을 방지하기 위해 잠깐 켰다 끄는 로직)
-    - cron: '0 1 * * 6'
-
-  workflow_dispatch:
-    inputs:
-      action:
-        description: 'Action to perform'
-        required: true
+# ⛔ DISABLED - terraform destroy 준비 중
+on: []
+# on:
+  # ⚠️ terraform destroy 전 자동 실행 비활성화
+  # schedule:
+  #   # 1. [STOP] 매일 오전 23:45
+  #   - cron: '45 14 * * *'
+  #
+  #   # 2. [START] 매일 오후 18:15
+  #   - cron: '15 9 * * *'
+  #
+  #   # 3. [CYCLE] 매주 토요일 오전 10:00 (KST 10:00 = UTC 01:00)
+  #   # (RDS가 7일 이상 꺼져 있으면 AWS가 강제로 켜버리는 것을 방지하기 위해 잠깐 켰다 끄는 로직)
+  #   - cron: '0 1 * * 6'
+#
+#   workflow_dispatch:
+#     inputs:
+#       action:
+#         description: 'Action to perform'
+#         required: true
         default: 'status'
         type: choice
         options:

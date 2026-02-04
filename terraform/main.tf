@@ -7,14 +7,16 @@ terraform {
       version = "~> 5.0"
     }
   }
-  #  Backend 설정 블록
-  backend "s3" {
-    bucket         = "capstone-dev-terraform-state-backup" # 사용자님이 이미 만든 S3 버킷 이름
-    key            = "backend_state/terraform.tfstate"     # S3 안에 저장될 파일 경로
-    region         = "ap-northeast-2"
-    encrypt        = true                   # 보안을 위해 암호화
-    dynamodb_table = "terraform-state-lock" # 방금 만든 DynamoDB 테이블 이름
-  }
+  # # Backend 설정 블록
+  ################################################################################################
+  # terraform destroy를 위해 주석 처리함. 실제 사용 시 s3 연동을 위한 주석 해제 필요함.
+  # backend "s3" {
+  #   bucket         = "capstone-dev-terraform-state-backup" # 사용자님이 이미 만든 S3 버킷 이름
+  #   key            = "backend_state/terraform.tfstate"     # S3 안에 저장될 파일 경로
+  #   region         = "ap-northeast-2"
+  #   encrypt        = true                   # 보안을 위해 암호화
+  #   dynamodb_table = "terraform-state-lock" # 방금 만든 DynamoDB 테이블 이름
+  # }
 }
 
 
@@ -43,12 +45,13 @@ module "storage" {
   source = "./modules/storage"
 
   environment           = var.environment
+  domain_name           = var.domain_name
   vpc_id                = module.network.vpc_id
   private_subnet_ids    = module.network.private_subnet_ids
   rds_security_group_id = module.network.rds_security_group_id
 }
 
-# Security Module (IAM)
+# Security Module (IAM) - SQS ARN은 비워두고 IAM 정책에서 fallback 처리
 module "security" {
   source = "./modules/security"
 
@@ -58,7 +61,7 @@ module "security" {
   s3_highlights_arn      = module.storage.s3_highlights_arn
   db_password_secret_arn = module.storage.db_password_secret_arn
   django_secret_arn      = module.storage.django_secret_arn
-  sqs_queue_arn          = "" # Pipeline 모듈 생성 후 업데이트 예정
+  sqs_queue_arn          = "" # Security는 Pipeline보다 먼저 생성되므로 비워둠 (IAM 정책에서 fallback 처리됨)
 }
 
 # Pipeline Module

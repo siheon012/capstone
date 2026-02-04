@@ -1,8 +1,10 @@
 name: 'Terraform CI'
 
-on:
-  pull_request:
-    branches: [develop, main]
+# ⛔ DISABLED - terraform destroy 준비 중
+on: []
+# on:
+#   pull_request:
+#     branches: [develop, main]
 
 permissions:
   contents: read

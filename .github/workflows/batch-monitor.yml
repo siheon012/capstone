@@ -1,9 +1,12 @@
 name: AWS Batch and Cost Monitor
 
-on:
-  schedule:
-    - cron: '0 0 * * *' # KST 09:00 (Daily)
-    - cron: '0 1 * * 1' # KST 10:00 (Weekly)
+# ⛔ DISABLED - terraform destroy 준비 중
+on: []
+# on:
+  # ⚠️ terraform destroy 전 자동 실행 비활성화
+  # schedule:
+  #   - cron: '0 0 * * *' # KST 09:00 (Daily)
+  #   - cron: '0 1 * * 1' # KST 10:00 (Weekly)
   workflow_dispatch:
     inputs:
       report_type:

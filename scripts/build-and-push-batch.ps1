@@ -172,5 +172,5 @@ Write-Host "   terraform plan" -ForegroundColor Cyan
 Write-Host "   terraform apply" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "3. (Optional) Create Custom AMI with this image pre-loaded" -ForegroundColor White
-Write-Host "   See doc/CUSTOM_AMI_GUIDE.md" -ForegroundColor Cyan
+Write-Host "   See docs/CUSTOM_AMI_GUIDE.md" -ForegroundColor Cyan
 Write-Host ""

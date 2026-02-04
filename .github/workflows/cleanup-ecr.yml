@@ -1,8 +1,11 @@
 name: 'ECR Image Cleanup'
 
-on:
-  schedule:
-    - cron: '0 18 * * 6' # KST 일요일 03:00 (UTC 토요일 18:00)
+# ⛔ DISABLED - terraform destroy 준비 중
+on: []
+# on:
+  # ⚠️ terraform destroy 전 자동 실행 비활성화
+  # schedule:
+  #   - cron: '0 18 * * 6' # KST 일요일 03:00 (UTC 토요일 18:00)
   workflow_dispatch:
 
 env:

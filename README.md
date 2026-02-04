@@ -5,7 +5,7 @@
 > **"Replace expensive sensors with AI - Secure unmanned stores using existing CCTV infrastructure."**
 
 <div align="center">
-  <img src="picture/page_screenshots/main page.png" width="80%" alt="Main Dashboard">
+  <img src="docs/assets/page_screenshots/main page.png" width="80%" alt="Main Dashboard">
 </div>
 
 ---
@@ -44,10 +44,10 @@ As unmanned stores and convenience shops proliferate, **theft, vandalism, and ju
 
 See how the service works in action: **[Service Flow Demo →](FLOW.md)**
 
-|                       **Main Dashboard**                        |                        **AI Analysis Timeline**                        |
-| :-------------------------------------------------------------: | :--------------------------------------------------------------------: |
-| <img src="picture/page_screenshots/main page.png" width="100%"> | <img src="picture/page_screenshots/sessions_id page.png" width="100%"> |
-|            Real-time performance metrics monitoring             |             Object detection visualization & RAG-based Q&A             |
+|                         **Main Dashboard**                          |                          **AI Analysis Timeline**                          |
+| :-----------------------------------------------------------------: | :------------------------------------------------------------------------: |
+| <img src="docs/assets/page_screenshots/main page.png" width="100%"> | <img src="docs/assets/page_screenshots/sessions_id page.png" width="100%"> |
+|              Real-time performance metrics monitoring               |               Object detection visualization & RAG-based Q&A               |
 
 **Infrastructure Visualization**: See [Infrastructure Architecture →](INFRA.md)
 
@@ -168,12 +168,12 @@ Comprehensive documentation for each module - click links to dive deeper:
 
 ### 🏗️ Infrastructure (IaC)
 
-| Module                     | Description                                                                 | Link                                                                                                       |
-| -------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **Terraform**              | 153 AWS resources managed across 6 specialized modules                      | [terraform/README.md](terraform/README.md)                                                                 |
-| **Infrastructure Diagram** | Visual representation of network, compute, pipeline architecture            | [INFRA.md](INFRA.md)                                                                                       |
-| **Terraform CI/CD**        | AI-powered Terraform validation with Bedrock analysis & auto-issue creation | [doc/issue/GITHUB_ACTIONS_TERRAFORM_CI_2026-01-16.md](doc/issue/GITHUB_ACTIONS_TERRAFORM_CI_2026-01-16.md) |
-| **Terraform Refactoring**  | Module separation & state management for scalable IaC                       | [doc/issue/TERRAFORM_REFACTORING.md](doc/issue/TERRAFORM_REFACTORING.md)                                   |
+| Module                     | Description                                                                 | Link                                                                                                                 |
+| -------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Terraform**              | 153 AWS resources managed across 6 specialized modules                      | [terraform/README.md](terraform/README.md)                                                                           |
+| **Infrastructure Diagram** | Visual representation of network, compute, pipeline architecture            | [INFRA.md](INFRA.md)                                                                                                 |
+| **Terraform CI/CD**        | AI-powered Terraform validation with Bedrock analysis & auto-issue creation | [docs/05_devops/GITHUB_ACTIONS_TERRAFORM_CI_2026-01-16.md](docs/05_devops/GITHUB_ACTIONS_TERRAFORM_CI_2026-01-16.md) |
+| **Terraform Refactoring**  | Module separation & state management for scalable IaC                       | [docs/02_infrastructure/TERRAFORM_REFACTORING.md](docs/02_infrastructure/TERRAFORM_REFACTORING.md)                   |
 
 **Key Topics**: Modular design, zero-downtime migration with `moved` blocks, S3 remote state, AI-powered Plan analysis
 
@@ -232,7 +232,7 @@ Through strategic architecture improvements, we achieved **93% network cost redu
 - ✅ Security Group-based access control (ALB → ECS only)
 - ✅ AWS Batch Spot instances (70% GPU cost reduction)
 
-📄 **Detailed Report**: [Cost Reduction Analysis →](doc/issue/COST_REDUCTION_JAN_2026.md)
+📄 **Detailed Report**: [Cost Reduction Analysis →](docs/04_cost_optimization/COST_REDUCTION_JAN_2026.md)
 
 ### FinOps Automation
 
@@ -307,7 +307,7 @@ Auto-create GitHub Issue 📝
 - 🔒 **Shift-Left Security**: Vulnerabilities caught before reaching production
 - 📈 **Continuous Compliance**: Every commit triggers automated security checks
 
-📄 **Detailed Report**: [DevSecOps Pipeline Implementation →](doc/issue/DEVSECOPS_PIPELINE_IMPLEMENTATION.md)
+📄 **Detailed Report**: [DevSecOps Pipeline Implementation →](docs/05_devops/DEVSECOPS_PIPELINE_IMPLEMENTATION.md)
 
 ---
 

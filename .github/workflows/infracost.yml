@@ -1,9 +1,11 @@
 name: Infracost FinOps Check
 
-on:
-  pull_request:
-    paths:
-      - 'terraform/**'
+# ⛔ DISABLED - terraform destroy 준비 중
+on: []
+# on:
+#   pull_request:
+#     paths:
+#       - 'terraform/**'
 
 permissions:
   contents: read

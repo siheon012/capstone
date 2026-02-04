@@ -43,7 +43,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
 # ECS/Fargate 배포 시 빌드 타임 환경 변수
-ARG NEXT_PUBLIC_API_URL=https://api.deepsentinel.cloud
+# Terraform에서 ECS 태스크 정의로 주입됨
+ARG NEXT_PUBLIC_API_URL=
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 # 애플리케이션 빌드
@@ -103,7 +104,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 
 # ECS/Fargate용 API URL 설정
-ENV NEXT_PUBLIC_API_URL=https://api.deepsentinel.cloud
+# Terraform에서 ECS 태스크 정의로 주입됨
+ENV NEXT_PUBLIC_API_URL=
 ENV AWS_REGION=ap-northeast-2
 
 # 프로덕션 서버용 포트

@@ -1,9 +1,11 @@
 name: Deploy to Production
 
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+# ⛔ DISABLED - terraform destroy 준비 중
+on: []
+# on:
+#   push:
+#     branches: [main]
+#   workflow_dispatch:
 
 permissions:
   contents: read

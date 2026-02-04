@@ -102,9 +102,9 @@ resource "aws_s3_bucket_cors_configuration" "raw_videos" {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "PUT", "POST", "DELETE", "HEAD"]
     allowed_origins = [
-      "https://deepsentinel.cloud",
-      "https://www.deepsentinel.cloud",
-      "https://api.deepsentinel.cloud",
+      "https://${var.domain_name}",
+      "https://www.${var.domain_name}",
+      "https://api.${var.domain_name}",
       "http://localhost:3000",
       "http://localhost:8000"
     ]
@@ -178,9 +178,9 @@ resource "aws_s3_bucket_cors_configuration" "thumbnails" {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "PUT", "POST", "DELETE", "HEAD"]
     allowed_origins = [
-      "https://deepsentinel.cloud",
-      "https://www.deepsentinel.cloud",
-      "https://api.deepsentinel.cloud",
+      "https://${var.domain_name}",
+      "https://www.${var.domain_name}",
+      "https://api.${var.domain_name}",
       "http://localhost:3000",
       "http://localhost:8000"
     ]
@@ -226,9 +226,9 @@ resource "aws_s3_bucket_cors_configuration" "highlights" {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "HEAD"]
     allowed_origins = [
-      "https://deepsentinel.cloud",
-      "https://www.deepsentinel.cloud",
-      "https://api.deepsentinel.cloud",
+      "https://${var.domain_name}",
+      "https://www.${var.domain_name}",
+      "https://api.${var.domain_name}",
       "http://localhost:3000",
       "http://localhost:8000"
     ]

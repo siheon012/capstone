@@ -55,13 +55,14 @@ module "storage" {
 module "security" {
   source = "./modules/security"
 
-  environment            = var.environment
-  s3_raw_videos_arn      = module.storage.s3_raw_videos_arn
-  s3_thumbnails_arn      = module.storage.s3_thumbnails_arn
-  s3_highlights_arn      = module.storage.s3_highlights_arn
-  db_password_secret_arn = module.storage.db_password_secret_arn
-  django_secret_arn      = module.storage.django_secret_arn
-  sqs_queue_arn          = "" # Security는 Pipeline보다 먼저 생성되므로 비워둠 (IAM 정책에서 fallback 처리됨)
+  environment              = var.environment
+  s3_raw_videos_arn        = module.storage.s3_raw_videos_arn
+  s3_thumbnails_arn        = module.storage.s3_thumbnails_arn
+  s3_highlights_arn        = module.storage.s3_highlights_arn
+  s3_analysis_models_arn   = module.storage.s3_analysis_models_arn
+  db_password_secret_arn   = module.storage.db_password_secret_arn
+  django_secret_arn        = module.storage.django_secret_arn
+  sqs_queue_arn            = "" # Security는 Pipeline보다 먼저 생성되므로 비워둠 (IAM 정책에서 fallback 처리됨)
 }
 
 # Pipeline Module

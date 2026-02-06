@@ -25,10 +25,7 @@ data "aws_ami" "ecs_gpu" {
   }
 }
 
-# ECS Cluster (기존 클러스터 사용)
-data "aws_ecs_cluster" "main" {
-  cluster_name = "capstone-cluster"
-}
+# ECS Cluster는 ecs-fargate.tf에 정의되어 있음 (aws_ecs_cluster.main)
 
 # Launch Template for GPU EC2
 resource "aws_launch_template" "gpu_ecs" {
@@ -118,7 +115,7 @@ resource "aws_ecs_capacity_provider" "gpu" {
 
 # Attach Capacity Provider to Cluster
 resource "aws_ecs_cluster_capacity_providers" "main" {
-  cluster_name = data.aws_ecs_cluster.main.cluster_name
+  cluster_name = aws_ecs_cluster.main.name
 
   capacity_providers = [
     "FARGATE",
@@ -259,7 +256,7 @@ resource "aws_ecs_task_definition" "video_analysis_gpu" {
 
 resource "aws_ecs_service" "video_analysis_gpu" {
   name            = "capstone-video-analysis-gpu-service"
-  cluster         = data.aws_ecs_cluster.main.id
+  cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.video_analysis_gpu.arn
   desired_count   = 1
   launch_type     = "EC2"

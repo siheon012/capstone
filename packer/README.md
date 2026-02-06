@@ -1,25 +1,25 @@
 # Packer - Custom GPU AMI Builder
 
-이 디렉토리는 AWS Batch에서 사용하는 **커스텀 GPU AMI**를 자동으로 빌드하는 Packer 설정을 포함합니다.
+This directory contains Packer configurations for automatically building **custom GPU AMIs** used by AWS Batch.
 
-## 📋 개요
+## 📋 Overview
 
-### 왜 커스텀 AMI가 필요한가?
+### Why Custom AMI?
 
-AWS Batch는 작업 시작 시 Docker 이미지를 ECR에서 다운로드하고 ML 모델을 로드해야 합니다. 이 과정은 다음과 같은 문제가 있습니다:
+AWS Batch needs to download Docker images from ECR and load ML models at job startup. This process has several issues:
 
-- **긴 시작 시간**: Docker 이미지 17GB + 모델 1.85GB = 약 20분
-- **반복적인 다운로드**: 매 작업마다 동일한 리소스 다운로드
-- **비용 증가**: 네트워크 전송 비용 및 대기 시간
+- **Long startup time**: Docker image 17GB + models 1.85GB = ~20 minutes
+- **Repetitive downloads**: Same resources downloaded for every job
+- **Increased costs**: Network transfer costs and wait time
 
-### 커스텀 AMI의 장점
+### Benefits of Custom AMI
 
-- ✅ **시작 시간 단축**: 20분 → 3분 (약 85% 감소)
-- ✅ **네트워크 비용 절감**: ECR/S3 전송 비용 최소화
-- ✅ **안정성 향상**: 사전 검증된 이미지와 모델 사용
-- ✅ **자동화**: Packer로 재현 가능한 빌드
+- ✅ **Reduced startup time**: 20min → 3min (~85% reduction)
+- ✅ **Lower network costs**: Minimize ECR/S3 transfer costs
+- ✅ **Improved stability**: Use pre-validated images and models
+- ✅ **Automation**: Reproducible builds with Packer
 
-## 🏗️ 아키텍처
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -46,191 +46,191 @@ AWS Batch는 작업 시작 시 Docker 이미지를 ECR에서 다운로드하고 
 └─────────────────────────────────────────────────────────┘
 ```
 
-## 📦 파일 구조
+## 📦 File Structure
 
 ```
 packer/
-├── aws-gpu-ami.pkr.hcl              # 메인 Packer 템플릿
-├── variables.auto.pkrvars.hcl.example  # 변수 예제 파일
-├── .gitignore                        # Git 무시 파일
+├── aws-gpu-ami.pkr.hcl              # Main Packer template
+├── variables.auto.pkrvars.hcl.example  # Variables example file
+├── .gitignore                        # Git ignore file
 ├── scripts/
-│   ├── download-models.sh            # ML 모델 다운로드
-│   └── verify-gpu.sh                 # GPU 검증 스크립트
-└── README.md                         # 이 문서
+│   ├── download-models.sh            # ML model downloader
+│   └── verify-gpu.sh                 # GPU verification script
+└── README.md                         # This document
 ```
 
-## 🚀 사용 방법
+## 🚀 Usage
 
-### 1. 사전 요구사항
+### 1. Prerequisites
 
-- **Packer 설치**: [공식 사이트](https://www.packer.io/downloads)에서 다운로드
-- **AWS 자격증명**: `~/.aws/credentials` 또는 환경변수 설정
-- **네트워크 리소스**:
-  - Public subnet (Internet Gateway 필요)
-  - Security group (HTTPS outbound, 선택적으로 SSH)
+- **Install Packer**: Download from [official website](https://www.packer.io/downloads)
+- **AWS Credentials**: Configure `~/.aws/credentials` or environment variables
+- **Network Resources**:
+  - Public subnet (requires Internet Gateway)
+  - Security group (HTTPS outbound, optionally SSH)
 
-### 2. 설정
+### 2. Configuration
 
-#### 2.1 변수 파일 생성
+#### 2.1 Create Variables File
 
 ```bash
-# 예제 파일을 복사
+# Copy example file
 cd packer
 cp variables.auto.pkrvars.hcl.example variables.auto.pkrvars.hcl
 
-# 편집기로 열어서 값 수정
-# - ecr_repository_url: ECR 리포지토리 URL
+# Edit values
+# - ecr_repository_url: ECR repository URL
 # - subnet_id: Public subnet ID
 # - security_group_id: Security group ID
 ```
 
-#### 2.2 필수 변수 설정
+#### 2.2 Set Required Variables
 
-**variables.auto.pkrvars.hcl** 파일을 열어 다음 값들을 설정하세요:
+Open **variables.auto.pkrvars.hcl** and configure the following values:
 
 ```hcl
-# AWS 계정 ID와 리전 확인
+# Check AWS account ID and region
 ecr_repository_url = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/capstone-dev-batch-processor"
 
-# VPC 리소스 (Terraform output에서 확인 가능)
+# VPC resources (check from Terraform output)
 subnet_id         = "subnet-0abc123def456789a"
 security_group_id = "sg-0abc123def456789a"
 ```
 
-### 3. AMI 빌드
+### 3. Build AMI
 
-#### 3.1 Packer 초기화
+#### 3.1 Initialize Packer
 
 ```bash
-# packer 디렉토리에서 실행
+# Run in packer directory
 cd packer
 packer init .
 ```
 
-#### 3.2 템플릿 검증
+#### 3.2 Validate Template
 
 ```bash
 packer validate -var-file="variables.auto.pkrvars.hcl" .
 ```
 
-#### 3.3 AMI 빌드
+#### 3.3 Build AMI
 
 ```bash
 packer build -var-file="variables.auto.pkrvars.hcl" .
 ```
 
-또는 **PowerShell 스크립트 사용** (Windows):
+Or **use PowerShell script** (Windows):
 
 ```powershell
-# 프로젝트 루트에서 실행
-.\scripts\build-ami.ps1 -Action init      # 최초 1회
-.\scripts\build-ami.ps1 -Action validate  # 검증
-.\scripts\build-ami.ps1 -Action build     # 빌드
+# Run from project root
+.\scripts\build-ami.ps1 -Action init      # First time only
+.\scripts\build-ami.ps1 -Action validate  # Validate
+.\scripts\build-ami.ps1 -Action build     # Build
 ```
 
-### 4. 빌드 프로세스
+### 4. Build Process
 
-빌드는 약 **15-30분** 소요되며 다음 단계를 거칩니다:
+The build takes approximately **15-30 minutes** and goes through these steps:
 
-1. ✅ **Base AMI 선택**: 최신 ECS GPU-optimized AMI
-2. ✅ **EC2 인스턴스 시작**: g5.xlarge (NVIDIA A10G)
-3. ✅ **시스템 업데이트**: yum update, 필수 패키지 설치
-4. ✅ **Docker 이미지 Pull**: ECR에서 batch-processor 이미지 다운로드
-5. ✅ **모델 다운로드**: S3 또는 직접 다운로드로 /opt/ml에 저장
-6. ✅ **ECS 최적화**: GPU 지원 및 이미지 캐싱 설정
-7. ✅ **정리**: 로그, 임시 파일 삭제
-8. ✅ **AMI 생성**: EBS 스냅샷과 AMI 생성
-9. ✅ **매니페스트 생성**: manifest.json에 AMI ID 저장
+1. ✅ **Select Base AMI**: Latest ECS GPU-optimized AMI
+2. ✅ **Launch EC2 Instance**: g5.xlarge (NVIDIA A10G)
+3. ✅ **System Update**: yum update, install essential packages
+4. ✅ **Pull Docker Image**: Download batch-processor image from ECR
+5. ✅ **Download Models**: Save to /opt/ml from S3 or direct download
+6. ✅ **Optimize ECS**: Configure GPU support and image caching
+7. ✅ **Cleanup**: Remove logs, temporary files
+8. ✅ **Create AMI**: Generate EBS snapshot and AMI
+9. ✅ **Generate Manifest**: Save AMI ID to manifest.json
 
-### 5. Terraform 업데이트
+### 5. Update Terraform
 
-빌드가 완료되면 **manifest.json**에서 새 AMI ID를 확인하고 Terraform에 적용합니다:
+After build completes, check new AMI ID in **manifest.json** and apply to Terraform:
 
 ```bash
-# manifest.json에서 AMI ID 확인
+# Check AMI ID in manifest.json
 cat packer/manifest.json | jq '.builds[0].artifact_id'
 
-# Terraform 설정 업데이트
+# Update Terraform configuration
 # terraform/modules/pipeline/batch-video-analysis-gpu.tf
 # image_id = "ami-NEW_AMI_ID"
 
-# Terraform 적용
+# Apply Terraform
 cd terraform
 terraform plan
 terraform apply
 ```
 
-## 🔧 고급 설정
+## 🔧 Advanced Settings
 
-### 커스텀 모델 추가
+### Add Custom Models
 
-**scripts/download-models.sh** 파일을 수정하여 필요한 모델을 추가하세요:
+Modify **scripts/download-models.sh** to add required models:
 
 ```bash
-# 예: YOLO 모델 추가
+# Example: Add YOLO model
 download_if_missing \
     "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt" \
     "$MODEL_DIR/yolov8n.pt" \
     "YOLOv8 Nano"
 
-# 예: S3에서 커스텀 모델 다운로드
+# Example: Download custom model from S3
 aws s3 cp "s3://your-bucket/models/custom-model.pth" \
     "$MODEL_DIR/custom-model.pth" \
     --region ap-northeast-2
 ```
 
-### S3에서 모델 일괄 다운로드
+### Batch Download Models from S3
 
-S3 버킷에 모델을 미리 업로드한 경우:
+If models are pre-uploaded to S3 bucket:
 
 ```hcl
 # variables.auto.pkrvars.hcl
 models_s3_bucket = "your-models-bucket-name"
 ```
 
-Packer는 자동으로 `s3://your-models-bucket-name/models/` 경로의 모든 파일을 `/opt/ml/models/`로 동기화합니다.
+Packer will automatically sync all files from `s3://your-models-bucket-name/models/` to `/opt/ml/models/`.
 
-### 디버그 모드
+### Debug Mode
 
-빌드 중 문제가 발생하면 디버그 모드로 실행:
+Run in debug mode if build fails:
 
 ```bash
 packer build -debug -var-file="variables.auto.pkrvars.hcl" .
 ```
 
-또는 PowerShell:
+Or with PowerShell:
 
 ```powershell
 .\scripts\build-ami.ps1 -Action build -Debug
 ```
 
-## 💰 비용
+## 💰 Cost
 
-### 빌드 비용
+### Build Cost
 
-- **인스턴스 비용**: g5.xlarge @ $0.20/hour (Seoul 리전 Spot)
-- **빌드 시간**: 약 20-30분
-- **예상 비용**: **$0.07 - 0.10** per build
+- **Instance cost**: g5.xlarge @ $0.20/hour (Seoul region Spot)
+- **Build time**: ~20-30 minutes
+- **Estimated cost**: **$0.07 - 0.10** per build
 
-### 스토리지 비용
+### Storage Cost
 
-- **EBS 스냅샷**: 30GB @ $0.05/GB/month
-- **AMI 스토리지**: 스냅샷과 동일
-- **예상 비용**: **$1.50/month** per AMI
+- **EBS snapshot**: 30GB @ $0.05/GB/month
+- **AMI storage**: Same as snapshot
+- **Estimated cost**: **$1.50/month** per AMI
 
-### 절감 효과
+### Cost Savings
 
-커스텀 AMI 사용으로 얻는 절감 효과:
+Savings from using custom AMI:
 
-- **시간 절감**: 작업당 17분 단축 = 비용 절감
-- **네트워크 비용**: ECR/S3 전송 비용 제거 (작업당 ~$0.10)
-- **월 10개 작업 가정**: **$1/month 절감**
+- **Time savings**: 17 minutes saved per job = cost reduction
+- **Network cost**: Eliminated ECR/S3 transfer costs (~$0.10 per job)
+- **Assuming 10 jobs/month**: **$1/month savings**
 
-**결론**: 월 10개 이상 작업 시 비용 효율적
+**Conclusion**: Cost-effective for 10+ jobs per month
 
-## 🔄 CI/CD 통합
+## 🔄 CI/CD Integration
 
-### GitHub Actions 예제
+### GitHub Actions Example
 
 ```yaml
 name: Build Custom AMI
@@ -274,48 +274,48 @@ jobs:
           path: packer/manifest.json
 ```
 
-## 📚 참고 자료
+## 📚 References
 
 - [Packer Documentation](https://www.packer.io/docs)
 - [AWS ECS GPU-optimized AMI](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-gpu.html)
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
 
-## 🐛 트러블슈팅
+## 🐛 Troubleshooting
 
-### 빌드 실패 시
+### Build Failures
 
-1. **ECR 로그인 실패**
+1. **ECR Login Failed**
 
    ```bash
-   # IAM 권한 확인 (AmazonEC2ContainerRegistryReadOnly)
+   # Check IAM permissions (AmazonEC2ContainerRegistryReadOnly)
    aws ecr get-login-password --region ap-northeast-2
    ```
 
-2. **네트워크 오류**
-   - Subnet이 Internet Gateway에 연결되어 있는지 확인
-   - Security Group에서 HTTPS (443) outbound 허용 확인
+2. **Network Errors**
+   - Verify subnet is connected to Internet Gateway
+   - Check security group allows HTTPS (443) outbound
 
-3. **GPU 감지 안됨**
-   - 정상 동작 (빌드 인스턴스는 GPU 없을 수 있음)
-   - 실제 Batch 작업에서 GPU 작동 확인
+3. **GPU Not Detected**
+   - Normal behavior (build instance may not have GPU)
+   - Verify GPU works in actual Batch jobs
 
-4. **디스크 공간 부족**
-   - EBS 볼륨 크기 증가 (현재 30GB)
-   - launch_block_device_mappings에서 volume_size 조정
+4. **Disk Space Insufficient**
+   - Increase EBS volume size (currently 30GB)
+   - Adjust volume_size in launch_block_device_mappings
 
-### AMI 삭제
+### Delete AMI
 
-더 이상 사용하지 않는 AMI는 비용 절감을 위해 삭제:
+Delete unused AMIs to save costs:
 
 ```bash
-# AMI 등록 해제
+# Deregister AMI
 aws ec2 deregister-image --image-id ami-xxxxxxxxx --region ap-northeast-2
 
-# 연관된 스냅샷 삭제
+# Delete associated snapshot
 aws ec2 describe-snapshots --owner-ids self --filters "Name=description,Values=*ami-xxxxxxxxx*"
 aws ec2 delete-snapshot --snapshot-id snap-xxxxxxxxx --region ap-northeast-2
 ```
 
-## 📝 라이선스
+## 📝 License
 
-이 프로젝트는 프로젝트 루트의 라이선스를 따릅니다.
+This project follows the license of the project root.

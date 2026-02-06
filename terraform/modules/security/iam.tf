@@ -405,6 +405,30 @@ resource "aws_iam_role_policy_attachment" "batch_instance_ecs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
 
+# Batch Instance S3 Access Policy (for Packer AMI builds to download ML models)
+resource "aws_iam_role_policy" "batch_instance_s3_models" {
+  name = "capstone-${var.environment}-batch-instance-s3-models"
+  role = aws_iam_role.batch_instance_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3ModelsReadAccess"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = var.s3_analysis_models_arn != "" ? [
+          var.s3_analysis_models_arn,
+          "${var.s3_analysis_models_arn}/*"
+        ] : ["*"]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "batch_instance" {
   name = "capstone-${var.environment}-batch-instance-profile"
   role = aws_iam_role.batch_instance_role.name
@@ -441,6 +465,77 @@ resource "aws_iam_role_policy_attachment" "ecs_instance_role" {
 resource "aws_iam_instance_profile" "ecs_instance" {
   name = "capstone-${var.environment}-ecs-instance-profile"
   role = aws_iam_role.ecs_instance_role.name
+}
+
+# ========================================
+# Packer 전용 IAM Role (AMI 빌드 시 S3 모델 다운로드)
+# ========================================
+
+# 1. IAM Role 생성 (EC2가 이 역할을 쓸 수 있게 허용)
+resource "aws_iam_role" "packer_role" {
+  name = "capstone-${var.environment}-packer-build-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "capstone-packer-build-role"
+    Environment = var.environment
+    Project     = "Capstone"
+    Purpose     = "Packer AMI builds with S3 model access"
+  }
+}
+
+# 2. IAM Policy: S3 모델 버킷 읽기 권한
+resource "aws_iam_policy" "packer_s3_read" {
+  name        = "capstone-${var.environment}-packer-s3-model-read-policy"
+  description = "Allow Packer to read ML models from S3 during AMI builds"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowListAndReadModelBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",   # 파일 다운로드 (필수)
+          "s3:ListBucket"   # aws s3 sync 명령어용 (필수)
+        ]
+        Resource = var.s3_analysis_models_arn != "" ? [
+          var.s3_analysis_models_arn,           # 버킷 자체 (ListBucket용)
+          "${var.s3_analysis_models_arn}/*"    # 버킷 내 파일들 (GetObject용)
+        ] : ["*"]
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "capstone-packer-s3-read"
+    Environment = var.environment
+    Project     = "Capstone"
+  }
+}
+
+# 3. Role과 Policy 연결
+resource "aws_iam_role_policy_attachment" "packer_attach" {
+  role       = aws_iam_role.packer_role.name
+  policy_arn = aws_iam_policy.packer_s3_read.arn
+}
+
+# 4. ⭐ 인스턴스 프로파일 생성 (Packer가 실제로 쓰는 것)
+resource "aws_iam_instance_profile" "packer_profile" {
+  name = "capstone-${var.environment}-packer-instance-profile"
+  role = aws_iam_role.packer_role.name
 }
 
 # ========================================

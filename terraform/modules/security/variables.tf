@@ -28,6 +28,11 @@ variable "s3_highlights_arn" {
   type        = string
 }
 
+variable "s3_analysis_models_arn" {
+  description = "Analysis models S3 bucket ARN (from storage module, for Packer AMI builds)"
+  type        = string
+}
+
 variable "db_password_secret_arn" {
   description = "DB password secret ARN (from storage module)"
   type        = string

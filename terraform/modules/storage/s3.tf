@@ -282,3 +282,48 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
 
 # Terraform state bucket output는 outputs.tf에 정의됨
 
+# ============================================
+# 4. ML 모델 저장 버킷 (Analysis Models)
+# ============================================
+# Packer AMI 빌드 시 모델 다운로드에 사용
+
+resource "aws_s3_bucket" "analysis_models" {
+  bucket = "capstone-${var.environment}-analysis-model"
+
+  tags = {
+    Name        = "capstone-analysis-models"
+    Environment = var.environment
+    Project     = "Capstone"
+    Purpose     = "ML model storage for AMI builds"
+  }
+}
+
+# Analysis Models - Versioning
+resource "aws_s3_bucket_versioning" "analysis_models" {
+  bucket = aws_s3_bucket.analysis_models.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Analysis Models - Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "analysis_models" {
+  bucket = aws_s3_bucket.analysis_models.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Analysis Models - Public Access Block (완전 차단)
+resource "aws_s3_bucket_public_access_block" "analysis_models" {
+  bucket = aws_s3_bucket.analysis_models.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+

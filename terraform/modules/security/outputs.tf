@@ -72,6 +72,20 @@ output "ecs_instance_role_name" {
 }
 
 # ==========================================
+# Packer 관련 IAM (Packer 템플릿에서 사용)
+# ==========================================
+
+output "packer_instance_profile_name" {
+  description = "Packer instance profile name (for Packer aws-gpu-ami.pkr.hcl)"
+  value       = aws_iam_instance_profile.packer_profile.name
+}
+
+output "packer_instance_profile_arn" {
+  description = "Packer instance profile ARN"
+  value       = aws_iam_instance_profile.packer_profile.arn
+}
+
+# ==========================================
 # Lambda 관련 IAM (pipeline 모듈에서 사용)
 # ==========================================
 

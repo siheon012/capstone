@@ -63,8 +63,8 @@ variable "docker_image_tag" {
 
 variable "models_s3_bucket" {
   type        = string
-  default     = ""
-  description = "Optional S3 bucket containing ML models to pre-download"
+  default     = "capstone-dev-analysis-model"
+  description = "S3 bucket containing ML models to pre-download"
 }
 
 variable "ssh_keypair_name" {
@@ -87,6 +87,12 @@ variable "environment" {
   type        = string
   default     = "dev"
   description = "Environment tag (dev, staging, prod)"
+}
+
+variable "iam_instance_profile" {
+  type        = string
+  default     = "capstone-dev-packer-instance-profile"
+  description = "IAM instance profile for S3 model access during AMI build"
 }
 
 # ========================================
@@ -139,8 +145,8 @@ source "amazon-ebs" "ecs_gpu" {
   security_group_ids     = [var.security_group_id]
   associate_public_ip_address = true
   
-  # IAM instance profile for ECR access
-  iam_instance_profile = "capstone-dev-batch-instance-profile"
+  # IAM instance profile for S3 model access
+  iam_instance_profile = var.iam_instance_profile
   
   # SSH configuration - Let Packer create temporary keypair automatically
   ssh_username = "ec2-user"

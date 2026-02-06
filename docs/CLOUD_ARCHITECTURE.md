@@ -262,12 +262,12 @@ sequenceDiagram
 
 ### **Storage Layer** (25 Resources)
 
-| 리소스          | 수량 | 크기               | 용도                                                |
-| --------------- | ---- | ------------------ | --------------------------------------------------- |
-| S3 Buckets      | 4    | -                  | raw-videos, thumbnails, highlights, terraform-state |
-| Bucket Policies | 4    | -                  | IAM 기반 접근 제어                                  |
-| RDS PostgreSQL  | 1    | db.t3.micro (20GB) | 메인 데이터베이스 + pgvector                        |
-| Secrets Manager | 2    | -                  | DB Password, Django Secret                          |
+| 리소스          | 수량 | 크기               | 용도                                                                |
+| --------------- | ---- | ------------------ | ------------------------------------------------------------------- |
+| S3 Buckets      | 5    | -                  | raw-videos, thumbnails, highlights, terraform-state, analysis-model |
+| Bucket Policies | 5    | -                  | IAM 기반 접근 제어                                                  |
+| RDS PostgreSQL  | 1    | db.t3.micro (20GB) | 메인 데이터베이스 + pgvector                                        |
+| Secrets Manager | 2    | -                  | DB Password, Django Secret                                          |
 
 ### **Pipeline Layer** (40 Resources)
 

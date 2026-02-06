@@ -83,6 +83,16 @@ output "s3_terraform_state_bucket" {
   value       = aws_s3_bucket.terraform_state.id
 }
 
+output "s3_analysis_models_bucket" {
+  description = "Analysis models S3 bucket name (Packer AMI builds)"
+  value       = aws_s3_bucket.analysis_models.id
+}
+
+output "s3_analysis_models_arn" {
+  description = "Analysis models S3 bucket ARN (IAM policy에서 사용)"
+  value       = aws_s3_bucket.analysis_models.arn
+}
+
 # ==========================================
 # Secrets Manager
 # ==========================================

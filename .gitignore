@@ -110,6 +110,10 @@ terraform/modules/pipeline/lambda_deployment.zip
 # localstack data
 localstack/
 
+# nginx SSL certificates (auto-generated)
+nginx/ssl/*
+!nginx/ssl/.gitkeep
+
 # ISSUE 정리 파일
 ISSUE.md
 

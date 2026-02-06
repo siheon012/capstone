@@ -1,0 +1,2 @@
+# SSL certificates will be generated here
+# This folder structure is kept for Docker volume mounting

@@ -79,7 +79,7 @@ jobs:
       # 6. 보안 결과를 GitHub Security에 업로드
       - name: Upload tfsec SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: results.sarif
           category: tfsec

@@ -1,4 +1,4 @@
-package test
+Ôªøpackage test
 
 import (
 	"testing"
@@ -60,7 +60,6 @@ func TestIAMRoleCreation(t *testing.T) {
 	defer terraform.Destroy(t, terraformOptions)
 	terraform.InitAndApply(t, terraformOptions)
 
-	// IAM ??ï† ARN ?ïÏù∏
 	ecsTaskRoleArn := terraform.Output(t, terraformOptions, "ecs_task_role_arn")
 	assert.NotEmpty(t, ecsTaskRoleArn, "ECS task role ARN should not be empty")
 	assert.Contains(t, ecsTaskRoleArn, "arn:aws:iam::", "Should be a valid IAM role ARN")

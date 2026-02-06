@@ -1,4 +1,4 @@
-package test
+ï»¿package test
 
 import (
 	"testing"
@@ -43,8 +43,6 @@ func TestModuleOutputConsistency(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		// ?ŒìŠ¤??ì¼€?´ìŠ¤ë§ˆë‹¤ ë³‘ë ¬ ?¤í–‰
-		tc := tc // ?´ë¡œ?€ ë³€??ìº¡ì²˜
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -55,14 +53,11 @@ func TestModuleOutputConsistency(t *testing.T) {
 				NoColor:       true,
 			}
 
-			// Planë§??¤í–‰?˜ì—¬ ì¶œë ¥ê°??•ì‹ ê²€ì¦?
 			terraform.Init(t, terraformOptions)
 			planExitCode := terraform.PlanExitCode(t, terraformOptions)
 			assert.Equal(t, 0, planExitCode, "%s plan should succeed", tc.name)
 
-			// ì¶œë ¥ê°’ì´ ?•ì˜?˜ì–´ ?ˆëŠ”ì§€ ?•ì¸ (Plan ?¨ê³„?ì„œ ê°€??
 			for _, output := range tc.requiredOutputs {
-				// Terraform showë¡?ì¶œë ¥ê°??•ì˜ ?•ì¸
 				planJSON := terraform.Show(t, terraformOptions)
 				assert.Contains(t, planJSON, output, "%s should have output: %s", tc.name, output)
 			}
@@ -93,7 +88,6 @@ func TestTerraformFormatting(t *testing.T) {
 				TerraformDir: tc.path,
 			}
 
-			// terraform fmt -check ?¤í–‰
 			stdout, stderr, err := terraform.RunTerraformCommandE(t, terraformOptions, "fmt", "-check", "-recursive")
 			
 			if err != nil {

@@ -1,4 +1,4 @@
-package test
+ï»¿package test
 
 import (
 	"fmt"
@@ -10,20 +10,21 @@ import (
 )
 
 // TestCompleteInfrastructure tests the complete infrastructure stack
-// ? ï¸ WARNING: This test creates real AWS resources and may incur costs
+// WARNING: This test creates real AWS resources and may incur costs
 // Only run this in a dedicated test AWS account
 func TestCompleteInfrastructure(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping expensive integration test in short mode")
 	}
 
-	// ?˜ê²½ ë³€?˜ë¡œ ëª…ì‹œ?ìœ¼ë¡??œì„±?”í•´?¼ë§Œ ?¤í–‰
+	// Environment variable must be explicitly set to run
+	// export RUN_FULL_INTEGRATION_TEST=true
 	// export RUN_FULL_INTEGRATION_TEST=true
 	// if os.Getenv("RUN_FULL_INTEGRATION_TEST") != "true" {
 	// 	t.Skip("Skipping full integration test. Set RUN_FULL_INTEGRATION_TEST=true to run")
 	// }
 
-	t.Log("? ï¸ This test will create actual AWS infrastructure")
+	t.Log("? This test will create actual AWS infrastructure")
 	t.Log("Expected duration: 10-15 minutes")
 	t.Log("Expected cost: ~$0.50-1.00")
 
@@ -38,18 +39,15 @@ func TestCompleteInfrastructure(t *testing.T) {
 		BackendConfig: map[string]interface{}{},
 		NoColor:       true,
 
-		// ?€?„ì•„???¤ì • (?¸í”„???ì„±???œê°„??ê±¸ë¦¼)
 		MaxRetries:         3,
 		TimeBetweenRetries: 5 * time.Second,
 	})
 
-	// ?ŒìŠ¤??ì¢…ë£Œ ??ëª¨ë“  ë¦¬ì†Œ???•ë¦¬
 	defer terraform.Destroy(t, terraformOptions)
 
 	// Terraform init & apply
 	terraform.InitAndApply(t, terraformOptions)
 
-	// ì£¼ìš” ì¶œë ¥ê°?ê²€ì¦?
 	t.Run("Verify Network Outputs", func(t *testing.T) {
 		vpcID := terraform.Output(t, terraformOptions, "vpc_id")
 		assert.NotEmpty(t, vpcID, "VPC ID should not be empty")
@@ -69,7 +67,6 @@ func TestCompleteInfrastructure(t *testing.T) {
 		assert.Contains(t, ecsClusterArn, "arn:aws:ecs:", "Should be a valid ECS cluster ARN")
 	})
 
-	t.Log("??All infrastructure components validated successfully")
 }
 
 // TestInfrastructurePlanNoChanges tests that running plan twice produces no changes
@@ -87,10 +84,8 @@ func TestInfrastructurePlanNoChanges(t *testing.T) {
 
 	defer terraform.Destroy(t, terraformOptions)
 
-	// ì²?ë²ˆì§¸ apply
 	terraform.InitAndApply(t, terraformOptions)
 
-	// ??ë²ˆì§¸ plan - ë³€ê²½ì‚¬??´ ?†ì–´????(idempotent)
 	planExitCode := terraform.PlanExitCode(t, terraformOptions)
 
 	// Exit code 0 = no changes (idempotent)

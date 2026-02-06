@@ -197,13 +197,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install tfsec
+        run: |
+          wget -q https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 -O /usr/local/bin/tfsec
+          chmod +x /usr/local/bin/tfsec
+          tfsec --version
+
       - name: Run tfsec (SARIF for GitHub Security)
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: terraform
-          format: sarif
-          soft_fail: true
-          github_token: ${{ github.token }}
+        continue-on-error: true
+        run: |
+          cd terraform
+          tfsec . --format sarif --out ../results.sarif --soft-fail
+
+      - name: Run tfsec (JSON for artifact)
+        continue-on-error: true
+        run: |
+          cd terraform
+          tfsec . --format json --out ../results.json --soft-fail
+
+      - name: Run tfsec (Console output)
+        continue-on-error: true
+        run: |
+          cd terraform
+          tfsec . --soft-fail
 
       - name: Upload tfsec SARIF to GitHub Security
         if: always()
@@ -211,14 +227,6 @@ jobs:
         with:
           sarif_file: results.sarif
           category: tfsec
-
-      - name: Run tfsec (JSON for artifact)
-        if: always()
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: terraform
-          format: json
-          soft_fail: true
 
       - name: Upload tfsec Results
         if: always()

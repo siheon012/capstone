@@ -66,11 +66,11 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Download Go modules
-        working-directory: test
+        working-directory: test/infra
         run: go mod download
 
       - name: Run Validation Tests
-        working-directory: test
+        working-directory: test/infra
         run: |
           echo "🔍 Running fast validation tests (no AWS resources created)..."
 
@@ -138,23 +138,23 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Download Go modules
-        working-directory: test
+        working-directory: test/infra
         run: go mod download
 
       - name: Run Network Module Tests
-        working-directory: test
+        working-directory: test/infra
         run: |
           echo "🌐 Testing Network Module (creates VPC, subnets)..."
           go test -v -run TestNetworkModule -timeout 30m
 
       - name: Run Storage Module Tests
-        working-directory: test
+        working-directory: test/infra
         run: |
           echo "🗄️ Testing Storage Module (creates S3 buckets)..."
           go test -v -run TestStorageModule -timeout 30m
 
       - name: Run Security Module Tests
-        working-directory: test
+        working-directory: test/infra
         run: |
           echo "🔐 Testing Security Module (creates IAM roles)..."
           go test -v -run TestIAMRoleCreation -timeout 30m
@@ -221,13 +221,13 @@ jobs:
           echo "================================================"
 
       - name: Run Full Integration Tests
-        working-directory: test
+        working-directory: test/infra
         run: |
           echo "🚀 Running full integration test..."
           go test -v -run TestCompleteInfrastructure -timeout 60m
 
       - name: Test Idempotency
-        working-directory: test
+        working-directory: test/infra
         run: |
           echo "🔄 Testing infrastructure idempotency..."
           go test -v -run TestInfrastructurePlanNoChanges -timeout 60m

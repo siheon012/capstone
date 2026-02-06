@@ -1,15 +1,15 @@
 name: 'Terraform CI'
 
-# ⛔ DISABLED - terraform destroy 준비 중
-on: []
-# on:
-#   pull_request:
-#     branches: [develop, main]
+#on: []
+on:
+  pull_request:
+    branches: [develop, main]
 
 permissions:
   contents: read
   pull-requests: write # PR에 댓글을 달아야 해서 권한 필요함
   issues: write # GitHub Issue 생성을 위한 권한
+  security-events: write # Security scan results
 
 jobs:
   terraform:
@@ -39,19 +39,64 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-2
 
-      # 4. 코드 스타일 검사 (들여쓰기 엉망이면 여기서 탈락)
+      # 4. 보안 스캔 먼저 실행 - Checkov
+      - name: Security Scan - Checkov
+        id: checkov
+        continue-on-error: true
+        run: |
+          echo "🛡️ Running Checkov security scan..."
+          pip install checkov
+
+          checkov -d . \
+            --framework terraform \
+            --output cli \
+            --output json \
+            --output-file-path /tmp \
+            --download-external-modules true \
+            --compact || true
+
+          if [ -f /tmp/results_json.json ]; then
+            FAILED=$(jq -r '.summary.failed // 0' /tmp/results_json.json)
+            echo "checkov_failed=$FAILED" >> $GITHUB_OUTPUT
+            
+            if [ "$FAILED" -gt 0 ]; then
+              echo "⚠️ Checkov found $FAILED security issues"
+            else
+              echo "✅ Checkov security scan passed"
+            fi
+          fi
+
+      # 5. 보안 스캔 - tfsec
+      - name: Security Scan - tfsec
+        id: tfsec
+        continue-on-error: true
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform
+          format: json,sarif
+          soft_fail: true
+
+      # 6. 보안 결과를 GitHub Security에 업로드
+      - name: Upload tfsec SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: tfsec
+
+      # 7. 코드 스타일 검사 (들여쓰기 엉망이면 여기서 탈락)
       - name: Terraform Format
         id: fmt
         run: terraform fmt -check
         continue-on-error: true
 
-      # 5. 초기화 (S3 Backend 연결)
+      # 8. 초기화 (S3 Backend 연결)
       - name: Terraform Init
         id: init
         run: terraform init
         continue-on-error: true
 
-      # 6. 변경 사항 예측 (Plan)
+      # 9. 변경 사항 예측 (Plan)
       - name: Terraform Plan
         id: plan
         env:

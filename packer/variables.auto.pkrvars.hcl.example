@@ -1,0 +1,38 @@
+# ========================================
+# Packer Variables Configuration
+# ========================================
+# Copy this file to variables.auto.pkrvars.hcl and customize values
+# ========================================
+
+# AWS Region
+aws_region = "ap-northeast-2"
+
+# Instance type for building AMI (must be GPU instance)
+instance_type = "g5.xlarge"
+
+# AMI naming
+ami_name_prefix = "capstone-ecs-gpu-custom"
+environment     = "dev"
+
+# ECR Configuration
+# Replace with your actual ECR repository URL
+ecr_repository_url = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/capstone-dev-batch-processor"
+docker_image_tag   = "latest"
+
+# Optional: S3 bucket with pre-trained models
+# Leave empty to skip S3 download or use direct download in script
+models_s3_bucket = ""
+# models_s3_bucket = "your-bucket-name"
+
+# Network Configuration
+# Replace with your actual subnet ID (must have internet access via IGW or NAT)
+subnet_id = "subnet-xxxxxxxxxxxxxxxxx"
+
+# Replace with your actual security group ID
+# Should allow outbound HTTPS (443) for ECR/S3, and optionally SSH (22) for debugging
+security_group_id = "sg-xxxxxxxxxxxxxxxxx"
+
+# Optional: SSH keypair name for debugging
+# Leave empty to use SSH agent authentication
+ssh_keypair_name = ""
+# ssh_keypair_name = "your-keypair-name"

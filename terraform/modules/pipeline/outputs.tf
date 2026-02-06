@@ -83,3 +83,27 @@ output "batch_processor_ecr_url" {
   description = "Batch processor ECR repository URL"
   value       = aws_ecr_repository.batch_processor.repository_url
 }
+
+output "ai_batch_ecr_url" {
+  description = "ECR Repository URL for AI Batch Processor"
+  value       = data.aws_ecr_repository.ai_batch.repository_url
+}
+
+# ==========================================
+# Custom GPU AMI (Packer로 빌드)
+# ==========================================
+
+output "custom_gpu_ami_id" {
+  description = "Custom GPU AMI ID (built by Packer)"
+  value       = data.aws_ami.custom_gpu.id
+}
+
+output "custom_gpu_ami_name" {
+  description = "Custom GPU AMI Name"
+  value       = data.aws_ami.custom_gpu.name
+}
+
+output "custom_gpu_ami_creation_date" {
+  description = "Custom GPU AMI Creation Date"
+  value       = data.aws_ami.custom_gpu.creation_date
+}

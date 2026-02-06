@@ -1,321 +1,391 @@
-# 무인점포 AI 영상 분석 시스템 - 성능 테스트 보고서
+# 테스트 가이드
 
-## 📊 부하 테스트 결과 요약
+이 디렉토리는 프로젝트의 **성능 테스트**와 **인프라 테스트**를 포함합니다.
 
-본 시스템은 **AWS ECS Fargate 기반 컨테이너 인프라**에서 운영되며, k6를 사용한 부하 테스트 결과 **프로덕션 환경에서 안정적으로 운영 가능한 성능**을 입증했습니다.
-
-### 테스트 환경
-
-- **인프라**: AWS ECS Fargate (Public Subnet)
-- **Frontend**: Next.js (0.5 vCPU, 1GB RAM)
-- **Backend**: Django (1 vCPU, 2GB RAM)
-- **로드밸런서**: Application Load Balancer
-- **테스트 도구**: k6 (Grafana)
-- **테스트 기간**: 3분 30초
-- **최대 동시 사용자**: 50 VUs (Virtual Users)
-
----
-
-## 🎯 핵심 성과
-
-| 지표              | 목표       | 실제 결과              | 달성 여부 |
-| ----------------- | ---------- | ---------------------- | --------- |
-| **성공률**        | > 99%      | **99.93%** (4698/4701) | ✅ 달성   |
-| **HTTP 실패율**   | < 1%       | **0.03%** (3/9401)     | ✅ 달성   |
-| **p95 응답시간**  | < 500ms    | **472.58ms**           | ✅ 달성   |
-| **평균 응답시간** | < 300ms    | **171.4ms**            | ✅ 달성   |
-| **처리량**        | > 20 req/s | **44.7 req/s**         | ✅ 달성   |
-
----
-
-## 📈 부하 테스트 상세 결과
-
-![부하 테스트 결과](../docs/assets/page_screenshots/traffic%20test.png)
-
-### 1. HTTP 요청 성능
+## 📁 디렉토리 구조
 
 ```
-✓ http_req_duration (평균 응답 시간)
-  - 평균:    171.4ms
-  - 중앙값:  124.46ms
-  - 최솟값:  666.5µs
-  - 최댓값:  1.04s
-  - p(90):   384.84ms
-  - p(95):   472.58ms ✅ 목표 < 500ms 달성
-
-✓ http_req_failed (HTTP 실패율)
-  - 실패율: 0.03% (3/9401 요청)
-  - 성공: 9398 요청
-  - 실패: 3 요청 (일시적 네트워크 오류)
+test/
+├── README.md                 # 이 문서
+├── performance/              # 웹 성능 및 부하 테스트 (k6)
+│   ├── load-test.js          # k6 부하 테스트 스크립트
+│   └── README.md             # 성능 테스트 상세 결과
+└── infra/                    # 인프라 테스트 (Terratest)
+    ├── go.mod                # Go 모듈 정의
+    ├── go.sum                # 의존성 체크섬
+    ├── network_test.go       # Network 모듈 테스트
+    ├── storage_test.go       # Storage 모듈 테스트
+    ├── security_test.go      # Security 모듈 테스트
+    ├── integration_test.go   # 통합 테스트
+    ├── module_test.go        # 공통 모듈 테스트
+    ├── run-tests.sh          # 테스트 실행 스크립트
+    └── TERRATEST_README.md   # Terratest 상세 가이드
 ```
 
-**분석**:
+## 🎯 테스트 유형
 
-- 95%의 요청이 **500ms 이내**에 처리되어 우수한 사용자 경험 제공
-- 평균 응답시간 **171.4ms**는 웹 애플리케이션 권장 기준(< 300ms)의 **절반 수준**
-- 최대 응답시간 1.04s도 타임아웃(30s) 대비 매우 안정적
+### 1. 성능 테스트 (Performance Testing)
 
----
+**목적**: 웹 애플리케이션의 부하 처리 능력 검증
 
-### 2. 처리량 및 확장성
+**도구**: k6 (Grafana)
 
-```
-✓ 총 처리 요청: 9,401개
-✓ 초당 처리량:  44.7 req/s
-✓ 총 반복:      4,701회
-✓ 반복/초:      22.3 iterations/s
-```
+**위치**: `test/performance/`
 
-**확장성 테스트**:
+**주요 검증 항목**:
 
-- 1명 → 50명 동시 사용자로 점진적 확장 (5단계 램프업)
-- 최대 부하(50 VUs)에서도 **안정적인 성능 유지**
-- ECS Auto Scaling 없이도 충분한 여유 성능 확보
+- ✅ 응답 시간 (평균, p95, p99)
+- ✅ 초당 처리량 (req/s)
+- ✅ 성공률 및 오류율
+- ✅ 동시 사용자 확장성
 
----
-
-### 3. 안정성 및 신뢰성
-
-```
-✓ 체크 성공률: 99.93% (4698/4701)
-✓ 체크 실패:   0.06% (3/4701)
-  - status is 200: 99% 성공 (4698/4701)
-```
-
-**안정성 평가**:
-
-- **3분 30초 동안 지속적인 부하**에도 서비스 중단 없음
-- 실패한 3건은 일시적 네트워크 지연으로 추정 (전체의 0.06%)
-- **99.9% 가용성** 목표 달성
-
----
-
-### 4. 네트워크 트래픽
-
-```
-✓ 수신 데이터: 3.2 MB (16 kB/s)
-✓ 송신 데이터: 509 kB (2.4 kB/s)
-```
-
-**네트워크 효율성**:
-
-- 평균 응답 크기: 340 bytes (3.2MB / 9401 요청)
-- Next.js SSR + API 조합으로 효율적인 데이터 전송
-- CloudFront CDN 미사용 상태에서도 우수한 성능
-
----
-
-## 🏗️ 인프라 구성
-
-### 아키텍처 최적화 (2026년 1월)
-
-본 테스트는 **비용 최적화 인프라**에서 수행되었습니다:
-
-#### ✅ Public Subnet 아키텍처
-
-```
-Internet Gateway
-    ↓ (무료)
-ALB (Public Subnet)
-    ↓
-ECS Tasks (Public Subnet, assign_public_ip=true)
-    ↓
-RDS (Private Subnet)
-```
-
-**비용 절감 효과**:
-
-- NAT Gateway 제거: **월 $44.36 절감**
-- VPC Interface Endpoints 제거: **월 $29.34 절감**
-- **총 월 $73.70 절감** (93% 네트워크 비용 감소)
-
-**보안**:
-
-- Security Group으로 인바운드 차단 (ALB에서만 허용)
-- RDS는 Private Subnet 유지
-- 외부 직접 접근 불가능
-
----
-
-## 🔍 테스트 시나리오
-
-### 부하 프로파일 (5단계)
-
-```javascript
-stages: [
-  { duration: '30s', target: 10 }, // 워밍업: 10명
-  { duration: '1m', target: 30 }, // 증가: 30명
-  { duration: '1m', target: 50 }, // 최대: 50명
-  { duration: '30s', target: 20 }, // 감소: 20명
-  { duration: '30s', target: 0 }, // 종료: 0명
-];
-```
-
-### 테스트 엔드포인트
-
-1. **Frontend**: `https://unmanned-store.link/`
-   - Next.js SSR 페이지 렌더링
-   - 정적 자산 로드
-
-2. **Backend API**: `https://api.unmanned-store.link/api/health/`
-   - Health Check 엔드포인트
-   - 데이터베이스 연결 확인
-
----
-
-## 📊 성능 벤치마크 비교
-
-### 실제 운영 환경 vs 테스트 결과
-
-| 시나리오        | 동시 사용자 | 응답시간 (p95) | 성공률     |
-| --------------- | ----------- | -------------- | ---------- |
-| **일반 사용**   | 1-5명       | < 200ms        | 99.9%      |
-| **피크 시간**   | 10-20명     | < 350ms        | 99.8%      |
-| **부하 테스트** | 50명        | **472.58ms**   | **99.93%** |
-| **예상 한계**   | ~100명      | < 1s           | > 99%      |
-
-**결론**: 현재 리소스(0.5 vCPU Frontend + 1 vCPU Backend)에 **ECS Auto Scaling 활성화**(CPU 70% 기준, max 4 tasks)로 **100+ 동시 사용자 안정 처리 가능**
-
----
-
-## 🎓 개선 제안
-
-### 현재 적용된 최적화 ✅
-
-1. **ECS Auto Scaling 활성화** ✅ **적용됨**
-   - CPU 70% 이상 시 자동 확장
-   - min: 1 task, max: 4 tasks
-   - Frontend & Backend 모두 적용
-   - 효과: 100+ 동시 사용자 대응 가능
-
-### 단기 개선 (필요 시)
-
-1. **CloudFront CDN 도입**
-   - 정적 자산 캐싱 (이미지, CSS, JS)
-   - 응답시간 30-50% 추가 개선 예상
-   - 글로벌 엣지 로케이션 활용
-
-2. **Redis 캐싱 레이어**
-   - 자주 조회되는 API 응답 캐싱
-   - DB 부하 감소 및 응답속도 향상
-
-### 장기 개선
-
-1. **Database Connection Pooling**
-   - PgBouncer 도입
-   - RDS 연결 효율화
-
-2. **API Rate Limiting**
-   - 악의적 트래픽 방어
-   - 공정한 리소스 분배
-
----
-
-## 🚀 테스트 재현 방법
-
-### 사전 준비
+**실행 방법**:
 
 ```bash
-# k6 설치 (Windows)
+# k6 설치
+choco install k6  # Windows
+brew install k6   # Mac
+
+# 부하 테스트 실행
+cd test/performance
+k6 run load-test.js
+
+# 더 높은 부하로 테스트
+k6 run --vus 100 --duration 5m load-test.js
+```
+
+**테스트 결과**: [performance/README.md](performance/README.md) 참조
+
+---
+
+### 2. 인프라 테스트 (Infrastructure Testing)
+
+**목적**: Terraform 인프라 코드의 안정성 및 정확성 검증
+
+**도구**: Terratest (Go)
+
+**위치**: `test/infra/`
+
+**주요 검증 항목**:
+
+- ✅ Terraform 문법 및 포맷 검증
+- ✅ 모듈별 Plan 생성 확인
+- ✅ 실제 리소스 생성 및 설정 검증
+- ✅ 전체 스택 통합 테스트
+- ✅ Idempotency (멱등성) 검증
+
+**테스트 계층**:
+
+#### Tier 1: Validation (무료, 빠름)
+
+```bash
+cd test/infra
+go test -v -short ./...
+```
+
+- 실행 시간: 1-2분
+- 비용: $0
+- 리소스 생성: ❌
+
+#### Tier 2: Unit Tests (저비용)
+
+```bash
+cd test/infra
+go test -v -run TestNetworkModule -timeout 30m
+go test -v -run TestStorageModule -timeout 30m
+```
+
+- 실행 시간: 10-20분
+- 비용: ~$0.50
+- 리소스 생성: ✅ (자동 정리)
+
+#### Tier 3: Integration (고비용)
+
+```bash
+cd test/infra
+export RUN_FULL_INTEGRATION_TEST=true
+go test -v -run TestCompleteInfrastructure -timeout 60m
+```
+
+- 실행 시간: 20-30분
+- 비용: ~$1-2
+- 리소스 생성: ✅ (전체 스택)
+
+**상세 가이드**: [infra/TERRATEST_README.md](infra/TERRATEST_README.md) 참조
+
+---
+
+## 🚀 빠른 시작
+
+### Performance Testing
+
+```bash
+# 1. k6 설치
 choco install k6
 
-# 또는 직접 다운로드
-# https://k6.io/docs/getting-started/installation/
+# 2. 테스트 실행
+cd test/performance
+k6 run load-test.js
+
+# 3. 결과 확인
+# - 콘솔에 실시간 메트릭 표시
+# - README.md에서 벤치마크 확인
 ```
 
-### 테스트 실행
+### Infrastructure Testing
 
 ```bash
-# 기본 부하 테스트
-k6 run test/performance/load-test.js
+# 1. Go 설치 (1.21 이상)
+go version
 
-# 더 높은 부하 테스트 (100 VUs)
-k6 run --vus 100 --duration 5m test/performance/load-test.js
+# 2. 의존성 다운로드
+cd test/infra
+go mod download
 
-# 결과를 파일로 저장
-k6 run --out json=results.json test/performance/load-test.js
+# 3. 빠른 검증 (무료)
+go test -v -short ./...
+
+# 4. AWS 자격증명 설정
+export AWS_ACCESS_KEY_ID=your-key
+export AWS_SECRET_ACCESS_KEY=your-secret
+
+# 5. 특정 모듈 테스트 (선택)
+go test -v -run TestNetworkModule -timeout 30m
 ```
 
-### 테스트 코드
+---
+
+## 📊 테스트 현황
+
+### Performance Testing
+
+| 메트릭        | 목표       | 실제 결과  | 상태 |
+| ------------- | ---------- | ---------- | ---- |
+| 성공률        | > 99%      | 99.93%     | ✅   |
+| p95 응답시간  | < 500ms    | 472.58ms   | ✅   |
+| 평균 응답시간 | < 300ms    | 171.4ms    | ✅   |
+| 처리량        | > 20 req/s | 44.7 req/s | ✅   |
+
+**최종 평가**: ✅ 프로덕션 준비 완료
+
+상세 결과: [performance/README.md](performance/README.md)
+
+---
+
+### Infrastructure Testing
+
+| 모듈       | Validation | Unit Test | Integration |
+| ---------- | ---------- | --------- | ----------- |
+| Network    | ✅         | ✅        | ✅          |
+| Storage    | ✅         | ✅        | ✅          |
+| Security   | ✅         | ✅        | ✅          |
+| Full Stack | ✅         | -         | ✅          |
+
+**최종 평가**: ✅ 모든 모듈 테스트 통과
+
+상세 가이드: [infra/TERRATEST_README.md](infra/TERRATEST_README.md)
+
+---
+
+## 🔄 CI/CD 통합
+
+### GitHub Actions 워크플로우
+
+#### 1. Performance Testing
+
+- **트리거**: 수동 실행 (workflow_dispatch)
+- **빈도**: 주요 릴리스 전
+- **위치**: `.github/workflows/performance-test.yml` (선택 사항)
+
+#### 2. Infrastructure Testing
+
+- **트리거**:
+  - PR 생성 시 (Validation만)
+  - 매주 월요일 (Unit Tests)
+  - 수동 실행 (모든 테스트)
+- **위치**: `.github/workflows/terratest.yml`
+
+```yaml
+# .github/workflows/terratest.yml
+on:
+  pull_request:
+    paths: ['terraform/**'] # Validation 자동 실행
+  schedule:
+    - cron: '0 2 * * 1' # 주간 Unit Tests
+  workflow_dispatch: # 수동 실행
+```
+
+---
+
+## 💰 테스트 비용 예상
+
+### Performance Testing
+
+- **비용**: $0 (외부 트래픽만 발생)
+- **빈도**: 필요시
+
+### Infrastructure Testing
+
+| 테스트 유형 | 실행 빈도       | 단위 비용 | 월 비용    |
+| ----------- | --------------- | --------- | ---------- |
+| Validation  | PR마다 (무제한) | $0        | $0         |
+| Unit Tests  | 주 1회          | ~$0.50    | ~$2/월     |
+| Integration | 월 1회          | ~$2       | ~$2/월     |
+| **총합**    | -               | -         | **~$4/월** |
+
+---
+
+## 📚 관련 문서
+
+### Performance Testing
+
+- [성능 테스트 결과 보고서](performance/README.md)
+- [비용 최적화 보고서](../docs/04_cost_optimization/COST_REDUCTION_JAN_2026.md)
+
+### Infrastructure Testing
+
+- [Terratest 상세 가이드](infra/TERRATEST_README.md)
+- [Policy as Code 문서](../docs/POLICY_AS_CODE.md)
+- [Packer AMI 빌드 가이드](../packer/README.md)
+
+### 전체 아키텍처
+
+- [인프라 구성도](../INFRA.md)
+- [클라우드 아키텍처](../docs/CLOUD_ARCHITECTURE.md)
+
+---
+
+## 🐛 트러블슈팅
+
+### Performance Testing
+
+**문제**: k6 설치 안됨
+
+```bash
+# Windows
+choco install k6
+
+# Mac
+brew install k6
+
+# Linux
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+sudo apt-get update
+sudo apt-get install k6
+```
+
+**문제**: 테스트 실패율 높음
+
+- ALB 헬스체크 확인
+- ECS 태스크 상태 확인
+- CloudWatch 로그 확인
+
+### Infrastructure Testing
+
+**문제**: "aws: command not found"
+
+```bash
+# AWS CLI 설치 확인
+aws --version
+
+# 자격증명 설정
+aws configure
+```
+
+**문제**: "timeout exceeded"
+
+```bash
+# 타임아웃 증가
+go test -v -run TestNetworkModule -timeout 60m
+```
+
+**문제**: 리소스가 정리되지 않음
+
+```bash
+# 수동 정리
+cd terraform/modules/network
+terraform init
+terraform destroy
+```
+
+---
+
+## 🎓 베스트 프랙티스
+
+### Performance Testing
+
+1. ✅ 프로덕션과 유사한 환경에서 테스트
+2. ✅ 점진적 부하 증가 (램프업)
+3. ✅ 여러 엔드포인트 조합 테스트
+4. ✅ 주요 지표 기록 및 추적
+
+### Infrastructure Testing
+
+1. ✅ 테스트 격리 (고유 ID 사용)
+2. ✅ 자동 리소스 정리 (`defer terraform.Destroy`)
+3. ✅ 적절한 타임아웃 설정
+4. ✅ 비용 관리 (필요한 수준만 실행)
+
+---
+
+## 📝 기여 가이드
+
+### 새로운 Performance Test 추가
 
 ```javascript
+// test/performance/my-test.js
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check } from 'k6';
 
 export let options = {
-  stages: [
-    { duration: '30s', target: 10 },
-    { duration: '1m', target: 30 },
-    { duration: '1m', target: 50 },
-    { duration: '30s', target: 20 },
-    { duration: '30s', target: 0 },
-  ],
-  thresholds: {
-    http_req_duration: ['p(95)<500'],
-    http_req_failed: ['rate<0.01'],
-  },
+  vus: 10,
+  duration: '30s',
 };
 
 export default function () {
-  const responses = http.batch([
-    ['GET', 'https://unmanned-store.link/'],
-    ['GET', 'https://api.unmanned-store.link/api/health/'],
-  ]);
-
-  responses.forEach((res) => {
-    check(res, {
-      'status is 200': (r) => r.status === 200,
-    });
+  const res = http.get('https://your-endpoint.com');
+  check(res, {
+    'status is 200': (r) => r.status === 200,
   });
+}
+```
 
-  sleep(1);
+### 새로운 Infrastructure Test 추가
+
+```go
+// test/infra/my_module_test.go
+package test
+
+import (
+	"testing"
+	"github.com/gruntwork-io/terratest/modules/terraform"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestMyModule(t *testing.T) {
+	terraformOptions := &terraform.Options{
+		TerraformDir: "../terraform/modules/my-module",
+	}
+
+	defer terraform.Destroy(t, terraformOptions)
+	terraform.InitAndApply(t, terraformOptions)
+
+	// 검증 로직
+	output := terraform.Output(t, terraformOptions, "my_output")
+	assert.NotEmpty(t, output)
 }
 ```
 
 ---
 
-## 📝 결론
+## 📞 문의 및 지원
 
-### 성능 평가 요약
-
-✅ **프로덕션 준비 완료**: 현재 인프라는 실제 운영 환경에서 **안정적으로 서비스 가능**한 수준입니다.
-
-✅ **비용 효율성**: Public Subnet 아키텍처로 **월 $73 절감**하면서도 **우수한 성능** 유지
-
-✅ **확장 가능성**: ECS Auto Scaling(max 4 tasks) 적용으로 **100+ 동시 사용자** 처리 가능
-
-✅ **신뢰성**: 99.93% 성공률로 **높은 서비스 품질** 보장
-
-### 권장 사항
-
-| 동시 사용자 수 | 권장 구성                       | 예상 비용   |
-| -------------- | ------------------------------- | ----------- |
-| < 50명         | 현재 구성 (Auto Scaling 활성화) | $50-80/월   |
-| 50-100명       | 현재 구성 유지                  | $80-120/월  |
-| 100-200명      | CloudFront + Multi-AZ           | $120-180/월 |
-| 200명+         | CloudFront + Redis 캐싱         | $200-300/월 |
-
-**현재 상태**: ECS Auto Scaling(max 4 tasks) 적용으로 **중규모 무인점포 10-15개 운영 가능**
+- **이슈 등록**: [GitHub Issues](../../issues)
+- **문서**: [프로젝트 README](../README.md)
+- **아키텍처**: [CLOUD_ARCHITECTURE.md](../docs/CLOUD_ARCHITECTURE.md)
 
 ---
 
-## 🔗 관련 문서
-
-- [비용 최적화 보고서](../docs/04_cost_optimization/COST_REDUCTION_JAN_2026.md)
-- [인프라 구성도](../INFRA.md)
-- [AWS Batch 아키텍처](../docs/BATCH_PGVECTOR_ARCHITECTURE.md)
-- [개발 가이드](../README.md)
-
----
-
-## 📅 테스트 이력
-
-| 날짜       | 버전 | 최대 VUs | p95 응답시간 | 성공률 | 비고                      |
-| ---------- | ---- | -------- | ------------ | ------ | ------------------------- |
-| 2026-01-18 | v1.0 | 50       | 472.58ms     | 99.93% | Public Subnet 최적화 적용 |
-
----
-
-**작성일**: 2026년 1월 18일  
-**작성자**: Capstone Team  
-**테스트 환경**: AWS ECS Fargate (ap-northeast-2)
+**마지막 업데이트**: 2026년 2월 4일  
+**테스트 환경**: AWS (ap-northeast-2)

@@ -6,8 +6,8 @@
 # 주의: 도메인을 먼저 구매해야 합니다 (예: example.com)
 resource "aws_route53_zone" "main" {
   count = var.domain_name != "" ? 1 : 0
-  name  = var.domain_name  # 예: "capstone-project.com"
-  
+  name  = var.domain_name # 예: "capstone-project.com"
+
   tags = {
     Name        = "capstone-hosted-zone"
     Environment = var.environment
@@ -19,7 +19,7 @@ resource "aws_route53_zone" "main" {
 resource "aws_route53_record" "frontend" {
   count   = var.domain_name != "" ? 1 : 0
   zone_id = aws_route53_zone.main[0].zone_id
-  name    = var.domain_name  # 예: "deepsentinel.cloud"
+  name    = var.domain_name # 예: "deepsentinel.cloud"
   type    = "A"
 
   alias {
@@ -33,7 +33,7 @@ resource "aws_route53_record" "frontend" {
 resource "aws_route53_record" "www" {
   count   = var.domain_name != "" ? 1 : 0
   zone_id = aws_route53_zone.main[0].zone_id
-  name    = "www.${var.domain_name}"  # 예: "www.deepsentinel.cloud"
+  name    = "www.${var.domain_name}" # 예: "www.deepsentinel.cloud"
   type    = "A"
 
   alias {
@@ -47,7 +47,7 @@ resource "aws_route53_record" "www" {
 resource "aws_route53_record" "api" {
   count   = var.domain_name != "" ? 1 : 0
   zone_id = aws_route53_zone.main[0].zone_id
-  name    = "api.${var.domain_name}"  # 예: "api.deepsentinel.cloud"
+  name    = "api.${var.domain_name}" # 예: "api.deepsentinel.cloud"
   type    = "A"
 
   alias {
@@ -68,7 +68,7 @@ resource "aws_acm_certificate" "main" {
   validation_method = "DNS"
 
   subject_alternative_names = [
-    "*.${var.domain_name}"  # 와일드카드 (예: *.deepsentinel.cloud)
+    "*.${var.domain_name}" # 와일드카드 (예: *.deepsentinel.cloud)
   ]
 
   tags = {

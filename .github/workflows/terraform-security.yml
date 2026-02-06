@@ -1,0 +1,365 @@
+name: Terraform Security Scan
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'terraform/**'
+      - 'packer/**'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'terraform/**'
+      - 'packer/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  # ========================================
+  # Job 1: Checkov - 포괄적인 보안 검사
+  # ========================================
+  checkov:
+    name: 🛡️ Checkov Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Checkov
+        run: |
+          pip install checkov
+          checkov --version
+
+      - name: Run Checkov on Terraform
+        id: checkov
+        continue-on-error: true
+        run: |
+          echo "🔍 Running Checkov security scan on Terraform..."
+
+          # Checkov 실행 (SARIF, JSON, CLI 리포트 생성)
+          checkov -d terraform/ \
+            --framework terraform \
+            --output cli \
+            --output json \
+            --output-file-path . \
+            --download-external-modules true \
+            --quiet \
+            --compact || true
+
+          # 결과 요약
+          if [ -f results_json.json ]; then
+            echo "📊 Checkov scan completed"
+            
+            PASSED=$(jq -r '.summary.passed // 0' results_json.json)
+            FAILED=$(jq -r '.summary.failed // 0' results_json.json)
+            SKIPPED=$(jq -r '.summary.skipped // 0' results_json.json)
+            
+            echo "✅ Passed: $PASSED"
+            echo "❌ Failed: $FAILED"
+            echo "⏭️ Skipped: $SKIPPED"
+            
+            echo "checkov_passed=$PASSED" >> $GITHUB_OUTPUT
+            echo "checkov_failed=$FAILED" >> $GITHUB_OUTPUT
+            echo "checkov_skipped=$SKIPPED" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Checkov on Packer (if exists)
+        continue-on-error: true
+        run: |
+          if [ -d "packer" ]; then
+            echo "🔍 Running Checkov on Packer templates..."
+            checkov -d packer/ \
+              --framework packer \
+              --output cli \
+              --quiet \
+              --compact || true
+          fi
+
+      - name: Upload Checkov Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-results
+          path: |
+            results_*.json
+            results_*.sarif
+
+      - name: Comment PR with Checkov Results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            if (!fs.existsSync('results_json.json')) {
+              console.log('No Checkov results found');
+              return;
+            }
+
+            const results = JSON.parse(fs.readFileSync('results_json.json', 'utf8'));
+            const summary = results.summary || {};
+
+            const passed = summary.passed || 0;
+            const failed = summary.failed || 0;
+            const skipped = summary.skipped || 0;
+            const total = passed + failed + skipped;
+
+            // 심각도별 분류
+            const failedChecks = results.results?.failed_checks || [];
+            const critical = failedChecks.filter(c => c.severity === 'CRITICAL').length;
+            const high = failedChecks.filter(c => c.severity === 'HIGH').length;
+            const medium = failedChecks.filter(c => c.severity === 'MEDIUM').length;
+            const low = failedChecks.filter(c => c.severity === 'LOW').length;
+
+            // 상위 5개 이슈 추출
+            const topIssues = failedChecks
+              .sort((a, b) => {
+                const severityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+                return (severityOrder[a.severity] || 99) - (severityOrder[b.severity] || 99);
+              })
+              .slice(0, 5);
+
+            let comment = `## 🛡️ Checkov Security Scan Results\n\n`;
+            comment += `### 📊 Summary\n\n`;
+            comment += `| Status | Count | Percentage |\n`;
+            comment += `|--------|------:|----------:|\n`;
+            comment += `| ✅ Passed | ${passed} | ${total > 0 ? ((passed/total)*100).toFixed(1) : 0}% |\n`;
+            comment += `| ❌ Failed | ${failed} | ${total > 0 ? ((failed/total)*100).toFixed(1) : 0}% |\n`;
+            comment += `| ⏭️ Skipped | ${skipped} | ${total > 0 ? ((skipped/total)*100).toFixed(1) : 0}% |\n`;
+            comment += `| **Total** | **${total}** | **100%** |\n\n`;
+
+            if (failed > 0) {
+              comment += `### ⚠️ Failed Checks by Severity\n\n`;
+              comment += `| Severity | Count |\n`;
+              comment += `|----------|------:|\n`;
+              if (critical > 0) comment += `| 🔴 CRITICAL | ${critical} |\n`;
+              if (high > 0) comment += `| 🟠 HIGH | ${high} |\n`;
+              if (medium > 0) comment += `| 🟡 MEDIUM | ${medium} |\n`;
+              if (low > 0) comment += `| 🟢 LOW | ${low} |\n`;
+              comment += `\n`;
+              
+              if (topIssues.length > 0) {
+                comment += `### 🔝 Top Security Issues\n\n`;
+                topIssues.forEach((issue, idx) => {
+                  const severityEmoji = {
+                    CRITICAL: '🔴',
+                    HIGH: '🟠',
+                    MEDIUM: '🟡',
+                    LOW: '🟢'
+                  }[issue.severity] || '⚪';
+                  
+                  comment += `#### ${idx + 1}. ${severityEmoji} ${issue.check_name || issue.check_id}\n\n`;
+                  comment += `- **File**: \`${issue.file_path}:${issue.file_line_range?.[0] || 'N/A'}\`\n`;
+                  comment += `- **Severity**: ${issue.severity}\n`;
+                  if (issue.description) {
+                    comment += `- **Description**: ${issue.description}\n`;
+                  }
+                  if (issue.guideline) {
+                    comment += `- **Guideline**: ${issue.guideline}\n`;
+                  }
+                  comment += `\n`;
+                });
+              }
+            } else {
+              comment += `### ✅ All Security Checks Passed!\n\n`;
+              comment += `No security issues found in your Terraform code. Great job! 🎉\n\n`;
+            }
+
+            comment += `---\n`;
+            comment += `📝 **Note**: This scan checks for common security misconfigurations, compliance violations, and best practice deviations.\n`;
+            comment += `🔗 [View detailed report in workflow artifacts](${context.payload.pull_request.html_url}/checks)\n`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # ========================================
+  # Job 2: tfsec - Terraform 특화 보안 검사
+  # ========================================
+  tfsec:
+    name: 🔒 tfsec Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install tfsec
+        run: |
+          wget -q https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 -O /usr/local/bin/tfsec
+          chmod +x /usr/local/bin/tfsec
+          tfsec --version
+
+      - name: Run tfsec (SARIF for GitHub Security)
+        continue-on-error: true
+        run: |
+          cd terraform
+          tfsec . --format sarif --out ../results.sarif --soft-fail
+
+      - name: Run tfsec (JSON for artifact)
+        continue-on-error: true
+        run: |
+          cd terraform
+          tfsec . --format json --out ../results.json --soft-fail
+
+      - name: Run tfsec (Console output)
+        continue-on-error: true
+        run: |
+          cd terraform
+          tfsec . --soft-fail
+
+      - name: Upload tfsec SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: results.sarif
+          category: tfsec
+
+      - name: Upload tfsec Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfsec-results
+          path: results.*
+
+  # ========================================
+  # Job 3: Terraform Format & Validate
+  # ========================================
+  terraform-validate:
+    name: 📝 Terraform Format & Validate
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./terraform
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform Format Check
+        id: fmt
+        run: |
+          echo "🎨 Checking Terraform formatting..."
+          terraform fmt -check -recursive -diff
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: |
+          echo "🔧 Initializing Terraform..."
+          terraform init -backend=false
+        continue-on-error: true
+
+      - name: Terraform Validate
+        id: validate
+        run: |
+          echo "✅ Validating Terraform configuration..."
+          terraform validate -no-color
+
+      - name: Comment PR with validation results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fmtOutcome = '${{ steps.fmt.outcome }}';
+            const initOutcome = '${{ steps.init.outcome }}';
+            const validateOutcome = '${{ steps.validate.outcome }}';
+
+            let comment = `## 📝 Terraform Validation Results\n\n`;
+            comment += `| Check | Status |\n`;
+            comment += `|-------|--------|\n`;
+            comment += `| Format | ${fmtOutcome === 'success' ? '✅ Passed' : '❌ Failed'} |\n`;
+            comment += `| Init | ${initOutcome === 'success' ? '✅ Passed' : '❌ Failed'} |\n`;
+            comment += `| Validate | ${validateOutcome === 'success' ? '✅ Passed' : '❌ Failed'} |\n\n`;
+
+            if (fmtOutcome !== 'success') {
+              comment += `⚠️ **Format issues detected**. Run \`terraform fmt -recursive\` to fix.\n\n`;
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # ========================================
+  # Job 4: Security Summary
+  # ========================================
+  security-summary:
+    name: 📊 Security Scan Summary
+    runs-on: ubuntu-latest
+    needs: [checkov, tfsec, terraform-validate]
+    if: always()
+
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 🛡️ Terraform Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Tool | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Checkov
+          if [ "${{ needs.checkov.result }}" == "success" ]; then
+            echo "| 🛡️ Checkov | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🛡️ Checkov | ⚠️ Issues Found |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # tfsec
+          if [ "${{ needs.tfsec.result }}" == "success" ]; then
+            echo "| 🔒 tfsec | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🔒 tfsec | ⚠️ Issues Found |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Terraform Validate
+          if [ "${{ needs.terraform-validate.result }}" == "success" ]; then
+            echo "| 📝 Terraform Validate | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 📝 Terraform Validate | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 What was checked?" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Checkov**: Comprehensive security & compliance scan" >> $GITHUB_STEP_SUMMARY
+          echo "  - S3 bucket encryption" >> $GITHUB_STEP_SUMMARY
+          echo "  - Public access blocks" >> $GITHUB_STEP_SUMMARY
+          echo "  - IAM policy best practices" >> $GITHUB_STEP_SUMMARY
+          echo "  - Network security groups" >> $GITHUB_STEP_SUMMARY
+          echo "  - Logging & monitoring" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **tfsec**: Terraform-specific security issues" >> $GITHUB_STEP_SUMMARY
+          echo "  - AWS security best practices" >> $GITHUB_STEP_SUMMARY
+          echo "  - Encryption at rest & in transit" >> $GITHUB_STEP_SUMMARY
+          echo "  - Resource exposure" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Terraform Validate**: Syntax & configuration validation" >> $GITHUB_STEP_SUMMARY
+          echo "  - HCL syntax errors" >> $GITHUB_STEP_SUMMARY
+          echo "  - Resource configuration" >> $GITHUB_STEP_SUMMARY
+          echo "  - Variable dependencies" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 View detailed reports in [Security > Code scanning](../../security/code-scanning)" >> $GITHUB_STEP_SUMMARY

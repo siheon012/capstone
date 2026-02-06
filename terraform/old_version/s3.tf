@@ -61,9 +61,9 @@ resource "aws_s3_bucket_public_access_block" "raw_videos" {
   bucket = aws_s3_bucket.raw_videos.id
 
   block_public_acls       = true
-  block_public_policy     = false  # 버킷 정책 허용
+  block_public_policy     = false # 버킷 정책 허용
   ignore_public_acls      = true
-  restrict_public_buckets = false  # 버킷 정책 허용
+  restrict_public_buckets = false # 버킷 정책 허용
 }
 
 # Raw Videos - Bucket Policy (웹 접근 허용)
@@ -137,9 +137,9 @@ resource "aws_s3_bucket_public_access_block" "thumbnails" {
   bucket = aws_s3_bucket.thumbnails.id
 
   block_public_acls       = true
-  block_public_policy     = false  # 버킷 정책 허용
+  block_public_policy     = false # 버킷 정책 허용
   ignore_public_acls      = true
-  restrict_public_buckets = false  # 버킷 정책 허용
+  restrict_public_buckets = false # 버킷 정책 허용
 }
 
 # Thumbnails - Bucket Policy (웹 접근 허용)

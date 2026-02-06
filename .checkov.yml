@@ -1,0 +1,92 @@
+# ========================================
+# Checkov Configuration
+# ========================================
+# This file customizes Checkov's behavior for this project
+#
+# Purpose: Define which security checks to skip and why
+# Location: Project root directory
+# ========================================
+
+# Skip specific checks that don't apply to this project
+skip-check:
+  # S3 Logging - 개발 환경에서는 비용 절감을 위해 비활성화
+  - CKV_AWS_18 # S3 Bucket should have access logging configured
+
+  # VPC Flow Logs - 개발 환경에서는 비활성화
+  - CKV_AWS_35 # Ensure VPC has flow logs enabled
+
+  # CloudTrail - 개발 환경에서는 비활성화 (프로덕션에서는 활성화 권장)
+  - CKV_AWS_67 # Ensure CloudTrail is enabled in all regions
+
+  # ALB Access Logs - 비용 절감 (필요시 활성화)
+  - CKV_AWS_91 # Ensure the ELBv2 (Application/Network) has access logging enabled
+
+  # RDS Enhanced Monitoring - 개발 환경에서는 비활성화
+  - CKV_AWS_118 # Ensure that enhanced monitoring is enabled for Amazon RDS instances
+
+  # S3 Versioning - 일부 버킷은 versioning 불필요 (thumbnails, highlights)
+  - CKV_AWS_21 # Ensure all data stored in the S3 bucket have versioning enabled
+
+  # KMS Key Rotation - 개발 환경에서는 기본 암호화 사용
+  - CKV_AWS_7 # Ensure rotation for customer created CMKs is enabled
+
+# Compact output for cleaner CI logs
+compact: true
+
+# Download external Terraform modules for complete scanning
+download-external-modules: true
+
+# Framework to scan
+framework:
+  - terraform
+  - secrets
+
+# Output formats
+output:
+  - cli
+  - json
+  - sarif
+
+# Severity levels to check
+check:
+  - CRITICAL
+  - HIGH
+  - MEDIUM
+  - LOW
+
+# External checks directory (optional)
+# external-checks-dir:
+#   - ./custom-checks
+
+# Baseline file (optional - for tracking progress)
+# baseline: .checkov.baseline
+
+# ========================================
+# Custom Skip Rules by Resource
+# ========================================
+
+# 프로젝트별 예외 사항을 리소스별로 정의
+# 예: 특정 S3 버킷은 public access가 필요한 경우
+# skip-path:
+#   - terraform/modules/storage/s3.tf:CKV_AWS_20  # S3 bucket must not allow public read
+
+# ========================================
+# Soft-Fail Mode
+# ========================================
+# CI/CD에서 보안 이슈가 있어도 빌드 실패하지 않고 경고만 표시
+# GitHub Actions에서 --soft-fail 플래그로 제어
+soft-fail: false
+
+# ========================================
+# GitHub Integration
+# ========================================
+# GitHub Security tab에 결과 업로드
+repo-root-for-plan-enrichment: .
+
+# ========================================
+# 참고사항
+# ========================================
+# 1. 개발 환경에서는 일부 보안 기능을 비활성화하여 비용 절감
+# 2. 프로덕션 배포 시에는 skip-check 항목 재검토 필요
+# 3. 새로운 보안 이슈 발견 시 이 파일에 예외 추가 및 문서화
+# 4. 정기적으로 skip된 체크들을 리뷰하여 적용 가능한지 확인

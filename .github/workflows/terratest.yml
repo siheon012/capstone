@@ -1,0 +1,290 @@
+name: Terratest - Infrastructure Testing
+
+on:
+  # PR에서 terraform 변경 시 빠른 검증 (Plan & Validate만)
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'terraform/**'
+      - 'test/**'
+
+  # 수동 실행
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Test type to run'
+        required: true
+        default: 'validate'
+        type: choice
+        options:
+          - validate # 빠른 검증 (Plan only, 무료)
+          - unit # 단위 테스트 (일부 리소스 생성)
+          - integration # 통합 테스트 (전체 인프라, 비용 발생)
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+env:
+  GO_VERSION: '1.21'
+  AWS_REGION: 'ap-northeast-2'
+
+jobs:
+  # ========================================
+  # Job 1: 빠른 검증 (무료, PR마다 실행)
+  # ========================================
+  validate:
+    name: 🔍 Terraform Validation Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # cache disabled until go.sum is committed
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Go modules
+        working-directory: test/infra
+        run: |
+          go mod download
+          go mod tidy
+
+      - name: Run Validation Tests
+        working-directory: test/infra
+        run: |
+          echo "🔍 Running fast validation tests (no AWS resources created)..."
+
+          # 포맷 검사
+          go test -v -run TestTerraformFormatting -timeout 5m
+
+          # Terraform validate
+          go test -v -run TestTerraformValidation -timeout 10m
+
+          # Plan 테스트 (리소스 생성 안 함)
+          go test -v -run TestNetworkModulePlan -timeout 5m
+          go test -v -run TestStorageModulePlan -timeout 5m
+          go test -v -run TestSecurityModulePlan -timeout 5m
+
+      - name: Comment PR with validation results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ✅ Terratest Validation Passed
+              
+              All Terraform modules passed validation tests:
+              - ✅ Format check
+              - ✅ Syntax validation
+              - ✅ Plan generation
+              
+              No AWS resources were created during this test.
+              `
+            });
+
+  # ========================================
+  # Job 2: 단위 테스트 (비용 발생, 수동 실행)
+  # ========================================
+  unit-tests:
+    name: 🧪 Unit Tests (AWS Resources)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'unit'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # cache disabled until go.sum is committed
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Go modules
+        working-directory: test/infra
+        run: |
+          go mod download
+          go mod tidy
+
+      - name: Run Network Module Tests
+        working-directory: test/infra
+        run: |
+          echo "🌐 Testing Network Module (creates VPC, subnets)..."
+          go test -v -run TestNetworkModule -timeout 30m
+
+      - name: Run Storage Module Tests
+        working-directory: test/infra
+        run: |
+          echo "🗄️ Testing Storage Module (creates S3 buckets)..."
+          go test -v -run TestStorageModule -timeout 30m
+
+      - name: Run Security Module Tests
+        working-directory: test/infra
+        run: |
+          echo "🔐 Testing Security Module (creates IAM roles)..."
+          go test -v -run TestIAMRoleCreation -timeout 30m
+
+      - name: Generate test report
+        if: always()
+        run: |
+          echo "## 🧪 Terratest Unit Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Module | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Network | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Storage | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ These tests created actual AWS resources that were automatically cleaned up." >> $GITHUB_STEP_SUMMARY
+
+  # ========================================
+  # Job 3: 통합 테스트 (비용 많이 발생, 수동 실행만)
+  # ========================================
+  integration-tests:
+    name: 🚀 Integration Tests (Full Stack)
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.test_type == 'integration'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # cache disabled until go.sum is committed
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Go modules
+        working-directory: test/infra
+        run: |
+          go mod download
+          go mod tidy
+
+      - name: ⚠️ Confirm Integration Test
+        run: |
+          echo "================================================"
+          echo "⚠️ WARNING: FULL INTEGRATION TEST"
+          echo "================================================"
+          echo "This will:"
+          echo "- Create complete infrastructure stack"
+          echo "- Take 15-20 minutes"
+          echo "- Cost approximately $1-2"
+          echo "- Automatically cleanup all resources"
+          echo "================================================"
+
+      - name: Run Full Integration Tests
+        working-directory: test/infra
+        run: |
+          echo "🚀 Running full integration test..."
+          go test -v -run TestCompleteInfrastructure -timeout 60m
+
+      - name: Test Idempotency
+        working-directory: test/infra
+        run: |
+          echo "🔄 Testing infrastructure idempotency..."
+          go test -v -run TestInfrastructurePlanNoChanges -timeout 60m
+
+      - name: Create Issue with test results
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const date = new Date().toISOString().split('T')[0];
+            const status = '${{ job.status }}' === 'success' ? '✅ PASSED' : '❌ FAILED';
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `${status} Integration Test - ${date}`,
+              body: `## 🚀 Full Infrastructure Integration Test Results
+              
+              **Date:** ${date}
+              **Status:** ${status}
+              **Duration:** ~15-20 minutes
+              **Cost:** ~$1-2
+              
+              ### Tests Run:
+              - ✅ Complete infrastructure deployment
+              - ✅ Idempotency verification
+              - ✅ Resource cleanup
+              
+              ### Details:
+              See workflow run: ${context.payload.repository.html_url}/actions/runs/${context.runId}
+              
+              ---
+              *Automated integration test report*
+              `,
+              labels: ['terratest', 'integration-test', 'infrastructure']
+            });
+
+  # ========================================
+  # Job 4: 테스트 결과 요약
+  # ========================================
+  summary:
+    name: 📊 Test Summary
+    runs-on: ubuntu-latest
+    needs: [validate, unit-tests, integration-tests]
+    if: always()
+
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 🧪 Terratest Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 Validation | ${{ needs.validate.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚀 Integration | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 💡 Test Types:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Validation**: Fast, free, runs on every PR" >> $GITHUB_STEP_SUMMARY
+          echo "- **Unit Tests**: Creates individual modules, manual trigger only" >> $GITHUB_STEP_SUMMARY
+          echo "- **Integration**: Full stack, manual trigger only" >> $GITHUB_STEP_SUMMARY

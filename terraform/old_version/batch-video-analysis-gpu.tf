@@ -63,8 +63,8 @@ resource "aws_ecr_lifecycle_policy" "ai_batch" {
 # Launch Template for GPU Instances
 resource "aws_launch_template" "batch_gpu" {
   name_prefix   = "capstone-batch-gpu-"
-  image_id      = "ami-05a7c7234d12946e9"  # Custom AMI with pre-loaded 17GB Docker image
-  instance_type = "g5.xlarge" # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
+  image_id      = "ami-05a7c7234d12946e9" # Custom AMI with pre-loaded 17GB Docker image
+  instance_type = "g5.xlarge"             # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
 
   iam_instance_profile {
     arn = aws_iam_instance_profile.batch_instance.arn
@@ -196,8 +196,8 @@ resource "aws_batch_compute_environment" "video_analysis_gpu" {
 
     # EC2 Configuration to use Custom AMI with pre-loaded Docker image
     ec2_configuration {
-      image_type = "ECS_AL2_NVIDIA"
-      image_id_override = "ami-05a7c7234d12946e9"  # Custom AMI with 17GB image pre-loaded
+      image_type        = "ECS_AL2_NVIDIA"
+      image_id_override = "ami-05a7c7234d12946e9" # Custom AMI with 17GB image pre-loaded
     }
 
     tags = {

@@ -37,7 +37,7 @@ resource "aws_launch_template" "gpu_ecs" {
   instance_type = "g5.xlarge"
 
   iam_instance_profile {
-    arn = var.ecs_instance_profile_arn  # from security module
+    arn = var.ecs_instance_profile_arn # from security module
   }
 
   vpc_security_group_ids = [var.ecs_tasks_security_group_id]
@@ -72,10 +72,10 @@ resource "aws_launch_template" "gpu_ecs" {
 # Auto Scaling Group for GPU EC2
 resource "aws_autoscaling_group" "gpu_ecs" {
   name                = "capstone-${var.environment}-gpu-ecs-asg"
-  vpc_zone_identifier = var.private_subnet_ids  # from network module
-  min_size            = 0  # 비활성화: AWS Batch 사용 중
-  max_size            = 0  # 비활성화: AWS Batch 사용 중
-  desired_capacity    = 0  # 비활성화: AWS Batch 사용 중
+  vpc_zone_identifier = var.private_subnet_ids # from network module
+  min_size            = 0                      # 비활성화: AWS Batch 사용 중
+  max_size            = 0                      # 비활성화: AWS Batch 사용 중
+  desired_capacity    = 0                      # 비활성화: AWS Batch 사용 중
 
   launch_template {
     id      = aws_launch_template.gpu_ecs.id
@@ -140,10 +140,10 @@ resource "aws_ecs_task_definition" "video_analysis_gpu" {
   family                   = "capstone-video-analysis-gpu"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
-  cpu                      = "2048"  # 2 vCPU
-  memory                   = "8192"  # 8GB
-  execution_role_arn       = var.ecs_task_execution_role_arn  # from security module
-  task_role_arn            = var.ecs_task_role_arn  # from security module
+  cpu                      = "2048"                          # 2 vCPU
+  memory                   = "8192"                          # 8GB
+  execution_role_arn       = var.ecs_task_execution_role_arn # from security module
+  task_role_arn            = var.ecs_task_role_arn           # from security module
 
   container_definitions = jsonencode([
     {
@@ -265,8 +265,8 @@ resource "aws_ecs_service" "video_analysis_gpu" {
   launch_type     = "EC2"
 
   network_configuration {
-    subnets         = var.private_subnet_ids  # from network module
-    security_groups = [var.ecs_tasks_security_group_id]  # from network module
+    subnets         = var.private_subnet_ids            # from network module
+    security_groups = [var.ecs_tasks_security_group_id] # from network module
   }
 
   placement_constraints {

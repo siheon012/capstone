@@ -1,0 +1,80 @@
+# ========================================
+# tfsec Configuration
+# ========================================
+# This file customizes tfsec's behavior for this project
+#
+# Purpose: Define project-specific security rules
+# Location: Project root or terraform/ directory
+# ========================================
+
+# Minimum severity to report
+minimum_severity: MEDIUM
+
+# Exclude specific checks
+exclude:
+  # S3 Logging - 개발 환경에서는 비용 절감
+  - aws-s3-enable-bucket-logging
+  
+  # VPC Flow Logs - 개발 환경에서는 비활성화
+  - aws-ec2-require-vpc-flow-logs-for-all-vpcs
+  
+  # CloudTrail - 개발 환경에서는 비활성화
+  - aws-cloudtrail-enable-all-regions
+  - aws-cloudtrail-enable-log-validation
+  
+  # ALB Logging - 비용 절감
+  - aws-elb-alb-not-public
+  - aws-elbv2-alb-not-public
+  
+  # S3 Versioning - 일부 버킷은 불필요
+  - aws-s3-enable-versioning
+
+# Exclude specific directories
+exclude_paths:
+  - terraform/.terraform/**
+  - terraform/moved_blocks/**
+  - terraform/old_version/**
+  - **/.terraform/**
+  - **/terraform.tfstate*
+
+# Exclude specific files
+# exclude_files:
+#   - example.tf
+
+# Custom checks directory (optional)
+# custom_check_dir: .tfsec
+
+# Include passed checks in output
+include-passed: false
+
+# Include ignored checks in output  
+include-ignored: false
+
+# Concise output
+concise-output: true
+
+# Output format in GitHub Actions
+# Handled by aquasecurity/tfsec-action
+
+# Soft fail - don't exit with error code
+soft-fail: false
+
+# Stop on first error
+# stop-on-errors: false
+
+# ========================================
+# 프로젝트별 예외 사항
+# ========================================
+# 특정 리소스나 파일에 대한 예외는 코드 내 주석으로 관리:
+# 
+# 예시:
+# resource "aws_s3_bucket" "public_assets" {
+#   #tfsec:ignore:aws-s3-block-public-acls
+#   bucket = "my-public-bucket"
+# }
+# 
+# 또는 전체 블록 무시:
+# #tfsec:ignore:*
+# resource "aws_instance" "example" {
+#   ...
+# }

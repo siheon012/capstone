@@ -67,14 +67,24 @@ jobs:
           fi
 
       # 5. 보안 스캔 - tfsec
-      - name: Security Scan - tfsec
+      - name: Install tfsec
+        run: |
+          wget -q https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 -O /usr/local/bin/tfsec
+          chmod +x /usr/local/bin/tfsec
+          tfsec --version
+
+      - name: Run tfsec (SARIF)
         id: tfsec
         continue-on-error: true
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: terraform
-          format: json,sarif
-          soft_fail: true
+        run: |
+          cd terraform
+          tfsec . --format sarif --out ../results.sarif --soft-fail
+
+      - name: Run tfsec (Console)
+        continue-on-error: true
+        run: |
+          cd terraform
+          tfsec . --soft-fail
 
       # 6. 보안 결과를 GitHub Security에 업로드
       - name: Upload tfsec SARIF

@@ -26,6 +26,33 @@ data "aws_ecr_repository" "ai_batch" {
   name = "capstone-dev-batch-processor"
 }
 
+# Custom GPU AMI built with Packer
+# Automatically uses the latest AMI built by Packer with pre-loaded models
+data "aws_ami" "custom_gpu" {
+  most_recent = true
+  owners      = ["self"]  # Only AMIs owned by this account
+
+  filter {
+    name   = "name"
+    values = ["capstone-ecs-gpu-custom-*"]  # Matches Packer naming convention
+  }
+
+  filter {
+    name   = "tag:ManagedBy"
+    values = ["Packer"]
+  }
+
+  filter {
+    name   = "tag:Environment"
+    values = [var.environment]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
 # 통합된 ECR Lifecycle Policy
 resource "aws_ecr_lifecycle_policy" "ai_batch" {
   # 원본 파일에서 사용하던 data 소스나 리소스 이름을 그대로 사용하세요
@@ -62,7 +89,7 @@ resource "aws_ecr_lifecycle_policy" "ai_batch" {
 # Launch Template for GPU Instances
 resource "aws_launch_template" "batch_gpu" {
   name_prefix   = "capstone-batch-gpu-"
-  image_id      = "ami-061fb5baa7da36413"  # Custom AMI with models in /opt/ml (1.85GB)
+  image_id      = data.aws_ami.custom_gpu.id  # Packer로 빌드된 최신 커스텀 AMI 자동 사용
   instance_type = "g5.xlarge" # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
 
   iam_instance_profile {
@@ -170,7 +197,7 @@ resource "aws_batch_compute_environment" "video_analysis_gpu" {
     # EC2 Configuration to use Custom AMI with models in /opt/ml
     ec2_configuration {
       image_type = "ECS_AL2_NVIDIA"
-      image_id_override = "ami-061fb5baa7da36413"  # Custom AMI with models in /opt/ml (1.85GB)
+      image_id_override = data.aws_ami.custom_gpu.id  # Packer로 빌드된 최신 커스텀 AMI
     }
 
     tags = {
@@ -418,22 +445,4 @@ resource "aws_cloudwatch_log_group" "batch_video_analysis_processor" {
 # Outputs
 # ========================================
 
-output "video_analysis_batch_compute_environment_arn" {
-  description = "Video Analysis GPU Batch Compute Environment ARN"
-  value       = aws_batch_compute_environment.video_analysis_gpu.arn
-}
 
-output "video_analysis_batch_job_queue_arn" {
-  description = "Video Analysis GPU Batch Job Queue ARN"
-  value       = aws_batch_job_queue.video_analysis_gpu.arn
-}
-
-output "video_analysis_batch_job_definition_arn" {
-  description = "Video Analysis Batch Job Definition ARN"
-  value       = aws_batch_job_definition.video_analysis_processor.arn
-}
-
-output "ai_batch_ecr_url" {
-  description = "ECR Repository URL for AI Batch Processor"
-  value       = data.aws_ecr_repository.ai_batch.repository_url
-}

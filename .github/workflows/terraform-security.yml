@@ -197,20 +197,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run tfsec
+      - name: Run tfsec (SARIF for GitHub Security)
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
           working_directory: terraform
-          format: json,sarif,default
+          format: sarif
           soft_fail: true
           github_token: ${{ github.token }}
 
-      - name: Upload tfsec SARIF
+      - name: Upload tfsec SARIF to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: results.sarif
           category: tfsec
+
+      - name: Run tfsec (JSON for artifact)
+        if: always()
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform
+          format: json
+          soft_fail: true
 
       - name: Upload tfsec Results
         if: always()

@@ -59,6 +59,18 @@ resource "aws_iam_user_policy_attachment" "github_actions_ecr" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
 }
 
+# GitHub Actions 사용자 Terraform/Terratest 실행 권한 (PowerUserAccess)
+resource "aws_iam_user_policy_attachment" "github_actions_poweruser" {
+  user       = aws_iam_user.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
+}
+
+# GitHub Actions 사용자 IAM 읽기 권한 (Terraform state 확인용)
+resource "aws_iam_user_policy_attachment" "github_actions_iam_read" {
+  user       = aws_iam_user.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/IAMReadOnlyAccess"
+}
+
 # GitHub Actions 사용자 ECS 배포 권한
 resource "aws_iam_policy" "github_actions_ecs_deploy" {
   name        = "GitHubActionsECSDeploy"

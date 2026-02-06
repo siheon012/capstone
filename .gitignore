@@ -202,3 +202,20 @@ backend_logs.txt
 batch_log.json
 temp_log.txt
 memi.zip
+
+# Packer auto-generated files
+packer/*.auto.pkrvars.hcl
+packer/packer_cache/
+packer/manifest.json
+packer/crash.log
+
+# Packer variables with secrets
+packer/variables.pkrvars.hcl
+
+# SSH keys
+packer/*.pem
+packer/*.key
+
+# Backup files
+packer/*.backup
+packer/*~

@@ -211,6 +211,7 @@ memi.zip
 packer/*.auto.pkrvars.hcl
 packer/packer_cache/
 packer/manifest.json
+packer/manifest.json.lock
 packer/crash.log
 
 # Packer variables with secrets

@@ -8,11 +8,6 @@ on:
       - 'terraform/**'
       - 'test/**'
 
-  # 주간 전체 테스트 (실제 리소스 생성)
-  schedule:
-    # 매주 월요일 오전 2시 (UTC) = 한국 시간 오전 11시
-    - cron: '0 2 * * 1'
-
   # 수동 실행
   workflow_dispatch:
     inputs:
@@ -108,14 +103,12 @@ jobs:
             });
 
   # ========================================
-  # Job 2: 단위 테스트 (비용 발생, 주간 실행)
+  # Job 2: 단위 테스트 (비용 발생, 수동 실행)
   # ========================================
   unit-tests:
     name: 🧪 Unit Tests (AWS Resources)
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'unit')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_type == 'unit'
 
     steps:
       - name: Checkout code
@@ -293,5 +286,5 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 💡 Test Types:" >> $GITHUB_STEP_SUMMARY
           echo "- **Validation**: Fast, free, runs on every PR" >> $GITHUB_STEP_SUMMARY
-          echo "- **Unit Tests**: Creates individual modules, weekly schedule" >> $GITHUB_STEP_SUMMARY
+          echo "- **Unit Tests**: Creates individual modules, manual trigger only" >> $GITHUB_STEP_SUMMARY
           echo "- **Integration**: Full stack, manual trigger only" >> $GITHUB_STEP_SUMMARY

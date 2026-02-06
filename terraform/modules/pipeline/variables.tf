@@ -146,5 +146,5 @@ variable "lambda_sqs_to_batch_role_arn" {
 }
 
 variable "batch_instance_role_name" { type = string }
-variable "ecs_instance_role_name"   { type = string }
+variable "ecs_instance_role_name" { type = string }
 

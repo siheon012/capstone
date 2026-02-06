@@ -19,7 +19,7 @@ resource "aws_launch_template" "gpu_batch" {
     device_name = "/dev/xvda"
 
     ebs {
-      volume_size           = 50  # 50GB (기본 30GB에서 증가)
+      volume_size           = 50 # 50GB (기본 30GB에서 증가)
       volume_type           = "gp3"
       delete_on_termination = true
       encrypted             = true
@@ -139,7 +139,7 @@ resource "aws_batch_job_definition" "gpu_video_processor" {
 
   container_properties = jsonencode({
     image = "${aws_ecr_repository.batch_processor.repository_url}:latest"
-    
+
     resourceRequirements = [
       {
         type  = "VCPU"
@@ -147,7 +147,7 @@ resource "aws_batch_job_definition" "gpu_video_processor" {
       },
       {
         type  = "MEMORY"
-        value = "8192"  # 8GB
+        value = "8192" # 8GB
       },
       {
         type  = "GPU"
@@ -220,7 +220,7 @@ resource "aws_batch_job_definition" "gpu_video_processor" {
   }
 
   timeout {
-    attempt_duration_seconds = 3600  # 1시간
+    attempt_duration_seconds = 3600 # 1시간
   }
 
   tags = {

@@ -5,8 +5,8 @@
 # Dead Letter Queue (DLQ) - 실패한 메시지 처리
 resource "aws_sqs_queue" "video_processing_dlq" {
   name                      = "capstone-${var.environment}-video-processing-dlq"
-  message_retention_seconds = 1209600  # 14일
-  
+  message_retention_seconds = 1209600 # 14일
+
   tags = {
     Name        = "capstone-video-processing-dlq"
     Environment = var.environment
@@ -19,15 +19,15 @@ resource "aws_sqs_queue" "video_processing_dlq" {
 resource "aws_sqs_queue" "video_processing" {
   name                       = "capstone-${var.environment}-video-processing"
   delay_seconds              = 0
-  max_message_size           = 262144  # 256KB
-  message_retention_seconds  = 345600  # 4일
-  receive_wait_time_seconds  = 20      # Long polling
-  visibility_timeout_seconds = 900     # 15분 (비디오 처리 시간 고려)
+  max_message_size           = 262144 # 256KB
+  message_retention_seconds  = 345600 # 4일
+  receive_wait_time_seconds  = 20     # Long polling
+  visibility_timeout_seconds = 900    # 15분 (비디오 처리 시간 고려)
 
   # DLQ 설정
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.video_processing_dlq.arn
-    maxReceiveCount     = 1  # 1번만 시도 (중복 실행 방지)
+    maxReceiveCount     = 1 # 1번만 시도 (중복 실행 방지)
   })
 
   tags = {
@@ -110,7 +110,7 @@ resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
   evaluation_periods  = 1
   metric_name         = "ApproximateNumberOfMessagesVisible"
   namespace           = "AWS/SQS"
-  period              = 300  # 5분
+  period              = 300 # 5분
   statistic           = "Average"
   threshold           = 0
   alarm_description   = "Alert when messages appear in DLQ"
@@ -131,7 +131,7 @@ resource "aws_cloudwatch_metric_alarm" "queue_depth" {
   evaluation_periods  = 2
   metric_name         = "ApproximateNumberOfMessagesVisible"
   namespace           = "AWS/SQS"
-  period              = 300  # 5분
+  period              = 300 # 5분
   statistic           = "Average"
   threshold           = 100
   alarm_description   = "Alert when queue depth exceeds 100 messages"

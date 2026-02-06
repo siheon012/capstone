@@ -37,7 +37,7 @@ resource "aws_iam_user" "github_actions" {
 
 # IAM 사용자-그룹 연결
 resource "aws_iam_group_membership" "admins" {
-  name = "capstone-admins-membership"
+  name  = "capstone-admins-membership"
   group = aws_iam_group.admins.name
   users = [
     aws_iam_user.siheon_admin.name
@@ -45,7 +45,7 @@ resource "aws_iam_group_membership" "admins" {
 }
 
 resource "aws_iam_group_membership" "developers" {
-  name = "capstone-developers-membership"
+  name  = "capstone-developers-membership"
   group = aws_iam_group.developers.name
   users = [
     aws_iam_user.seungbeom_dev.name,
@@ -143,27 +143,27 @@ resource "aws_iam_policy" "siheon_admin_monitoring" {
           "payments:*",
           "tax:*",
           "cur:*",
-          
+
           # CloudWatch 모니터링
           "cloudwatch:*",
           "logs:*",
-          
+
           # 리소스 사용량 모니터링
           "support:*",
           "trustedadvisor:*",
-          
+
           # 태그 관리
           "tag:*",
           "resource-groups:*",
-          
+
           # 설정 관리
           "config:*",
-          
+
           # 보안 모니터링
           "cloudtrail:*",
           "inspector:*",
           "guardduty:*",
-          
+
           # 인벤토리 관리
           "ssm:ListInstances",
           "ssm:DescribeInstanceInformation",

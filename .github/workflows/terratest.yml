@@ -51,7 +51,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: test/infra/go.sum
+          # cache disabled until go.sum is committed
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -67,7 +67,9 @@ jobs:
 
       - name: Download Go modules
         working-directory: test/infra
-        run: go mod download
+        run: |
+          go mod download
+          go mod tidy
 
       - name: Run Validation Tests
         working-directory: test/infra
@@ -123,7 +125,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: test/go.sum
+          # cache disabled until go.sum is committed
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -139,7 +141,9 @@ jobs:
 
       - name: Download Go modules
         working-directory: test/infra
-        run: go mod download
+        run: |
+          go mod download
+          go mod tidy
 
       - name: Run Network Module Tests
         working-directory: test/infra
@@ -190,7 +194,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: test/infra/go.sum
+          # cache disabled until go.sum is committed
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -206,7 +210,9 @@ jobs:
 
       - name: Download Go modules
         working-directory: test/infra
-        run: go mod download
+        run: |
+          go mod download
+          go mod tidy
 
       - name: ⚠️ Confirm Integration Test
         run: |

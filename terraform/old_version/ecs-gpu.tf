@@ -50,9 +50,9 @@ resource "aws_launch_template" "gpu_ecs" {
 resource "aws_autoscaling_group" "gpu_ecs" {
   name                = "capstone-${var.environment}-gpu-ecs-asg"
   vpc_zone_identifier = [aws_subnet.private_1.id, aws_subnet.private_2.id]
-  min_size            = 0  # 비활성화: AWS Batch 사용 중
-  max_size            = 0  # 비활성화: AWS Batch 사용 중
-  desired_capacity    = 0  # 비활성화: AWS Batch 사용 중
+  min_size            = 0 # 비활성화: AWS Batch 사용 중
+  max_size            = 0 # 비활성화: AWS Batch 사용 중
+  desired_capacity    = 0 # 비활성화: AWS Batch 사용 중
 
   launch_template {
     id      = aws_launch_template.gpu_ecs.id
@@ -117,8 +117,8 @@ resource "aws_ecs_task_definition" "video_analysis_gpu" {
   family                   = "capstone-video-analysis-gpu"
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
-  cpu                      = "2048"  # 2 vCPU
-  memory                   = "8192"  # 8GB
+  cpu                      = "2048" # 2 vCPU
+  memory                   = "8192" # 8GB
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
   task_role_arn            = aws_iam_role.ecs_task_role.arn
 

@@ -40,10 +40,10 @@ resource "aws_ecs_task_definition" "frontend" {
   family                   = "capstone-frontend"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"  # 0.5 vCPU
-  memory                   = "1024" # 1 GB
-  execution_role_arn       = var.ecs_task_execution_role_arn  # from security module
-  task_role_arn            = var.ecs_task_role_arn  # from security module
+  cpu                      = "512"                           # 0.5 vCPU
+  memory                   = "1024"                          # 1 GB
+  execution_role_arn       = var.ecs_task_execution_role_arn # from security module
+  task_role_arn            = var.ecs_task_role_arn           # from security module
 
   container_definitions = jsonencode([
     {
@@ -118,15 +118,15 @@ resource "aws_ecs_task_definition" "backend" {
   family                   = "capstone-backend"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "1024" # 1 vCPU
-  memory                   = "2048" # 2 GB
-  execution_role_arn       = var.ecs_task_execution_role_arn  # from security module
-  task_role_arn            = var.ecs_task_role_arn  # from security module
+  cpu                      = "1024"                          # 1 vCPU
+  memory                   = "2048"                          # 2 GB
+  execution_role_arn       = var.ecs_task_execution_role_arn # from security module
+  task_role_arn            = var.ecs_task_role_arn           # from security module
 
   container_definitions = jsonencode([
     {
       name      = "backend"
-  image     = "${var.account_id}.dkr.ecr.${var.region}.amazonaws.com/capstone-backend:latest"
+      image     = "${var.account_id}.dkr.ecr.${var.region}.amazonaws.com/capstone-backend:latest"
       essential = true
 
       portMappings = [
@@ -258,7 +258,7 @@ resource "aws_ecs_service" "frontend" {
   name            = "capstone-frontend-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.frontend.arn
-  desired_count   = 1  # 필요할 때 꺼
+  desired_count   = 1 # 필요할 때 꺼
   launch_type     = "FARGATE"
 
   network_configuration {
@@ -290,7 +290,7 @@ resource "aws_ecs_service" "backend" {
   name            = "capstone-backend-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.backend.arn
-  desired_count   = 1  # 필요할때 끄자
+  desired_count   = 1 # 필요할때 끄자
   launch_type     = "FARGATE"
 
   network_configuration {

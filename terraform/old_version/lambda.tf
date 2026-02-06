@@ -81,7 +81,7 @@ resource "aws_iam_role_policy" "sqs_to_batch_lambda" {
 
 # Lambda Function
 resource "aws_lambda_function" "sqs_to_batch" {
-  filename         = "lambda_deployment.zip"  # 배포 패키지
+  filename         = "lambda_deployment.zip" # 배포 패키지
   function_name    = "capstone-${var.environment}-sqs-to-batch"
   role             = aws_iam_role.sqs_to_batch_lambda.arn
   handler          = "sqs_to_batch.lambda_handler"
@@ -92,9 +92,9 @@ resource "aws_lambda_function" "sqs_to_batch" {
 
   environment {
     variables = {
-      BATCH_JOB_QUEUE      = aws_batch_job_queue.video_analysis_gpu.name  # batch-video-analysis-gpu.tf의 GPU Queue 사용
-      BATCH_JOB_DEFINITION = aws_batch_job_definition.video_analysis_processor.arn  # batch-video-analysis-gpu.tf의 Job Definition 사용
-      MAX_CONCURRENT_JOBS  = "1" # 안전장치: 최대 1개 Job만 동시 실행
+      BATCH_JOB_QUEUE      = aws_batch_job_queue.video_analysis_gpu.name           # batch-video-analysis-gpu.tf의 GPU Queue 사용
+      BATCH_JOB_DEFINITION = aws_batch_job_definition.video_analysis_processor.arn # batch-video-analysis-gpu.tf의 Job Definition 사용
+      MAX_CONCURRENT_JOBS  = "1"                                                   # 안전장치: 최대 1개 Job만 동시 실행
       ENVIRONMENT          = var.environment
     }
   }
@@ -124,7 +124,7 @@ resource "aws_cloudwatch_log_group" "sqs_to_batch_lambda" {
 resource "aws_lambda_event_source_mapping" "sqs_to_batch" {
   event_source_arn = aws_sqs_queue.video_processing.arn
   function_name    = aws_lambda_function.sqs_to_batch.arn
-  batch_size       = 1  # 한 번에 1개 메시지 처리
+  batch_size       = 1 # 한 번에 1개 메시지 처리
   enabled          = true
 
   # Partial Batch Response 활성화 (실패한 메시지만 재시도)
@@ -132,7 +132,7 @@ resource "aws_lambda_event_source_mapping" "sqs_to_batch" {
 
   # 동시 실행 제한 (선택사항)
   scaling_config {
-    maximum_concurrency = 10  # 최대 10개 Lambda 동시 실행
+    maximum_concurrency = 10 # 최대 10개 Lambda 동시 실행
   }
 }
 

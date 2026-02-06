@@ -30,11 +30,11 @@ data "aws_ecr_repository" "ai_batch" {
 # Automatically uses the latest AMI built by Packer with pre-loaded models
 data "aws_ami" "custom_gpu" {
   most_recent = true
-  owners      = ["self"]  # Only AMIs owned by this account
+  owners      = ["self"] # Only AMIs owned by this account
 
   filter {
     name   = "name"
-    values = ["capstone-ecs-gpu-custom-*"]  # Matches Packer naming convention
+    values = ["capstone-ecs-gpu-custom-*"] # Matches Packer naming convention
   }
 
   filter {
@@ -89,8 +89,8 @@ resource "aws_ecr_lifecycle_policy" "ai_batch" {
 # Launch Template for GPU Instances
 resource "aws_launch_template" "batch_gpu" {
   name_prefix   = "capstone-batch-gpu-"
-  image_id      = data.aws_ami.custom_gpu.id  # Packer로 빌드된 최신 커스텀 AMI 자동 사용
-  instance_type = "g5.xlarge" # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
+  image_id      = data.aws_ami.custom_gpu.id # Packer로 빌드된 최신 커스텀 AMI 자동 사용
+  instance_type = "g5.xlarge"                # GPU 인스턴스 (NVIDIA A10G, 24GB VRAM)
 
   iam_instance_profile {
     arn = var.batch_instance_profile_arn
@@ -172,22 +172,22 @@ resource "aws_batch_compute_environment" "video_analysis_gpu" {
   state        = "ENABLED"
 
   compute_resources {
-    type           = "EC2"
-    min_vcpus      = 0
-    max_vcpus      = 16 # 최대 4개의 g5.xlarge 인스턴스 (각 4 vCPU)
+    type      = "EC2"
+    min_vcpus = 0
+    max_vcpus = 16 # 최대 4개의 g5.xlarge 인스턴스 (각 4 vCPU)
 
 
     instance_type = ["g5.xlarge"]
 
     # ✅ 비용 절감: Public Subnet 사용 (NAT Gateway $44/월 → $0)
     # Security Group으로 인바운드를 차단하므로 보안 문제 없음
-    subnets = var.public_subnet_ids  # from network module
+    subnets = var.public_subnet_ids # from network module
 
     security_group_ids = [
-      var.batch_compute_security_group_id  # from network module
+      var.batch_compute_security_group_id # from network module
     ]
 
-    instance_role = var.batch_instance_profile_arn  # from security module
+    instance_role = var.batch_instance_profile_arn # from security module
 
     launch_template {
       launch_template_id = aws_launch_template.batch_gpu.id
@@ -196,8 +196,8 @@ resource "aws_batch_compute_environment" "video_analysis_gpu" {
 
     # EC2 Configuration to use Custom AMI with models in /opt/ml
     ec2_configuration {
-      image_type = "ECS_AL2_NVIDIA"
-      image_id_override = data.aws_ami.custom_gpu.id  # Packer로 빌드된 최신 커스텀 AMI
+      image_type        = "ECS_AL2_NVIDIA"
+      image_id_override = data.aws_ami.custom_gpu.id # Packer로 빌드된 최신 커스텀 AMI
     }
 
     tags = {

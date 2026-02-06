@@ -254,7 +254,7 @@ resource "aws_ecs_task_definition" "backend" {
   container_definitions = jsonencode([
     {
       name      = "backend"
-  image     = "${var.account_id}.dkr.ecr.${var.region}.amazonaws.com/capstone-backend:latest"
+      image     = "${var.account_id}.dkr.ecr.${var.region}.amazonaws.com/capstone-backend:latest"
       essential = true
 
       portMappings = [
@@ -386,7 +386,7 @@ resource "aws_ecs_service" "frontend" {
   name            = "capstone-frontend-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.frontend.arn
-  desired_count   = 1  # 필요할 때 꺼
+  desired_count   = 1 # 필요할 때 꺼
   launch_type     = "FARGATE"
 
   network_configuration {
@@ -413,7 +413,7 @@ resource "aws_ecs_service" "backend" {
   name            = "capstone-backend-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.backend.arn
-  desired_count   = 1  # 필요할때 끄자
+  desired_count   = 1 # 필요할때 끄자
   launch_type     = "FARGATE"
 
   network_configuration {

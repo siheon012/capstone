@@ -334,7 +334,7 @@ resource "aws_lb_listener_rule" "backend" {
 resource "aws_vpc_endpoint" "s3" {
   vpc_id       = aws_vpc.main.id
   service_name = "com.amazonaws.${var.region}.s3"
-  
+
   route_table_ids = [
     aws_route_table.public.id,
     aws_route_table.private.id
@@ -352,12 +352,12 @@ resource "aws_vpc_endpoint" "ecr_api" {
   service_name        = "com.amazonaws.${var.region}.ecr.api"
   vpc_endpoint_type   = "Interface"
   private_dns_enabled = true
-  
+
   subnet_ids = [
     aws_subnet.private_1.id,
     aws_subnet.private_2.id
   ]
-  
+
   security_group_ids = [
     aws_security_group.vpc_endpoints.id
   ]
@@ -374,12 +374,12 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
   service_name        = "com.amazonaws.${var.region}.ecr.dkr"
   vpc_endpoint_type   = "Interface"
   private_dns_enabled = true
-  
+
   subnet_ids = [
     aws_subnet.private_1.id,
     aws_subnet.private_2.id
   ]
-  
+
   security_group_ids = [
     aws_security_group.vpc_endpoints.id
   ]
@@ -396,12 +396,12 @@ resource "aws_vpc_endpoint" "logs" {
   service_name        = "com.amazonaws.${var.region}.logs"
   vpc_endpoint_type   = "Interface"
   private_dns_enabled = true
-  
+
   subnet_ids = [
     aws_subnet.private_1.id,
     aws_subnet.private_2.id
   ]
-  
+
   security_group_ids = [
     aws_security_group.vpc_endpoints.id
   ]

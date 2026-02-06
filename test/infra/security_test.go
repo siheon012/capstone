@@ -14,8 +14,11 @@ func TestSecurityModulePlan(t *testing.T) {
 	terraformOptions := &terraform.Options{
 		TerraformDir: "../../terraform/modules/security",
 		Vars: map[string]interface{}{
-			"environment": "test",
-			"vpc_id":      "vpc-test123",
+			"environment":              "test",
+			"s3_raw_videos_arn":        "arn:aws:s3:::test-raw-videos",
+			"s3_thumbnails_arn":        "arn:aws:s3:::test-thumbnails",
+			"s3_highlights_arn":        "arn:aws:s3:::test-highlights",
+			"db_password_secret_arn":   "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:test-db",
 		},
 		BackendConfig: map[string]interface{}{},
 		NoColor:       true,
@@ -50,8 +53,11 @@ func TestIAMRoleCreation(t *testing.T) {
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../../terraform/modules/security",
 		Vars: map[string]interface{}{
-			"environment": "test",
-			"vpc_id":      "vpc-test123",
+			"environment":              "test",
+			"s3_raw_videos_arn":        "arn:aws:s3:::test-raw-videos",
+			"s3_thumbnails_arn":        "arn:aws:s3:::test-thumbnails",
+			"s3_highlights_arn":        "arn:aws:s3:::test-highlights",
+			"db_password_secret_arn":   "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:test-db",
 		},
 		BackendConfig: map[string]interface{}{},
 		NoColor:       true,

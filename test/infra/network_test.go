@@ -20,9 +20,9 @@ func TestNetworkModule(t *testing.T) {
 		TerraformDir: "../../terraform/modules/network",
 
 		Vars: map[string]interface{}{
-			"environment":       "test",
-			"vpc_cidr":          "10.99.0.0/16",
-			"availability_zones": []string{"ap-northeast-2a", "ap-northeast-2c"},
+			"environment": "test",
+			"region":      "ap-northeast-2",
+			"vpc_cidr":    "10.99.0.0/16",
 		},
 
 		BackendConfig: map[string]interface{}{},
@@ -52,9 +52,9 @@ func TestNetworkModulePlan(t *testing.T) {
 	terraformOptions := &terraform.Options{
 		TerraformDir: "../../terraform/modules/network",
 		Vars: map[string]interface{}{
-			"environment":       "test",
-			"vpc_cidr":          "10.99.0.0/16",
-			"availability_zones": []string{"ap-northeast-2a", "ap-northeast-2c"},
+			"environment": "test",
+			"region":      "ap-northeast-2",
+			"vpc_cidr":    "10.99.0.0/16",
 		},
 		BackendConfig: map[string]interface{}{},
 		NoColor:       true,

@@ -23,8 +23,11 @@ func TestStorageModule(t *testing.T) {
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../../terraform/modules/storage",
 		Vars: map[string]interface{}{
-			"environment": environment,
-			"region":      awsRegion,
+			"environment":            environment,
+			"vpc_id":                 "vpc-test123",
+			"private_subnet_ids":     []string{"subnet-test1", "subnet-test2"},
+			"rds_security_group_id": "sg-test123",
+			"domain_name":            "test.example.com",
 		},
 		BackendConfig: map[string]interface{}{},
 		NoColor:       true,
@@ -66,8 +69,11 @@ func TestStorageModulePlan(t *testing.T) {
 	terraformOptions := &terraform.Options{
 		TerraformDir: "../../terraform/modules/storage",
 		Vars: map[string]interface{}{
-			"environment": "test",
-			"region":      "ap-northeast-2",
+			"environment":            "test",
+			"vpc_id":                 "vpc-test123",
+			"private_subnet_ids":     []string{"subnet-test1", "subnet-test2"},
+			"rds_security_group_id": "sg-test123",
+			"domain_name":            "test.example.com",
 		},
 		BackendConfig: map[string]interface{}{},
 		NoColor:       true,
@@ -87,8 +93,11 @@ func TestStorageModuleOutputs(t *testing.T) {
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: "../../terraform/modules/storage",
 		Vars: map[string]interface{}{
-			"environment": "test",
-			"region":      "ap-northeast-2",
+			"environment":            "test",
+			"vpc_id":                 "vpc-test123",
+			"private_subnet_ids":     []string{"subnet-test1", "subnet-test2"},
+			"rds_security_group_id": "sg-test123",
+			"domain_name":            "test.example.com",
 		},
 		BackendConfig: map[string]interface{}{},
 		NoColor:       true,

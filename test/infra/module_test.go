@@ -88,11 +88,15 @@ func TestTerraformFormatting(t *testing.T) {
 				TerraformDir: tc.path,
 			}
 
-		output, err := terraform.RunTerraformCommandE(t, terraformOptions, "fmt", "-check", "-recursive")
-		
-		if err != nil {
-			t.Logf("Format check failed for %s", tc.name)
-			t.Logf("Output: %s", output)
+			output, err := terraform.RunTerraformCommandE(t, terraformOptions, "fmt", "-check", "-recursive")
+			
+			if err != nil {
+				t.Logf("Format check failed for %s", tc.name)
+				t.Logf("Output: %s", output)
+				t.Logf("Run 'terraform fmt -recursive' to fix formatting issues")
+			}
+			
+			assert.NoError(t, err, "%s should be properly formatted. Run 'terraform fmt -recursive' to fix.", tc.name)
 		})
 	}
 }

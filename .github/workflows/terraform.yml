@@ -1,24 +1,26 @@
 name: 'Terraform CI'
 
-#on: []
 on:
   pull_request:
     branches: [develop, main]
+  # 테스트를 위해 수동 실행 가능하게 추가
+  workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: write # PR에 댓글을 달아야 해서 권한 필요함
-  issues: write # GitHub Issue 생성을 위한 권한
-  security-events: write # Security scan results
+  pull-requests: write
+  issues: write
+  security-events: write
 
 jobs:
   terraform:
     name: 'Terraform Plan'
     runs-on: ubuntu-latest
 
+    # ⭐ 중요: 모든 'run' 명령어는 ./terraform 폴더 안에서 실행됨
     defaults:
       run:
-        working-directory: ./terraform # main.tf가 있는 폴더 경로 (중요!)
+        working-directory: ./terraform
 
     steps:
       # 1. 내 코드 내려받기
@@ -29,9 +31,9 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.5.0 # 사용 중인 버전과 비슷하게 맞춤
+          terraform_version: 1.5.0
 
-      # 3. AWS 자격 증명 설정 (아까 등록한 Secret 사용)
+      # 3. AWS 자격 증명 설정
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -39,7 +41,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-2
 
-      # 4. 보안 스캔 먼저 실행 - Checkov
+      # 4. 보안 스캔 - Checkov
       - name: Security Scan - Checkov
         id: checkov
         continue-on-error: true
@@ -47,6 +49,7 @@ jobs:
           echo "🛡️ Running Checkov security scan..."
           pip install checkov
 
+          # working-directory가 terraform이므로 현재 디렉토리(.) 스캔
           checkov -d . \
             --framework terraform \
             --output cli \
@@ -77,13 +80,14 @@ jobs:
         id: tfsec
         continue-on-error: true
         run: |
-          cd terraform
-          tfsec . --format sarif --out ../results.sarif --soft-fail
+          # [수정됨] cd terraform 제거 (이미 terraform 폴더임)
+          # [수정됨] 결과 파일을 현재 폴더에 생성 (results.sarif)
+          tfsec . --format sarif --out results.sarif --soft-fail
 
       - name: Run tfsec (Console)
         continue-on-error: true
         run: |
-          cd terraform
+          # [수정됨] cd terraform 제거
           tfsec . --soft-fail
 
       # 6. 보안 결과를 GitHub Security에 업로드
@@ -91,16 +95,17 @@ jobs:
         if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: results.sarif
+          # [수정됨] 루트 기준 경로 명시 (terraform 폴더 안의 파일)
+          sarif_file: terraform/results.sarif
           category: tfsec
 
-      # 7. 코드 스타일 검사 (들여쓰기 엉망이면 여기서 탈락)
+      # 7. 코드 스타일 검사
       - name: Terraform Format
         id: fmt
         run: terraform fmt -check
         continue-on-error: true
 
-      # 8. 초기화 (S3 Backend 연결)
+      # 8. 초기화
       - name: Terraform Init
         id: init
         run: terraform init
@@ -112,11 +117,12 @@ jobs:
         env:
           TF_VAR_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
+          # Plan 결과를 바이너리로 저장하고, 동시에 화면에도 출력(/tmp로 복사)
           terraform plan -no-color -out=tfplan.binary 2>&1 | tee /tmp/terraform_plan_output.txt
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         continue-on-error: true
 
-      # 7. Terraform Plan을 텍스트로 변환
+      # 10. Terraform Plan을 텍스트로 변환
       - name: Convert Plan to Text
         if: always()
         run: |
@@ -126,7 +132,7 @@ jobs:
             echo "No plan file generated" > /tmp/terraform_plan_readable.txt
           fi
 
-      # 8. Bedrock으로 Plan 분석
+      # 11. Bedrock으로 Plan 분석
       - name: Analyze Terraform Plan with Bedrock
         if: always()
         id: bedrock-analysis
@@ -137,12 +143,13 @@ jobs:
           import json
           import os
           import boto3
+          import sys
 
           def read_file_safe(path):
               try:
                   if os.path.exists(path):
                       with open(path, 'r', encoding='utf-8', errors='replace') as f:
-                          return f.read()[:8000]  # 토큰 제한 고려
+                          return f.read()[:8000]
               except Exception as e:
                   return f'Error reading file: {str(e)}'
               return 'No log found'
@@ -154,7 +161,6 @@ jobs:
           init_outcome = '${{ steps.init.outcome }}'
           plan_outcome = '${{ steps.plan.outcome }}'
 
-          # Plan 실패 시와 성공 시 다른 프롬프트 사용
           if plan_outcome == 'failure' or init_outcome == 'failure' or fmt_outcome == 'failure':
               prompt = f'''You are a Terraform expert. Analyze the failure and provide solutions in Korean.
 
@@ -228,7 +234,7 @@ jobs:
                   f.write(f'AI 분석 실패: {str(e)}')
           "
 
-      # 9. GitHub Issue 생성
+      # 12. GitHub Issue 생성
       - name: Create Terraform Analysis Issue
         if: always()
         uses: actions/github-script@v7
@@ -304,12 +310,10 @@ jobs:
               labels: labels
             });
 
-      # 10. PR에 댓글 달기 (기존 기능 유지)
+      # 13. PR에 댓글 달기
       - name: Update Pull Request
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
-        env:
-          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -320,6 +324,14 @@ jobs:
               analysis = fs.readFileSync('/tmp/bedrock_terraform_analysis.txt', 'utf8');
             } catch (e) {
               console.log("No bedrock analysis found");
+            }
+
+            // Plan Output 읽기
+            let rawPlan = "";
+            try {
+               rawPlan = fs.readFileSync('/tmp/terraform_plan_output.txt', 'utf8');
+            } catch(e) {
+               rawPlan = "Plan output not captured.";
             }
 
             const fmtStatus = '${{ steps.fmt.outcome }}';
@@ -338,7 +350,7 @@ jobs:
             <details><summary>Show Raw Plan</summary>
 
             \`\`\`terraform
-            ${process.env.PLAN}
+            ${rawPlan.substring(0, 5000)}
             \`\`\`
 
             </details>

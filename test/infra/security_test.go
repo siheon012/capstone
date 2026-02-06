@@ -12,7 +12,7 @@ func TestSecurityModulePlan(t *testing.T) {
 	t.Parallel()
 
 	terraformOptions := &terraform.Options{
-		TerraformDir: "../terraform/modules/security",
+		TerraformDir: "../../terraform/modules/security",
 		Vars: map[string]interface{}{
 			"environment": "test",
 			"vpc_id":      "vpc-test123",
@@ -31,7 +31,7 @@ func TestSecurityModuleValidate(t *testing.T) {
 	t.Parallel()
 
 	terraformOptions := &terraform.Options{
-		TerraformDir:  "../terraform/modules/security",
+		TerraformDir:  "../../terraform/modules/security",
 		BackendConfig: map[string]interface{}{},
 	}
 
@@ -48,7 +48,7 @@ func TestIAMRoleCreation(t *testing.T) {
 	}
 
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
-		TerraformDir: "../terraform/modules/security",
+		TerraformDir: "../../terraform/modules/security",
 		Vars: map[string]interface{}{
 			"environment": "test",
 			"vpc_id":      "vpc-test123",
@@ -60,7 +60,7 @@ func TestIAMRoleCreation(t *testing.T) {
 	defer terraform.Destroy(t, terraformOptions)
 	terraform.InitAndApply(t, terraformOptions)
 
-	// IAM Ïó≠Ìï† ARN ÌôïÏù∏
+	// IAM ??ï† ARN ?ïÏù∏
 	ecsTaskRoleArn := terraform.Output(t, terraformOptions, "ecs_task_role_arn")
 	assert.NotEmpty(t, ecsTaskRoleArn, "ECS task role ARN should not be empty")
 	assert.Contains(t, ecsTaskRoleArn, "arn:aws:iam::", "Should be a valid IAM role ARN")

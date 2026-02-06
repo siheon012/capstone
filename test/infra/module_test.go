@@ -19,7 +19,7 @@ func TestModuleOutputConsistency(t *testing.T) {
 	}{
 		{
 			name:       "Network Module",
-			modulePath: "../terraform/modules/network",
+			modulePath: "../../terraform/modules/network",
 			vars: map[string]interface{}{
 				"environment":       "test",
 				"vpc_cidr":          "10.99.0.0/16",
@@ -29,7 +29,7 @@ func TestModuleOutputConsistency(t *testing.T) {
 		},
 		{
 			name:       "Storage Module",
-			modulePath: "../terraform/modules/storage",
+			modulePath: "../../terraform/modules/storage",
 			vars: map[string]interface{}{
 				"environment": "test",
 				"region":      "ap-northeast-2",
@@ -43,8 +43,8 @@ func TestModuleOutputConsistency(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		// 테스트 케이스마다 병렬 실행
-		tc := tc // 클로저 변수 캡처
+		// ?�스??케?�스마다 병렬 ?�행
+		tc := tc // ?�로?� 변??캡처
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -55,14 +55,14 @@ func TestModuleOutputConsistency(t *testing.T) {
 				NoColor:       true,
 			}
 
-			// Plan만 실행하여 출력값 형식 검증
+			// Plan�??�행?�여 출력�??�식 검�?
 			terraform.Init(t, terraformOptions)
 			planExitCode := terraform.PlanExitCode(t, terraformOptions)
 			assert.Equal(t, 0, planExitCode, "%s plan should succeed", tc.name)
 
-			// 출력값이 정의되어 있는지 확인 (Plan 단계에서 가능)
+			// 출력값이 ?�의?�어 ?�는지 ?�인 (Plan ?�계?�서 가??
 			for _, output := range tc.requiredOutputs {
-				// Terraform show로 출력값 정의 확인
+				// Terraform show�?출력�??�의 ?�인
 				planJSON := terraform.Show(t, terraformOptions)
 				assert.Contains(t, planJSON, output, "%s should have output: %s", tc.name, output)
 			}
@@ -76,12 +76,12 @@ func TestTerraformFormatting(t *testing.T) {
 		name string
 		path string
 	}{
-		{"Root Module", "../terraform"},
-		{"Network Module", "../terraform/modules/network"},
-		{"Storage Module", "../terraform/modules/storage"},
-		{"Security Module", "../terraform/modules/security"},
-		{"Compute Module", "../terraform/modules/compute"},
-		{"Pipeline Module", "../terraform/modules/pipeline"},
+		{"Root Module", "../../terraform"},
+		{"Network Module", "../../terraform/modules/network"},
+		{"Storage Module", "../../terraform/modules/storage"},
+		{"Security Module", "../../terraform/modules/security"},
+		{"Compute Module", "../../terraform/modules/compute"},
+		{"Pipeline Module", "../../terraform/modules/pipeline"},
 	}
 
 	for _, tc := range testCases {
@@ -93,9 +93,17 @@ func TestTerraformFormatting(t *testing.T) {
 				TerraformDir: tc.path,
 			}
 
-			// terraform fmt -check 실행
-			exitCode := terraform.FormatCheckExitCode(t, terraformOptions)
-			assert.Equal(t, 0, exitCode, "%s should be properly formatted. Run 'terraform fmt -recursive' to fix.", tc.name)
+			// terraform fmt -check ?�행
+			stdout, stderr, err := terraform.RunTerraformCommandE(t, terraformOptions, "fmt", "-check", "-recursive")
+			
+			if err != nil {
+				t.Logf("Format check failed for %s", tc.name)
+				t.Logf("Stdout: %s", stdout)
+				t.Logf("Stderr: %s", stderr)
+				t.Logf("Run 'terraform fmt -recursive' to fix formatting issues")
+			}
+			
+			assert.NoError(t, err, "%s should be properly formatted. Run 'terraform fmt -recursive' to fix.", tc.name)
 		})
 	}
 }
@@ -105,12 +113,12 @@ func TestTerraformValidation(t *testing.T) {
 	t.Parallel()
 
 	modules := []string{
-		"../terraform/modules/network",
-		"../terraform/modules/storage",
-		"../terraform/modules/security",
-		"../terraform/modules/iam",
-		"../terraform/modules/compute",
-		"../terraform/modules/pipeline",
+		"../../terraform/modules/network",
+		"../../terraform/modules/storage",
+		"../../terraform/modules/security",
+		"../../terraform/modules/iam",
+		"../../terraform/modules/compute",
+		"../../terraform/modules/pipeline",
 	}
 
 	for _, modulePath := range modules {

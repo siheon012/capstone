@@ -78,6 +78,10 @@
 
 **절감 효과**: 사전 예방으로 비용 폭탄 방지 (무형 가치)
 
+**실제 사용 예시**:
+
+![Infracost 사용 예시](../assets/github_actions/infracost%20usage.png)
+
 ---
 
 #### 2️⃣ **terraform.yml** - Terraform CI + AI 분석 ⭐ NEW
@@ -468,6 +472,10 @@ INFRACOST_API_KEY = <발급받은 키>
 
 # 4. PR 생성 시 자동으로 비용 예측 댓글 달림
 ````
+
+**Infracost 사용 화면**:
+
+![Infracost 사용 예시](../assets/github_actions/infracost%20usage.png)
 
 # ECS
 

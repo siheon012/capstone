@@ -55,9 +55,17 @@ See how the service works in action: **[Service Flow Demo →](FLOW.md)**
 
 ## 🛠️ Architecture
 
-### High-Level System Design
+DeepSentinel combines **automated CI/CD & IaC Pipeline** with **AWS Cloud Infrastructure** to create a fully automated, cost-optimized platform. Based on GitOps principles, we integrate FinOps, DevSecOps, and Infrastructure Testing into our deployment pipeline.
 
-Users upload videos through the frontend, which triggers the `S3 → SQS → Lambda → Batch (GPU)` serverless pipeline for AI analysis.
+<div align="center">
+  <img src="docs/assets/page_screenshots/deepsentinel-architecture.png" width="100%" alt="DeepSentinel Full Architecture">
+</div>
+
+**📖 [Complete Architecture Documentation →](docs/ARCHITECTURE_NEW.md)** (CI/CD Pipeline + Infrastructure Details)
+
+### System Overview
+
+Users upload videos through the frontend, which triggers the serverless GPU pipeline for AI analysis.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -95,14 +103,15 @@ Users upload videos through the frontend, which triggers the `S3 → SQS → Lam
 
 ## 🧰 Tech Stack
 
-| Category           | Technologies                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Infrastructure** | ![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat&logo=amazon-aws&logoColor=white) ![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=flat&logo=terraform&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)                                                                                                                             |
-| **Backend**        | ![Django](https://img.shields.io/badge/Django-092E20?style=flat&logo=django&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white) ![pgvector](https://img.shields.io/badge/pgvector-316192?style=flat&logo=postgresql&logoColor=white)                                                                                                                |
-| **Frontend**       | ![Next.js](https://img.shields.io/badge/Next.js%2015-000000?style=flat&logo=next.js&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white) ![React](https://img.shields.io/badge/React%2019-61DAFB?style=flat&logo=react&logoColor=black) ![Tailwind](https://img.shields.io/badge/Tailwind%20CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white) |
-| **AI / ML**        | ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white) ![YOLO](https://img.shields.io/badge/YOLOv8-00FFFF?style=flat) ![AWS Bedrock](https://img.shields.io/badge/AWS%20Bedrock-FF9900?style=flat&logo=amazon-aws&logoColor=white) ![CUDA](https://img.shields.io/badge/CUDA%2011.8-76B900?style=flat&logo=nvidia&logoColor=white)                                               |
-| **DevOps**         | ![AWS Batch](https://img.shields.io/badge/AWS%20Batch-FF9900?style=flat&logo=amazon-aws&logoColor=white) ![ECS](https://img.shields.io/badge/ECS%20Fargate-FF9900?style=flat&logo=amazon-ecs&logoColor=white) ![Lambda](https://img.shields.io/badge/Lambda-FF9900?style=flat&logo=aws-lambda&logoColor=white) ![SQS](https://img.shields.io/badge/SQS-FF4F8B?style=flat&logo=amazon-sqs&logoColor=white)                 |
-| **CI/CD & FinOps** | ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=github-actions&logoColor=white) ![Infracost](https://img.shields.io/badge/Infracost-DB44B8?style=flat&logo=terraform&logoColor=white) ![k6](https://img.shields.io/badge/k6-7D64FF?style=flat&logo=k6&logoColor=white)                                                                                                             |
+| Category                | Technologies                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Infrastructure**      | ![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat&logo=amazon-aws&logoColor=white) ![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=flat&logo=terraform&logoColor=white) ![HCL](https://img.shields.io/badge/HCL-7B42BC?style=flat&logo=terraform&logoColor=white) ![Packer](https://img.shields.io/badge/Packer-02A8EF?style=flat&logo=packer&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)                                                                                                                          |
+| **Backend**             | ![Python](https://img.shields.io/badge/Python%203.10+-3776AB?style=flat&logo=python&logoColor=white) ![Django](https://img.shields.io/badge/Django-092E20?style=flat&logo=django&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white) ![pgvector](https://img.shields.io/badge/pgvector-316192?style=flat&logo=postgresql&logoColor=white)                                                                                                                                                                                               |
+| **Frontend**            | ![Next.js](https://img.shields.io/badge/Next.js%2015-000000?style=flat&logo=next.js&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white) ![React](https://img.shields.io/badge/React%2019-61DAFB?style=flat&logo=react&logoColor=black) ![Tailwind](https://img.shields.io/badge/Tailwind%20CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)                                                                                                                                                                                     |
+| **AI / ML**             | ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white) ![YOLO](https://img.shields.io/badge/YOLOv8-00FFFF?style=flat) ![AWS Bedrock](https://img.shields.io/badge/AWS%20Bedrock-FF9900?style=flat&logo=amazon-aws&logoColor=white) ![CUDA](https://img.shields.io/badge/CUDA%2011.8-76B900?style=flat&logo=nvidia&logoColor=white)                                                                                                                                                                                                                                   |
+| **DevOps**              | ![AWS Batch](https://img.shields.io/badge/AWS%20Batch-FF9900?style=flat&logo=amazon-aws&logoColor=white) ![ECS](https://img.shields.io/badge/ECS%20Fargate-FF9900?style=flat&logo=amazon-ecs&logoColor=white) ![Lambda](https://img.shields.io/badge/Lambda-FF9900?style=flat&logo=aws-lambda&logoColor=white) ![SQS](https://img.shields.io/badge/SQS-FF4F8B?style=flat&logo=amazon-sqs&logoColor=white) ![Bash](https://img.shields.io/badge/Bash-4EAA25?style=flat&logo=gnu-bash&logoColor=white) ![PowerShell](https://img.shields.io/badge/PowerShell-5391FE?style=flat&logo=powershell&logoColor=white) |
+| **DevSecOps & Testing** | ![Trivy](https://img.shields.io/badge/Trivy-1904DA?style=flat&logo=aquasecurity&logoColor=white) ![Checkov](https://img.shields.io/badge/Checkov-6B3FA0?style=flat&logo=python&logoColor=white) ![Tfsec](https://img.shields.io/badge/Tfsec-000000?style=flat&logo=security&logoColor=white) ![Terratest](https://img.shields.io/badge/Terratest-00ADD8?style=flat&logo=go&logoColor=white) ![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)                                                                                                                                  |
+| **CI/CD & FinOps**      | ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=github-actions&logoColor=white) ![Infracost](https://img.shields.io/badge/Infracost-DB44B8?style=flat&logo=terraform&logoColor=white) ![k6](https://img.shields.io/badge/k6-7D64FF?style=flat&logo=k6&logoColor=white)                                                                                                                                                                                                                                                                                                 |
 
 ---
 
@@ -162,57 +171,7 @@ See [terraform/README.md](terraform/README.md) for detailed deployment guide.
 
 ---
 
-## 📂 Project Structure & Documentation
-
-Comprehensive documentation for each module - click links to dive deeper:
-
-### 🏗️ Infrastructure (IaC)
-
-| Module                     | Description                                                                 | Link                                                                                                                 |
-| -------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| **Terraform**              | 153 AWS resources managed across 6 specialized modules                      | [terraform/README.md](terraform/README.md)                                                                           |
-| **Infrastructure Diagram** | Visual representation of network, compute, pipeline architecture            | [INFRA.md](INFRA.md)                                                                                                 |
-| **Terraform CI/CD**        | AI-powered Terraform validation with Bedrock analysis & auto-issue creation | [docs/05_devops/GITHUB_ACTIONS_TERRAFORM_CI_2026-01-16.md](docs/05_devops/GITHUB_ACTIONS_TERRAFORM_CI_2026-01-16.md) |
-| **Terraform Refactoring**  | Module separation & state management for scalable IaC                       | [docs/02_infrastructure/TERRAFORM_REFACTORING.md](docs/02_infrastructure/TERRAFORM_REFACTORING.md)                   |
-
-**Key Topics**: Modular design, zero-downtime migration with `moved` blocks, S3 remote state, AI-powered Plan analysis
-
----
-
-### 💻 Application Layer
-
-| Component       | Description                                                             | Link                               |
-| --------------- | ----------------------------------------------------------------------- | ---------------------------------- |
-| **Backend API** | Django REST + pgvector RAG, AWS integration (S3/SQS/Bedrock)            | [back/README.md](back/README.md)   |
-| **Frontend**    | Next.js 15 App Router, real-time progress tracking, custom video player | [front/README.md](front/README.md) |
-
-**Backend Highlights**: S3 presigned URLs, JWT upload validation, vector search API  
-**Frontend Highlights**: Three-layer separation (actions/hooks/components), responsive design, toast notifications
-
----
-
-### 🧠 AI & Processing Pipeline
-
-| Component                 | Description                                                | Link                                                 |
-| ------------------------- | ---------------------------------------------------------- | ---------------------------------------------------- |
-| **Video Analysis Engine** | Multi-AI pipeline: YOLO + MiVOLO + MEBOW + LLaVA + Bedrock | [video-analysis/README.md](video-analysis/README.md) |
-| **AWS Batch Worker**      | GPU-accelerated video processing with auto-scaling         | [batch/README.md](batch/README.md)                   |
-| **Lambda Trigger**        | SQS → Batch orchestration with duplicate prevention        | [lambda/README.md](lambda/README.md)                 |
-
-**Pipeline Flow**: Frame sampling (30fps → 1.5fps) → AI models → PostgreSQL + S3 results
-
----
-
-### 📚 Additional Documentation
-
-| Document                    | Description                                   | Link                                         |
-| --------------------------- | --------------------------------------------- | -------------------------------------------- |
-| **Service Flow Demo**       | Step-by-step screenshots of user workflow     | [FLOW.md](FLOW.md)                           |
-| **GPU Worker (Deprecated)** | Cost comparison: 24/7 EC2 vs serverless Batch | [gpu_worker/README.md](gpu_worker/README.md) |
-
----
-
-## 📊 Cost Analysis
+## Cost Analysis
 
 ### Infrastructure Cost Optimization (2026.01)
 
@@ -311,7 +270,59 @@ Auto-create GitHub Issue 📝
 
 ---
 
-## 📝 License
+## � Project Structure & Documentation
+
+Comprehensive documentation for each module - click links to dive deeper:
+
+### 🏗️ Infrastructure (IaC)
+
+| Module                     | Description                                                                 | Link                                                                                                                 |
+| -------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Terraform**              | 153 AWS resources managed across 6 specialized modules                      | [terraform/README.md](terraform/README.md)                                                                           |
+| **Infrastructure Diagram** | Visual representation of network, compute, pipeline architecture            | [INFRA.md](INFRA.md)                                                                                                 |
+| **Terraform CI/CD**        | AI-powered Terraform validation with Bedrock analysis & auto-issue creation | [docs/05_devops/GITHUB_ACTIONS_TERRAFORM_CI_2026-01-16.md](docs/05_devops/GITHUB_ACTIONS_TERRAFORM_CI_2026-01-16.md) |
+| **Terraform Refactoring**  | Module separation & state management for scalable IaC                       | [docs/02_infrastructure/TERRAFORM_REFACTORING.md](docs/02_infrastructure/TERRAFORM_REFACTORING.md)                   |
+
+**Key Topics**: Modular design, zero-downtime migration with `moved` blocks, S3 remote state, AI-powered Plan analysis
+
+---
+
+### 💻 Application Layer
+
+| Component       | Description                                                             | Link                               |
+| --------------- | ----------------------------------------------------------------------- | ---------------------------------- |
+| **Backend API** | Django REST + pgvector RAG, AWS integration (S3/SQS/Bedrock)            | [back/README.md](back/README.md)   |
+| **Frontend**    | Next.js 15 App Router, real-time progress tracking, custom video player | [front/README.md](front/README.md) |
+
+**Backend Highlights**: S3 presigned URLs, JWT upload validation, vector search API  
+**Frontend Highlights**: Three-layer separation (actions/hooks/components), responsive design, toast notifications
+
+---
+
+### 🧠 AI & Processing Pipeline
+
+| Component                 | Description                                                | Link                                                 |
+| ------------------------- | ---------------------------------------------------------- | ---------------------------------------------------- |
+| **Video Analysis Engine** | Multi-AI pipeline: YOLO + MiVOLO + MEBOW + LLaVA + Bedrock | [video-analysis/README.md](video-analysis/README.md) |
+| **AWS Batch Worker**      | GPU-accelerated video processing with auto-scaling         | [batch/README.md](batch/README.md)                   |
+| **Lambda Trigger**        | SQS → Batch orchestration with duplicate prevention        | [lambda/README.md](lambda/README.md)                 |
+
+**Pipeline Flow**: Frame sampling (30fps → 1.5fps) → AI models → PostgreSQL + S3 results
+
+---
+
+### 📚 Additional Documentation
+
+| Document                    | Description                                   | Link                                         |
+| --------------------------- | --------------------------------------------- | -------------------------------------------- |
+| **Service Flow Demo**       | Step-by-step screenshots of user workflow     | [FLOW.md](FLOW.md)                           |
+| **Performance Testing**     | k6 load testing results & infrastructure validation | [test/README.md](test/README.md)       |
+| **Packer AMI Builder**      | GPU Worker golden image build automation      | [packer/README.md](packer/README.md)         |
+| **GPU Worker (Deprecated)** | Cost comparison: 24/7 EC2 vs serverless Batch | [gpu_worker/README.md](gpu_worker/README.md) |
+
+---
+
+## �📝 License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
